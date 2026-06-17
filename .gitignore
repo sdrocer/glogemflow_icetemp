@@ -1,0 +1,12 @@
+data/*
+!data/README.md
+figures/*.pdf
+figures/*.png
+figures/*.svg
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+*.egg-info/
+.DS_Store

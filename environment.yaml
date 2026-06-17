@@ -1,0 +1,17 @@
+name: glogemflow_icetemp
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy>=2.4
+  - pandas>=3.0
+  - scipy>=1.17
+  - matplotlib>=3.10
+  - jupyter
+  - jupyterlab
+  - ipykernel
+  - xarray          # for future regional synthesis
+  - pip
+  - pip:
+    - cmcrameri>=1.8
