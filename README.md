@@ -13,7 +13,7 @@ glogemflow_icetemp/
 ├── data/                NOT tracked — place GloGEM model output here (see data/README.md)
 ├── figures/             NOT tracked — notebook outputs (PDF/PNG figures) are written here
 ├── src/
-│   └── glogemflow_icetemp/
+│   └── icetemp/
 │       ├── io.py        GloGEM output readers (summary files, profile files, flowgrid .sav)
 │       └── plots.py     Shared colormaps, figure style, cross-section builder
 ├── notebooks/
@@ -43,7 +43,7 @@ git submodule update --init --recursive
 ```bash
 conda env create -f environment.yaml
 conda activate glogemflow_icetemp
-pip install -e src/    # installs the glogemflow_icetemp package in editable mode
+pip install -e src/    # installs the icetemp package in editable mode
 ```
 
 ### 3. Place model output
@@ -59,7 +59,7 @@ require GloGEM output in `data/`.
 
 ## Dependencies
 
-All Python dependencies are pinned in `environment.yaml`. The `glogemflow_icetemp` package
+All Python dependencies are pinned in `environment.yaml`. The `icetemp` package
 in `src/` provides shared I/O and plotting utilities imported by every notebook.
 
 ## Data availability
