@@ -1,0 +1,3 @@
+[submodule "glenglat"]
+	path = glenglat
+	url = https://github.com/mjacqu/glenglat.git
