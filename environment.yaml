@@ -11,7 +11,9 @@ dependencies:
   - jupyter
   - jupyterlab
   - ipykernel
-  - xarray          # for future regional synthesis
+  - xarray
+  - netcdf4         # xarray backend for ERA5 .nc files
+  - scikit-learn>=1.9
   - pip
   - pip:
     - cmcrameri>=1.8

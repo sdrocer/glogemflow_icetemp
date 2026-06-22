@@ -1,0 +1,21 @@
+{
+  "regression": {
+    "intercept": 3.7505,
+    "slope": -0.2244,
+    "r2": 0.0701,
+    "n_sites": 221,
+    "description": "delta_T_firn = intercept + slope * T_deep_background",
+    "units": "degC"
+  },
+  "cp_formula": {
+    "Lf_J_per_kg": 334000.0,
+    "ci_J_per_kg_K": 2009.0,
+    "implied_f_rf": 0.0226,
+    "description": "delta_T_firn = (Lf / ci) * f_rf, where f_rf is refreezing fraction"
+  },
+  "accumulation_zone_stats": {
+    "median_dT": 6.959,
+    "mean_dT": 6.412,
+    "std_dT": 4.048
+  }
+}
