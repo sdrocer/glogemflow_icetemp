@@ -1,0 +1,27 @@
+# Tier-3 Bayesian (Kennedy-O'Hagan) calibration -- CentralEurope production run.
+#
+# Read by icetemp.calibration.CalibrationConfig.from_yaml and each of
+# glogemflow_icetemp/scripts/01_build_design.py .. 05_validate_and_writeback.py.
+# See calibration_scheme_prompt.md (repo root) for the design rationale.
+
+region: CentralEurope
+include_estimated: true
+run_tag: centraleurope_bayescal
+
+# LHS design / emulator
+n_design_points: 100      # feasibility-spike this first with ~10-20 before committing to 100
+design_seed: 42
+explained_variance: 0.99
+
+# MCMC (emcee)
+n_walkers: 32
+n_steps: 5000
+burn_in: 1000
+thin: 5
+mcmc_seed: 42
+
+# leave-one-out validation
+loo_mode: map              # 'map' = fast point-estimate per fold; 'mcmc' = full re-sample (slow)
+
+# paths (output_dir left unset -> defaults to
+#   glogemflow_icetemp/data/bayescal/{run_tag}/)
