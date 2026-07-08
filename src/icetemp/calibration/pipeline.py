@@ -70,21 +70,18 @@ class CalibrationPipeline:
 
     # -- 02_run_training --------------------------------------------------------------------
     def write_training_inputs(self):
-        """Writes the glenglat elevation lookup, training config script, and
-        icetemperature_batch.dat -- does NOT touch config.pro and does NOT run IDL. See
-        runner.GloGEMRunner's module docstring."""
+        """Writes the glenglat elevation lookup, training config, and icetemperature_batch.dat
+        -- does NOT touch config.pro and does NOT run IDL. See runner.GloGEMRunner's module
+        docstring: training runs launch via the GLOGEM_CONFIG env var, never config.pro, so
+        no activation step is needed here -- run_training() can be called directly."""
         self.runner = GloGEMRunner(run_dir=self.config.training_dir)
         glaciers = self._calibration_glaciers()
         lookup_path, n_ids, n_elevs = self.runner.write_glenglat_lookup(glaciers)
         print(f'wrote glenglat elevation lookup ({n_ids} glacier_ids, {n_elevs} elevations) -> {lookup_path}')
         config_path = self.runner.write_training_config()
         batch_path, n_written, n_skipped = self.runner.write_batch_file(glaciers)
-        print(f'wrote training config -> {config_path}')
+        print(f'wrote training config (launched via GLOGEM_CONFIG, never config.pro) -> {config_path}')
         print(f'wrote batch file ({n_written} glaciers, {n_skipped} skipped -- no glacier_id) -> {batch_path}')
-        print(
-            'ACTION NEEDED: activate the training config yourself once config.pro is free:\n'
-            f'  cp {config_path} {self.runner.glogem_dir}/config.pro'
-        )
         return config_path, batch_path
 
     def run_training(self, idl_bin='idl', timeout=1800):

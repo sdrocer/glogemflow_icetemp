@@ -8,12 +8,17 @@ geometry -- so each design-point run touches ~65 glaciers instead of the full RG
 
 This module NEVER writes GloGEM/config.pro. config.pro is user-managed (see
 GloGEM/config.pro's own header: "do not edit while chain is running"; confirmed there is
-frequently a live, multi-hour production chain using it). Instead:
-  - `write_training_config()` writes a NEW file, GloGEM/scripts/config_bayescal_training.pro,
-    modelled on scripts/config_centraleurope_glenglat_knn.pro. The user activates it once
-    (`cp scripts/config_bayescal_training.pro config.pro`) when config.pro is free.
-  - `GloGEMRunner.run_design_point()` only rewrites its OWN override file
-    (firnice_temp_calib_file target) between runs and re-launches `.r glogem`.
+frequently a live, multi-hour production chain using it). Instead it uses
+settings.pro's own GLOGEM_CONFIG environment-variable override (procedures/initialise/
+settings.pro: `env_cfg = getenv('GLOGEM_CONFIG'); if env_cfg ne '' then user_config = env_cfg
+else user_config = base_dir + '/config.pro'` -- confirmed the ONLY place a config path is
+resolved, no other file hardcodes base_dir+'/config.pro'):
+  - `write_training_config()` writes a NEW, self-contained file under run_dir (NOT under
+    GloGEM/scripts/, and never named config.pro).
+  - `GloGEMRunner.run_design_point()` launches `.r glogem` with GLOGEM_CONFIG set to that
+    file's path, so it never reads or writes the real config.pro at all -- fully independent
+    of, and safe to run concurrently with, whatever config.pro is currently pointed at.
+  - Between runs it only rewrites its own override file (firnice_temp_calib_file target).
 
 icetemperature_batch.dat format: reverse-engineered from a REAL example file
 (/scratch_net/vierzack04_fourth/GloGEM_data/icetemperature_batch.dat), not just from reading
@@ -23,6 +28,7 @@ leaves from the ", " delimiter convention), so the exact spacing must be reprodu
 byte or the substring offsets silently pick the wrong glacier id / region code with no error.
 """
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -142,10 +148,11 @@ TRAINING_CONFIG_TEMPLATE = """\
 ; {override_file} between runs (see write_calibration_override) and re-launches `.r glogem`;
 ; this config file itself stays fixed across the whole design matrix.
 ;
-; This file is NOT config.pro. Activate it yourself when config.pro is free:
-;   cp scripts/config_bayescal_training.pro config.pro
-; GloGEMRunner never overwrites config.pro (see runner.py module docstring) -- it only
-; rewrites {override_file} and calls `echo '.r glogem' | idl`.
+; This file is NOT config.pro and is never copied onto it. GloGEMRunner launches IDL with
+; the environment variable GLOGEM_CONFIG set to this file's own path (settings.pro reads
+; GLOGEM_CONFIG in preference to base_dir/config.pro when set) -- runs against this config
+; are fully independent of, and safe to run concurrently with, whatever real config.pro is
+; currently doing.
 
 dirres     = '{run_dir}'
 RGIversion = '7'
@@ -224,12 +231,15 @@ class GloGEMRunner:
         version_past/mtt are both '' by default, so no extra suffix after 'PAST')."""
         return self.run_dir / 'monthly' / self.region_name / 'PAST' / 'firnice_temperature'
 
+    @property
+    def training_config_path(self):
+        return self.run_dir / 'config_bayescal_training.pro'
+
     def write_training_config(self, out_path=None):
-        """Write GloGEM/scripts/config_bayescal_training.pro (a NEW file -- never config.pro
-        itself). Returns the path written."""
-        out_path = Path(out_path) if out_path else (
-            self.glogem_dir / 'scripts' / 'config_bayescal_training.pro'
-        )
+        """Write the training config under run_dir (a NEW file -- never config.pro itself,
+        and never even copied onto it; launched via GLOGEM_CONFIG, see module docstring).
+        Returns the path written."""
+        out_path = Path(out_path) if out_path else self.training_config_path
         text = TRAINING_CONFIG_TEMPLATE.format(
             run_dir=str(self.run_dir) + '/',
             region_id=self.region_id,
@@ -296,14 +306,17 @@ class GloGEMRunner:
     def run_design_point(self, glacier_ids, theta, tag, idl_bin='idl', timeout=1800,
                           skip_if_done=True):
         """Evaluate G(x; theta) for one LHS design point: write the override file, launch
-        `echo '.r glogem' | idl` from glogem_dir, and mark `{tag}.done` on success so re-runs
-        of a partially-completed design matrix skip already-evaluated points (mirrors the
-        *.done sentinel pattern GloGEM's own scripts/overnight_chain.sh and
+        `echo '.r glogem' | idl` from glogem_dir with GLOGEM_CONFIG set to the training config
+        (see write_training_config / module docstring), and mark `{tag}.done` on success so
+        re-runs of a partially-completed design matrix skip already-evaluated points (mirrors
+        the *.done sentinel pattern GloGEM's own scripts/overnight_chain.sh and
         scripts/launch_batches.sh already use).
 
-        Does NOT touch config.pro -- assumes it is already pointed at the training config
-        (see write_training_config). Returns True if the run completed (or was already done),
-        False if the IDL invocation failed (non-zero exit) or timed out.
+        Never touches the real config.pro -- GLOGEM_CONFIG makes this run fully independent
+        of, and safe to launch concurrently with, whatever config.pro is currently doing (see
+        settings.pro's own GLOGEM_CONFIG env-var override, confirmed the only place a config
+        path gets resolved). Returns True if the run completed (or was already done), False if
+        the IDL invocation failed (non-zero exit) or timed out.
         """
         done = self._done_path(tag)
         if skip_if_done and done.exists():
@@ -311,11 +324,16 @@ class GloGEMRunner:
 
         write_calibration_override_single(glacier_ids, theta, self.override_path)
 
+        if not self.training_config_path.exists():
+            self.write_training_config()
+
         log_path = self.run_dir / f'{tag}.log'
+        env = dict(os.environ, GLOGEM_CONFIG=str(self.training_config_path))
         try:
             result = subprocess.run(
                 ['bash', '-c', f"echo '.r glogem' | {idl_bin}"],
                 cwd=str(self.glogem_dir), capture_output=True, text=True, timeout=timeout,
+                env=env,
             )
         except subprocess.TimeoutExpired as exc:
             log_path.write_text(f'TIMEOUT after {timeout}s\n{exc}\n')

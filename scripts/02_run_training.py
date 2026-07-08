@@ -7,10 +7,9 @@ Usage:
     python scripts/02_run_training.py [config.yaml]              # write inputs only (safe)
     python scripts/02_run_training.py [config.yaml] --run [idl_bin]  # actually launch IDL
 
-Writing inputs never touches config.pro or launches IDL. Launching training assumes YOU have
-already activated the training config once config.pro is free:
-    cp GloGEM/scripts/config_bayescal_training.pro GloGEM/config.pro
-(the write-inputs step prints this exact command with the right paths).
+Neither mode touches GloGEM/config.pro: training runs launch with the environment variable
+GLOGEM_CONFIG pointed at the auto-generated training config (see runner.GloGEMRunner's module
+docstring), so they are safe to run concurrently with anything else already using config.pro.
 """
 
 import sys
