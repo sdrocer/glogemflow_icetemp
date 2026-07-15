@@ -9,9 +9,10 @@ include_estimated: true
 run_tag: centraleurope_bayescal
 
 # LHS design / emulator
-n_design_points: 100      # feasibility-spike this first with ~10-20 before committing to 100
+n_design_points: 100      # feasibility-spike confirmed ~258s/point on an idle host -> ~7h total
 design_seed: 42
 explained_variance: 0.99
+remote_host: vierzack03    # run IDL training on an idle host, not wherever config.pro is busy
 
 # MCMC (emcee)
 n_walkers: 32

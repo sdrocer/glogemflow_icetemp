@@ -29,6 +29,7 @@ byte or the substring offsets silently pick the wrong glacier id / region code w
 """
 
 import os
+import signal
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -153,6 +154,16 @@ TRAINING_CONFIG_TEMPLATE = """\
 ; GLOGEM_CONFIG in preference to base_dir/config.pro when set) -- runs against this config
 ; are fully independent of, and safe to run concurrently with, whatever real config.pro is
 ; currently doing.
+;
+; NOT using firnice_batch: confirmed (empirically, via a live-monitored run that got past
+; CentralEurope and moved on to processing 'arcticcanadaN') that firnice_batch mode loops
+; over EVERY RGI region regardless of catchment_selection, paying for ~19 regions' worth of
+; climate-data loading to reach glaciers from just one -- the opposite of the fast, targeted
+; path this training loop needs. catchment_selection alone already restricts the glacier
+; loop to exactly the glaciers listed in catchments/RGI{rgi_region_code}_{catchment}.dat
+; (see write_catchment_file), and firnice_glenglat_lookup places profile output at the real
+; borehole depths independently of firnice_batch (glogem.pro: `if firnice_glenglat_lookup ne
+; '' then @setup_firnice_profile_from_glenglat.pro`, unconditional on firnice_batch).
 
 dirres     = '{run_dir}'
 RGIversion = '7'
@@ -167,15 +178,26 @@ read_parameters = 'y'
 
 refreezing_parametrised = 'y'
 glacier_retreat  = 'n'   ; fixed geometry -- isolate the firn/ice temperature module
-use_flow_model   = 'n'
+use_flow_model   = 'n'  ; full coupled flow model not needed for a fixed-geometry run;
+                         ; enable_advection below still gets a standalone SIA velocity
+                         ; estimate (driving stress + Glen's flow law) as a fallback
 frontal_ablation = 'n'
+; settings.pro defaults write_file='y' (general mass-balance output files); firnice_batch
+; used to force this off as a side effect (setup_firnice_batch.pro), now done explicitly
+; since firnice_batch is unused here.
+write_file       = 'n'
 
 ; Pinned explicitly -- see config_centraleurope_glenglat_knn.pro's own note: `.r glogem`
 ; re-runs in the SAME IDL session do not reset variables this config doesn't mention.
-firnice_batch           = 'y'   ; only the calibration glaciers in icetemperature_batch.dat
+firnice_batch           = 'n'
 firnice_thermal_spinup  = 'n'   ; training runs skip spinup -- fast path, per feasibility spike
-enable_advection        = 'n'
-enable_strain_heating   = 'n'
+enable_advection        = 'y'   ; large glaciers' T(z) is materially shaped by ice advection
+                         ; (cold-ice transport downglacier, emergence near the terminus) --
+                         ; excluding it would structurally bias the emulator against what the
+                         ; real observations reflect. Works via the standalone SIA fallback
+                         ; above, without needing use_flow_model='y'.
+enable_strain_heating   = 'n'   ; open question -- same SIA driving-stress basis as advection,
+                         ; not yet decided whether to include for training runs
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -199,28 +221,103 @@ class GloGEMRunner:
     """
 
     glogem_dir: Path = GLOGEM_DIR
-    run_dir: Path = REPO_ROOT / 'GloGEM' / 'test' / 'data' / 'bayescal_training'
+    # NOT under GloGEM/test/data/ -- that directory is reserved for GloGEM's own test run
+    # fixtures and is unrelated to Tier-3 calibration training output. Matches
+    # CalibrationConfig.training_dir's own convention (glogemflow_icetemp/data/bayescal/
+    # {run_tag}/training_runs); pipeline.py always passes an explicit run_dir=config.
+    # training_dir anyway, so this bare default only applies to a directly-instantiated
+    # GloGEMRunner() with no run_dir given.
+    run_dir: Path = REPO_ROOT / 'glogemflow_icetemp' / 'data' / 'bayescal' / '_default' / 'training_runs'
     override_filename: str = 'bayescal_override_current.dat'
-    catchment: str = 'CentralEurope_glenglat'
-    region_id: int = 14   # RGI region id for CentralEurope (verified against the working
-    # reference config scripts/config_centraleurope_glenglat_knn.pro's own region_id_loop=
-    # [14,14] -- NOT 11; picking the wrong id here would run the wrong glacier set entirely).
+    # Own catchment, NOT the pre-existing 'CentralEurope_glenglat' (16 glaciers, missing 2
+    # that a later climate.py bugfix recovered) -- write_catchment_file() generates this
+    # fresh from the actual calibration glacier set each time, so it always matches exactly.
+    catchment: str = 'CentralEurope_bayescal'
+    region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
+    # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
+    # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
+    # region_id_loop indexes GloGEM's own region_loop_data table; the RGI O1 code is what
+    # catchment filenames use (assign_region_parameters.pro:
+    # rgiregion=region_loop_data[1,re+region_id_loop[0]-1] -- confirmed 14 -> '11' from the
+    # existing RGI11_CentralEurope_glenglat.dat catchment file working with region_id_loop=14).
+    rgi_region_code: str = '11'
     region_name: str = 'CentralEurope'  # GloGEM's own output-path directory name for this
     # region (prepare_output_firnicetemp.pro's dir_region, from assign_region_parameters.pro's
     # region_loop_data lookup table) -- confirmed against real on-disk output from the k-NN
     # reference run: .../monthly/CentralEurope/PAST/firnice_temperature/temp_ID*.dat.
     year_min: int = 1991
     year_max: int = 2020
+    # catchment_selection.pro reads catchments/RGI{code}_{catchment}.dat from
+    # main_dir+'data/', where main_dir defaults (settings.pro) to /itet-stor/{user}/glogem/ --
+    # a SHARED production location (like calibration_source_dir), not dirres/run_dir-relative.
+    # Confirmed the existing reference catchment file actually lives here, not under the
+    # repo's test/ sandbox (that copy is a test-suite mirror, not what real runs read).
+    catchments_dir: Path = Path('/itet-stor/jabeer/glogem/data/catchments')
     glenglat_lookup_file: Optional[str] = None
+    # Launch IDL over `ssh -o BatchMode=yes {remote_host}` instead of running locally, so
+    # training runs land on an idle machine instead of contending with other GloGEM work on
+    # this host. Confirmed empirically: the SAME config that never finished after repeated
+    # multi-minute-to-multi-day CPU contention on a busy host completed in 258s on an idle
+    # one. All paths involved (repo, /itet-stor, /scratch_net/vierzack04_fourth) are on
+    # shared network storage, so output lands in the same place regardless of remote_host.
+    remote_host: Optional[str] = None
+    # settings.pro sets dircali = dirres unconditionally (no independent override) --
+    # read_calibration_params.pro therefore looks for MB-calibration output UNDER
+    # WHATEVER dirres THIS run points at, not some fixed shared location. A fresh, empty
+    # dirres (any new run_dir) has no such file; read_calibration_params.pro's own
+    # missing-file path is not a clean fast failure (confirmed by real testing: two IDL
+    # runs against a fresh run_dir each ran 15-20 CPU-bound minutes with zero output
+    # before being killed -- diagnosed after the fact from the working reference config's
+    # OWN header comment: "Mass-balance calibration is reused (copied) from the existing
+    # CentralEurope_glenglat_calib run rather than re-calibrated", confirmed by the user).
+    # copy_calibration_data() must run before ANY training IDL invocation.
+    calibration_source_dir: Path = Path(
+        '/scratch_net/vierzack04_fourth/jabeer/GloGEM/glogemflow_development/'
+        'CentralEurope_glenglat_calib/monthly/CentralEurope/calibration'
+    )
+    # read_calibration_params.pro embeds catchment_selection in the calibration filename
+    # itself (calibrate_m{mm}_cID{cp}_{sub_region}_final_{reanalysis}_{catchment}.dat) --
+    # copying the source files verbatim under a DIFFERENT catchment name (self.catchment)
+    # leaves them undiscoverable (confirmed live: "!!! Parameter-File for centraleurope is
+    # not available !!!"). copy_calibration_data() renames catchment name only.
+    calibration_source_catchment: str = 'CentralEurope_glenglat'
 
     def __post_init__(self):
         self.glogem_dir = Path(self.glogem_dir)
         self.run_dir = Path(self.run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.calibration_source_dir = Path(self.calibration_source_dir)
+        self.catchments_dir = Path(self.catchments_dir)
 
     @property
     def override_path(self):
         return self.run_dir / self.override_filename
+
+    @property
+    def catchment_file_path(self):
+        return self.catchments_dir / f'RGI{self.rgi_region_code}_{self.catchment}.dat'
+
+    def write_catchment_file(self, glaciers):
+        """Write catchments/RGI{rgi_region_code}_{catchment}.dat (catchment_selection.pro's
+        format: header line 'RGI-ID', then one 'RGI70-{rgi_region_code}.{5-digit glacier_id}'
+        line per glacier -- verified against the existing RGI11_CentralEurope_glenglat.dat).
+
+        Generated fresh from the ACTUAL calibration glacier set every call (not reused from
+        the pre-existing CentralEurope_glenglat catchment, which has 16 glaciers and is
+        missing 2 that a later climate.py region-parsing bugfix recovered) -- deduplicates
+        glacier_id (multiple GlacierCalibrationData objects can share one GloGEM glacier_id,
+        see emulator.py's glacier_name-keying note).
+
+        Writes into the SHARED production catchments directory (catchments_dir), not
+        run_dir -- catchment_selection.pro's own file lookup is main_dir-relative, with no
+        per-run override. Only ADDS a new, uniquely-named file; never touches any other
+        catchment file already there.
+        """
+        ids = sorted({g.glacier_id for g in glaciers if g.glacier_id})
+        lines = ['RGI-ID'] + [f'RGI70-{self.rgi_region_code}.{gid}' for gid in ids]
+        self.catchments_dir.mkdir(parents=True, exist_ok=True)
+        self.catchment_file_path.write_text('\n'.join(lines) + '\n')
+        return self.catchment_file_path, len(ids)
 
     @property
     def firnice_output_dir(self):
@@ -230,6 +327,51 @@ class GloGEMRunner:
         whenever calibrate='n' and tran[1]<2026, which TRAINING_CONFIG_TEMPLATE satisfies;
         version_past/mtt are both '' by default, so no extra suffix after 'PAST')."""
         return self.run_dir / 'monthly' / self.region_name / 'PAST' / 'firnice_temperature'
+
+    @property
+    def calibration_dest_dir(self):
+        """Where read_calibration_params.pro looks for MB-calibration output under THIS
+        run's dircali(=dirres): dircali/time_resolution/dir_region/calibration/ (see
+        read_calibration_params.pro: fn=dircali+'/'+time_resolution+'/'+dir_region+
+        '/calibration/calibrate_m...')."""
+        return self.run_dir / 'monthly' / self.region_name / 'calibration'
+
+    def copy_calibration_data(self):
+        """Copy pre-existing MB-calibration output (DDFsnow/DDFice/c_prec/t_offset per
+        glacier) into this run's own dircali location, so read_calibration_params.pro
+        (read_parameters='y' in TRAINING_CONFIG_TEMPLATE) finds real data on the very
+        first IDL invocation instead of a missing file. One-time, idempotent (skips
+        files that already exist with the same size).
+
+        Renames calibration_source_catchment -> self.catchment in each filename during
+        copy: read_calibration_params.pro embeds catchment_selection directly in the
+        filename it looks for (calibrate_m..._{catchment}.dat), so a verbatim copy under a
+        different catchment name is silently invisible to it (confirmed live: "!!!
+        Parameter-File for centraleurope is not available !!!" -- not fatal, but the run
+        then proceeds with empty/zero calibration parameters instead of real ones).
+
+        Returns the list of files copied.
+        """
+        import shutil
+
+        if not self.calibration_source_dir.is_dir():
+            raise FileNotFoundError(
+                f'calibration_source_dir not found: {self.calibration_source_dir} -- '
+                'training runs need pre-existing MB-calibration output copied into their '
+                'own dirres (dircali=dirres has no independent override in settings.pro); '
+                'point calibration_source_dir at a completed calibrate=\'y\' run for this '
+                'catchment/region.'
+            )
+        dest = self.calibration_dest_dir
+        dest.mkdir(parents=True, exist_ok=True)
+        copied = []
+        for src_file in self.calibration_source_dir.glob('*.dat'):
+            dest_name = src_file.name.replace(self.calibration_source_catchment, self.catchment)
+            dest_file = dest / dest_name
+            if not dest_file.exists() or dest_file.stat().st_size != src_file.stat().st_size:
+                shutil.copy2(src_file, dest_file)
+                copied.append(dest_file)
+        return copied
 
     @property
     def training_config_path(self):
@@ -243,6 +385,7 @@ class GloGEMRunner:
         text = TRAINING_CONFIG_TEMPLATE.format(
             run_dir=str(self.run_dir) + '/',
             region_id=self.region_id,
+            rgi_region_code=self.rgi_region_code,
             catchment=self.catchment,
             year_min=self.year_min,
             year_max=self.year_max,
@@ -306,11 +449,11 @@ class GloGEMRunner:
     def run_design_point(self, glacier_ids, theta, tag, idl_bin='idl', timeout=1800,
                           skip_if_done=True):
         """Evaluate G(x; theta) for one LHS design point: write the override file, launch
-        `echo '.r glogem' | idl` from glogem_dir with GLOGEM_CONFIG set to the training config
-        (see write_training_config / module docstring), and mark `{tag}.done` on success so
-        re-runs of a partially-completed design matrix skip already-evaluated points (mirrors
-        the *.done sentinel pattern GloGEM's own scripts/overnight_chain.sh and
-        scripts/launch_batches.sh already use).
+        `echo '.r glogem' | idl` (locally, or over ssh on self.remote_host) with GLOGEM_CONFIG
+        set to the training config (see write_training_config / module docstring), and mark
+        `{tag}.done` on success so re-runs of a partially-completed design matrix skip
+        already-evaluated points (mirrors the *.done sentinel pattern GloGEM's own
+        scripts/overnight_chain.sh and scripts/launch_batches.sh already use).
 
         Never touches the real config.pro -- GLOGEM_CONFIG makes this run fully independent
         of, and safe to launch concurrently with, whatever config.pro is currently doing (see
@@ -328,19 +471,48 @@ class GloGEMRunner:
             self.write_training_config()
 
         log_path = self.run_dir / f'{tag}.log'
-        env = dict(os.environ, GLOGEM_CONFIG=str(self.training_config_path))
+        # GLOGEM_RUN_TAG is not read by GloGEM itself -- it's a unique marker embedded in the
+        # command line so a timeout can reliably pkill -f this exact invocation. Env vars must
+        # be embedded in the command string (not passed via Popen's env=) because ssh does not
+        # forward the local Python process's environment to the remote host.
+        run_marker = f'{tag}_{os.getpid()}'
+        inner_cmd = (
+            f"cd {self.glogem_dir} && GLOGEM_CONFIG='{self.training_config_path}' "
+            f"GLOGEM_RUN_TAG='{run_marker}' bash -c \"echo '.r glogem' | {idl_bin}\""
+        )
+        if self.remote_host:
+            cmd = ['ssh', '-o', 'BatchMode=yes', self.remote_host, inner_cmd]
+        else:
+            cmd = ['bash', '-c', inner_cmd]
+
+        # start_new_session=True puts the launched process in its own process group, so a
+        # timeout can kill the WHOLE group via os.killpg -- plain subprocess.run(timeout=...)
+        # only terminates the immediate wrapper, orphaning idl as a runaway 100%-CPU process
+        # (confirmed twice locally: two killed timeouts each left a live idl process running).
+        # For the remote case, killing the local ssh client does NOT reliably kill the remote
+        # idl process (ssh only propagates a hangup if a pty was allocated, which -o
+        # BatchMode=yes does not do) -- so a timeout ALSO explicitly pkills on the remote host
+        # by the unique GLOGEM_RUN_TAG marker.
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, start_new_session=True,
+        )
         try:
-            result = subprocess.run(
-                ['bash', '-c', f"echo '.r glogem' | {idl_bin}"],
-                cwd=str(self.glogem_dir), capture_output=True, text=True, timeout=timeout,
-                env=env,
-            )
-        except subprocess.TimeoutExpired as exc:
-            log_path.write_text(f'TIMEOUT after {timeout}s\n{exc}\n')
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            proc.wait()
+            if self.remote_host:
+                subprocess.run(
+                    ['ssh', '-o', 'BatchMode=yes', self.remote_host,
+                     f"pkill -9 -f 'GLOGEM_RUN_TAG={run_marker}'"],
+                    timeout=30, capture_output=True,
+                )
+            log_path.write_text(f'TIMEOUT after {timeout}s -- process group killed\n')
             return False
 
-        log_path.write_text(result.stdout + '\n' + result.stderr)
-        if result.returncode != 0:
+        log_path.write_text(stdout + '\n' + stderr)
+        if proc.returncode != 0:
             return False
         done.touch()
         return True

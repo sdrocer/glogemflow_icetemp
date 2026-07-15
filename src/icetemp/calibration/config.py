@@ -24,6 +24,11 @@ class CalibrationConfig:
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.99
+    # Launch IDL training runs over ssh on this host instead of locally -- pick an idle
+    # machine (e.g. 'vierzack03', 'vierzack06') to avoid contending with other GloGEM work.
+    # Confirmed empirically: identical config went from never finishing (days, CPU
+    # contention) to 258s per design point on an idle host. None = run locally.
+    remote_host: str = None
 
     # -- MCMC --------------------------------------------------------------------------
     n_walkers: int = 32

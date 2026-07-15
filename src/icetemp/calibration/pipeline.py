@@ -70,19 +70,28 @@ class CalibrationPipeline:
 
     # -- 02_run_training --------------------------------------------------------------------
     def write_training_inputs(self):
-        """Writes the glenglat elevation lookup, training config, and icetemperature_batch.dat
-        -- does NOT touch config.pro and does NOT run IDL. See runner.GloGEMRunner's module
+        """Writes the catchment file, glenglat elevation lookup, and training config -- does
+        NOT touch config.pro and does NOT run IDL. See runner.GloGEMRunner's module
         docstring: training runs launch via the GLOGEM_CONFIG env var, never config.pro, so
-        no activation step is needed here -- run_training() can be called directly."""
-        self.runner = GloGEMRunner(run_dir=self.config.training_dir)
+        no activation step is needed here -- run_training() can be called directly.
+
+        Uses catchment_selection + firnice_glenglat_lookup, NOT firnice_batch: confirmed
+        (real, live-monitored run) that firnice_batch mode loops over every RGI region
+        regardless of catchment_selection, the opposite of the fast/targeted path needed
+        here. See runner.GloGEMRunner.write_catchment_file / TRAINING_CONFIG_TEMPLATE.
+        """
+        self.runner = GloGEMRunner(run_dir=self.config.training_dir, remote_host=self.config.remote_host)
+        copied = self.runner.copy_calibration_data()
+        print(f'copied {len(copied)} MB-calibration file(s) into {self.runner.calibration_dest_dir} '
+              f'(from {self.runner.calibration_source_dir})')
         glaciers = self._calibration_glaciers()
+        catchment_path, n_catchment = self.runner.write_catchment_file(glaciers)
+        print(f'wrote catchment file ({n_catchment} glaciers) -> {catchment_path}')
         lookup_path, n_ids, n_elevs = self.runner.write_glenglat_lookup(glaciers)
         print(f'wrote glenglat elevation lookup ({n_ids} glacier_ids, {n_elevs} elevations) -> {lookup_path}')
         config_path = self.runner.write_training_config()
-        batch_path, n_written, n_skipped = self.runner.write_batch_file(glaciers)
         print(f'wrote training config (launched via GLOGEM_CONFIG, never config.pro) -> {config_path}')
-        print(f'wrote batch file ({n_written} glaciers, {n_skipped} skipped -- no glacier_id) -> {batch_path}')
-        return config_path, batch_path
+        return config_path, catchment_path
 
     def run_training(self, idl_bin='idl', timeout=1800):
         """Actually launches IDL at every design point. Assumes config.pro is already
