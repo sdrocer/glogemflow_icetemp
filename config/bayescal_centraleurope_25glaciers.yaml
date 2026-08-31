@@ -1,0 +1,62 @@
+# Tier-3 Bayesian (Kennedy-O'Hagan) calibration -- CentralEurope, EXPANDED calibration set.
+#
+# Separate campaign from bayescal_centraleurope.yaml (18 glaciers), deliberately kept as a
+# clean, single-variable change: same 100-point LHS design (design.csv copied byte-identical
+# from the 18-glacier run, not regenerated), same fixed_perm_frac/track='depth' calibration
+# machinery -- ONLY the calibration glacier set changes (18 -> 25), via include_unassessed:
+# true (blank/never-curator-reviewed equilibrium profiles, which glenglat's own tutorial.ipynb
+# treats as includable -- NOT equilibrium=='false', which carries a confirmed depth-decaying
+# warm bias and is not included by this flag). This isolates whether the boundary-pinning seen
+# in the 18-glacier run was (partly) a data-sparsity artifact, decoupled from the separate
+# question of whether the theta (dT_scale, z0) training design itself needs widening -- see
+# calibration_methodology_current.md (repo root) for the full debugging history.
+#
+# Read by icetemp.calibration.CalibrationConfig.from_yaml and each of
+# glogemflow_icetemp/scripts/01_build_design.py .. 05_validate_and_writeback.py.
+
+region: CentralEurope
+include_estimated: true
+include_unassessed: true   # the actual variable under test in this campaign
+run_tag: centraleurope_bayescal_25glaciers
+
+# MB-calibration source: the original narrow CentralEurope_glenglat_calib source has NO entry
+# at all for 3 of the 25 glaciers (Glacier du Pelvoux 00245, Grubengletscher 01127,
+# Hintereisferner 03116) -- confirmed directly, 0 matches in its aggregate calibration file.
+# Without real calibration data, read_calibration_params.pro falls back to degenerate/zero
+# parameters silently (not a fast failure). output_template_calibrated has full coverage
+# (all 22 unique glacier_ids across the 25-glacier set confirmed present) -- but that
+# directory holds 94 files spanning many unrelated calibration-experiment/sensitivity
+# variants, so calibration_source_files whitelists exactly the 4 real m1/cID9/centraleurope
+# files read_calibration_params.pro and its neighbours actually need (see
+# runner.GloGEMRunner.copy_calibration_data's ERA5->era5 case-normalization note -- this
+# source uses uppercase ERA5, settings.pro:71 sets reanalysis='era5').
+calibration_source_dir: /scratch_net/vierzack04_fourth/jabeer/GloGEM/output_template_calibrated/r6_monthly/CentralEurope/calibration
+calibration_source_files:
+  - calibrate_m1_cID9_centraleurope.dat
+  - calibrate_m1_cID9_centraleurope_final_ERA5.dat
+  - caliphase_statistics_m1_cID9_centraleurope.dat
+  - toff_m1_cID9_centraleurope.dat
+
+# LHS design / emulator -- design.csv is copied byte-identical from the 18-glacier campaign
+# (same design_seed=42), NOT regenerated, so 01_build_design.py's own "skip if exists" logic
+# reuses it automatically. Listed here only for documentation/consistency.
+n_design_points: 100
+design_seed: 42
+explained_variance: 0.99
+remote_host: vierzack04
+                    # has finished and a host is genuinely idle
+                    # idle -- all of vierzack03-07 were busy (load 4.36-17.8) when this
+                    # campaign was queued.
+
+# MCMC (emcee) -- same settings as the 18-glacier campaign, for a fair comparison.
+n_walkers: 32
+n_steps: 30000
+burn_in: 5000
+thin: 5
+mcmc_seed: 42
+
+# leave-one-out validation
+loo_mode: map
+
+# paths (output_dir left unset -> defaults to
+#   glogemflow_icetemp/data/bayescal/{run_tag}/, already seeded with design.csv)

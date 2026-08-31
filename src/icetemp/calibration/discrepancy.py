@@ -27,17 +27,56 @@ EARTH_R_KM = 6371.0088
 # Matern length-scale search range [km]: notebook 05's own choice, wide enough to let
 # marginal-likelihood optimisation find anything from "very local" to "near-continental".
 LENGTH_SCALE_INIT_KM = 80.0
-LENGTH_SCALE_BOUNDS_KM = (10.0, 500.0)
+# Lower bound dropped 10.0 -> 0.02 km on 2026-08-20. After the elevation split the MEDIAN
+# inter-entity separation is 0.171 km, so a 10 km floor is two orders of magnitude coarser than
+# the structure the split exists to expose: sklearn's optimiser pinned the fit AT the lower bound
+# on campaign 7 (ConvergenceWarning, "close to the specified lower bound 10.0") and co-located
+# entities came out correlated ~0.991 -- i.e. the GP was forced to treat one glacier's 24 bands
+# as a single location no matter what the data said. 0.02 km (20 m) is below the closest real
+# separation, so the bound no longer binds and the marginal likelihood is free to choose.
+LENGTH_SCALE_BOUNDS_KM = (0.02, 500.0)
 
 
-def latlon_to_xyz(lat, lon):
+# Elevation length-scale search range [m], used only when latlon_to_xyz is given elevations.
+# Wide enough to span "discrepancy changes within one glacier's elevation span" (~50 m) to
+# "effectively elevation-independent" (~3000 m, i.e. larger than any single glacier's range).
+ELEV_LENGTH_SCALE_INIT_M = 300.0
+# Upper bound raised 3000 -> 12000 m on 2026-08-20: the horizontal dimensions were pinning at
+# their own 500 km upper bound (ConvergenceWarning on dimensions 1 and 2), which is the ARD
+# kernel's way of saying "this coordinate carries no information" -- a legitimate answer it must
+# be able to express without hitting a wall, otherwise the pinned value is an artefact of the
+# bound rather than a finding.
+ELEV_LENGTH_SCALE_BOUNDS_M = (20.0, 12000.0)
+
+
+def latlon_to_xyz(lat, lon, elevation=None):
     """Embed (lat, lon) on the unit sphere (scaled by Earth radius) so a standard isotropic
-    kernel behaves like a great-circle-distance kernel."""
+    kernel behaves like a great-circle-distance kernel.
+
+    If `elevation` (m a.s.l.) is given, it is appended as a FOURTH coordinate and the caller
+    must use an ANISOTROPIC kernel (see Discrepancy._fit_one) -- the first three columns are in
+    KILOMETRES while elevation is in METRES, so an isotropic length scale of 10-500 km would
+    make a 1000 m elevation difference effectively invisible. Giving elevation its own length
+    scale is what makes the extra coordinate do anything at all.
+
+    WHY ELEVATION IS NEEDED (2026-08-19): calibration entities are being split from one per
+    glacier to one per (glacier, 10 m elevation band) -- 24 -> 125 entities for CentralEurope --
+    so that deep boreholes on a glacier's tongue stop being matched against the model column at
+    that glacier's summit (Grenzgletscher pooled boreholes from 2015 m to 4485 m into a single
+    entity assigned 4450 m, so its 348 m tongue borehole was compared against a 35.9 m model
+    column). After that split, up to 28 entities of the same glacier sit at essentially
+    IDENTICAL lat/lon; on lat/lon alone the kernel would treat them as one location, giving a
+    singular or near-singular covariance and collapsing exactly the along-flow structure the
+    split exists to expose.
+    """
     lat_r, lon_r = np.radians(lat), np.radians(lon)
     x = EARTH_R_KM * np.cos(lat_r) * np.cos(lon_r)
     y = EARTH_R_KM * np.cos(lat_r) * np.sin(lon_r)
     z = EARTH_R_KM * np.sin(lat_r)
-    return np.column_stack([x, y, z])
+    cols = [x, y, z]
+    if elevation is not None:
+        cols.append(np.asarray(elevation, dtype=float))
+    return np.column_stack(cols)
 
 
 @dataclass
@@ -74,9 +113,22 @@ class Discrepancy:
         self._locations = {}
 
     def _fit_one(self, X_xyz, residuals, nugget_floor):
+        # 3 columns -> isotropic great-circle kernel (the original behaviour, unchanged).
+        # 4 columns -> ANISOTROPIC (ARD) kernel: the three spatial columns are kilometres on the
+        # sphere embedding, the fourth is elevation in metres, so they cannot share a length
+        # scale (see latlon_to_xyz). The spatial three are given the same initial value and the
+        # same bounds, so they stay near-isotropic unless the data genuinely says otherwise --
+        # a mild departure from an exact great-circle metric, acceptable because all calibration
+        # glaciers sit in one region where the embedding is close to a local tangent plane.
+        n_dim = np.asarray(X_xyz).shape[1]
+        if n_dim == 4:
+            ls = [LENGTH_SCALE_INIT_KM] * 3 + [ELEV_LENGTH_SCALE_INIT_M]
+            ls_bounds = [LENGTH_SCALE_BOUNDS_KM] * 3 + [ELEV_LENGTH_SCALE_BOUNDS_M]
+        else:
+            ls, ls_bounds = LENGTH_SCALE_INIT_KM, LENGTH_SCALE_BOUNDS_KM
         kernel = (
             ConstantKernel(1.0, (1e-3, 1e3))
-            * Matern(length_scale=LENGTH_SCALE_INIT_KM, length_scale_bounds=LENGTH_SCALE_BOUNDS_KM, nu=1.5)
+            * Matern(length_scale=ls, length_scale_bounds=ls_bounds, nu=1.5)
             + WhiteKernel(noise_level=max(nugget_floor, 1e-6),
                           noise_level_bounds=(max(nugget_floor, 1e-6) * 0.5, nugget_floor * 50 + 10.0))
         )
@@ -85,32 +137,41 @@ class Discrepancy:
         gp.fit(X_xyz, residuals)
         return gp
 
-    def fit(self, param_name, latitudes, longitudes, residuals):
+    def fit(self, param_name, latitudes, longitudes, residuals, elevations=None):
         """Fit the spatial residual GP for one parameter ('perm_frac' | 'dT_scale' | 'z0').
 
         residuals: calibrated_value - global_transfer_model_prediction, one per glacier (see
         writeback.compute_residuals). normalize_y=False keeps the prior mean exactly 0 --
         "no nearby data => trust the global Tier-2 model unmodified".
         """
-        X = latlon_to_xyz(np.asarray(latitudes), np.asarray(longitudes))
+        X = latlon_to_xyz(np.asarray(latitudes), np.asarray(longitudes), elevations)
         gp = self._fit_one(X, np.asarray(residuals), self.nugget_floor[param_name])
         self._gps[param_name] = gp
         self._locations[param_name] = X
         return gp
 
-    def predict(self, param_name, latitudes, longitudes):
-        """Posterior (mean, std) of delta(x) for one parameter at new locations."""
+    def predict(self, param_name, latitudes, longitudes, elevations=None):
+        """Posterior (mean, std) of delta(x) for one parameter at new locations.
+
+        `elevations` MUST be supplied iff the corresponding fit() supplied them -- a GP trained
+        on 4 columns cannot predict from 3. Guarded below rather than left to fail deep inside
+        sklearn with an opaque shape error."""
         gp = self._gps[param_name]
-        X = latlon_to_xyz(np.asarray(latitudes), np.asarray(longitudes))
+        n_trained = self._locations[param_name].shape[1]
+        if (elevations is None) != (n_trained == 3):
+            raise ValueError(
+                f"discrepancy '{param_name}' was fit on {n_trained} coordinate columns but "
+                f"predict was called {'without' if elevations is None else 'with'} elevations")
+        X = latlon_to_xyz(np.asarray(latitudes), np.asarray(longitudes), elevations)
         mean, std = gp.predict(X, return_std=True)
         return mean, std
 
-    def predict_all(self, latitudes, longitudes):
+    def predict_all(self, latitudes, longitudes, elevations=None):
         """Posterior (mean, std) for all three parameters at once. Returns two dicts keyed by
         param name, each mapping to an array of shape (n_locations,)."""
         means, stds = {}, {}
         for name in self._gps:
-            m, s = self.predict(name, latitudes, longitudes)
+            m, s = self.predict(name, latitudes, longitudes, elevations)
             means[name], stds[name] = m, s
         return means, stds
 

@@ -1,0 +1,68 @@
+# CAMPAIGN 6 -- DIAGNOSTIC: where does the likelihood actually want (perm_frac, dT_scale) to be?
+#
+# Campaign 5 converged beautifully (R-hat 1.0, ESS ~22000, connected support) but its posterior
+# pinned against the LOWER bound of BOTH free parameters:
+#     perm_frac 0.125 +/- 0.006   (design min 0.1015, nominal floor 0.1)
+#     dT_scale  0.243 +/- 0.014   (design min 0.2263, nominal floor 0.2 -- lowest posterior
+#                                  sample equalled the design edge to 4 dp)
+# i.e. the sampler is pressed against the wall and would go lower if allowed. That is either a
+# real model bias theta cannot absorb, or simply the edge of where we happened to sample.
+# This campaign distinguishes the two by extending the design AND the prior BELOW the floors.
+#
+# NOT a production proposal. Sub-floor values are a DIAGNOSTIC to locate the unconstrained
+# optimum and quantify how far outside the parameterisation the model is asking to be. Adopting
+# any value below the nominal floor would need separate physical justification.
+#
+# WHY THIS IS SAMPLEABLE AT ALL: the TRAINING override path does not re-clip --
+# apply_firnicetemp_calibration.pro assigns firnice_*_b directly (the _bayes/_knn appliers DO
+# clip, but are not used by training runs). And physics.py describes its bounds as
+# "settings.pro / apply_firnicetemp_calibration_knn.pro re-clip bounds", i.e. operational
+# limits rather than hard physics.
+#
+# DESIGN: 190 points = the 150 from campaign 5 (rows 0-149, byte-identical, reused via their
+# .done sentinels) + 40 new low-end points, 2D LHS over perm_frac [0.02, 0.30] x
+# dT_scale [0.05, 0.60], z0 constant at 15.0. Upper edges deliberately overlap the existing
+# design so the two blocks join continuously instead of leaving a gap the trust gate must
+# bridge. 12 of the new points sit below the perm_frac floor and 11 below the dT_scale floor.
+# design_seed=46 (42-45 used by earlier campaigns).
+#
+# REUSE IS SAFE HERE, unlike campaigns 3 and 4: those reused .done sentinels WITHOUT persisted
+# per-point outputs, and run_design_matrix then re-parsed whatever profile files happened to be
+# on disk -- silently duplicating 68.3% and 58.8% of their training data respectively (fixed
+# 2026-08-19; see runner.run_design_matrix). Campaign 5 ran every point fresh (0/150 duplicated,
+# verified bitwise) and its 150 per-point outputs have been materialised as {tag}.output.pkl, so
+# the fixed runner reloads the genuine output on skip rather than guessing.
+#
+# Only the 40 new points actually launch IDL: ~2.6 h at the measured 237 s/point.
+
+region: CentralEurope
+include_estimated: true
+include_unassessed: true
+run_tag: centraleurope_physicsfix_widened
+
+# Diagnostic prior widening -- must match the design's extended range, otherwise the sampler
+# would be re-confined by the prior to exactly the floors this campaign exists to test.
+bounds_override:
+  perm_frac: [0.02, 1.0]
+  dT_scale: [0.05, 5.0]
+
+calibration_source_dir: /scratch_net/vierzack04_fourth/jabeer/GloGEM/output_template_calibrated/r6_monthly/CentralEurope/calibration
+calibration_source_files:
+  - calibrate_m1_cID9_centraleurope.dat
+  - calibrate_m1_cID9_centraleurope_final_ERA5.dat
+  - caliphase_statistics_m1_cID9_centraleurope.dat
+  - toff_m1_cID9_centraleurope.dat
+
+n_design_points: 190
+design_seed: 46
+explained_variance: 0.99
+remote_host: vierzack06
+
+# MCMC -- unchanged from campaigns 1-5 so convergence stays comparable across the series.
+n_walkers: 32
+n_steps: 30000
+burn_in: 5000
+thin: 5
+mcmc_seed: 42
+
+loo_mode: map

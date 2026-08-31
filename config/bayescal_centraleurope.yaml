@@ -12,12 +12,21 @@ run_tag: centraleurope_bayescal
 n_design_points: 100      # feasibility-spike confirmed ~258s/point on an idle host -> ~7h total
 design_seed: 42
 explained_variance: 0.99
-remote_host: vierzack03    # run IDL training on an idle host, not wherever config.pro is busy
+remote_host: vierzack06    # vierzack03 picked up another user's load (4 IDL procs, one at
+                           # 68% CPU) since the last campaign; vierzack06 is idle (load 0.08)
+                           # and isn't anyone's primary interactive machine (unlike vierzack04,
+                           # which is idle right now but risks the same contention this
+                           # project already hit once if its owner resumes work mid-campaign)
 
 # MCMC (emcee)
+# First production run (n_steps=5000) did NOT converge: r_hat 2.0-2.2 for all 3 params,
+# tau (integrated autocorrelation time) ~190-224 steps -- emcee's own rule of thumb wants
+# chain length >= 50*tau (>=~11200 steps) before trusting tau at all, well short of what
+# 5000 steps gives. Raised substantially; re-running steps 4-5 only (pure Python, reuses
+# the already-fitted emulator.pkl from the 100 real IDL training runs, no IDL needed).
 n_walkers: 32
-n_steps: 5000
-burn_in: 1000
+n_steps: 30000
+burn_in: 5000
 thin: 5
 mcmc_seed: 42
 

@@ -1,0 +1,46 @@
+# SMOKE TEST -- not a campaign. 6 design points, run to verify that the 2026-08-18 IDL physics
+# fixes (B1/B2/B4 in firnice_temperature_model.pro) compile and produce sane profiles BEFORE
+# committing ~6-9 h of compute to a full 245-point campaign.
+#
+# What it checks:
+#   1. IDL still compiles and runs with the edited firnice_temperature_model.pro.
+#   2. Output profiles are physically sane (monotonic-ish, within PMP, no NaN/sentinel storms).
+#   3. Design rows 0 and 1 are copied BYTE-IDENTICAL from the 245-point
+#      centraleurope_bayescal_25glaciers_thetaexp_v2 design (its rows 0 and 100), so the same
+#      theta can be diffed old-physics vs new-physics to isolate exactly what the fixes changed.
+#   4. Rows 2-4 vary perm_frac at fixed dT_scale=1.5, z0=15 to confirm perm_frac produces a
+#      real, ordered effect under the new physics (it must -- spearman +0.618 on the old runs).
+#   5. Row 5 raises dT_scale as a positive control.
+#
+# The fixes under test (see firnice_temperature_model.pro for the full in-code rationale):
+#   B1 guard MAX(ABS(vertical_vel)) -- ablation-zone emergence advection was unreachable
+#   B2 Nye shape 1-zeta^(n+1) on TRUE depth, renormalised by 0.8 for depth-averaged u
+#   B4 basal Neumann BC T[bed] = T[bed-1] + G*dz/k, and stop wiping the bed node each month
+# (B3 strain heating deliberately NOT fixed -- user decision 2026-08-18, and it is off by
+# default so it affects nothing here.)
+
+region: CentralEurope
+include_estimated: true
+include_unassessed: true
+run_tag: smoketest_physicsfix
+
+calibration_source_dir: /scratch_net/vierzack04_fourth/jabeer/GloGEM/output_template_calibrated/r6_monthly/CentralEurope/calibration
+calibration_source_files:
+  - calibrate_m1_cID9_centraleurope.dat
+  - calibrate_m1_cID9_centraleurope_final_ERA5.dat
+  - caliphase_statistics_m1_cID9_centraleurope.dat
+  - toff_m1_cID9_centraleurope.dat
+
+# design.csv is hand-written (see above), NOT generated -- 01_build_design.py is skipped.
+n_design_points: 6
+design_seed: 0
+explained_variance: 0.99
+remote_host: vierzack07
+
+# MCMC settings are irrelevant here (smoke test stops after step 2b) but must parse.
+n_walkers: 8
+n_steps: 100
+burn_in: 20
+thin: 2
+mcmc_seed: 42
+loo_mode: map

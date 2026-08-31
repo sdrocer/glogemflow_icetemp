@@ -101,6 +101,11 @@ class ResidualWriter:
     def _fit_param_discrepancies(self):
         lat = np.array([r['latitude'] for r in self._effective])
         lon = np.array([r['longitude'] for r in self._effective])
+        # Elevation as a third coordinate, matching BayesianCalibrator.fit_discrepancy. This was
+        # the SECOND place the elevation split was silently dropped: r['elevation'] was already in
+        # scope here, so the per-parameter deltas exported to ~4000 glaciers collapsed every band
+        # of one glacier onto a single location exactly as the temperature discrepancy did.
+        self._elev = np.array([r['elevation'] for r in self._effective])
         for name, eff_key, base_idx in [
             ('perm_frac', 'perm_frac_eff', 0), ('dT_scale', 'dT_scale_eff', 1), ('z0', 'z0_eff', 2),
         ]:
@@ -108,11 +113,16 @@ class ResidualWriter:
             for r in self._effective:
                 base = self.transfer_model.predict(r['T_maat'], r['T_amplitude'], r['elevation'])
                 residuals.append(r[eff_key] - base[base_idx])
-            self.discrepancy.fit(name, lat, lon, np.array(residuals))
+            self.discrepancy.fit(name, lat, lon, np.array(residuals), elevations=self._elev)
 
-    def predict_deltas(self, latitudes, longitudes):
-        """Posterior-mean spatial correction (+std) per parameter at arbitrary locations."""
-        means, stds = self.discrepancy.predict_all(latitudes, longitudes)
+    def predict_deltas(self, latitudes, longitudes, elevations=None):
+        """Posterior-mean spatial correction (+std) per parameter at arbitrary locations.
+
+        `elevations` is REQUIRED whenever _fit_param_discrepancies supplied them (it does, since
+        2026-08-20) -- Discrepancy.predict raises loudly on a mismatch rather than silently
+        predicting from a differently-shaped design.
+        """
+        means, stds = self.discrepancy.predict_all(latitudes, longitudes, elevations)
         return means, stds
 
     def write(self, prediction_glaciers, path, climate=None):
@@ -127,7 +137,16 @@ class ResidualWriter:
         """
         lat = prediction_glaciers['latitude'].to_numpy(dtype=float)
         lon = prediction_glaciers['longitude'].to_numpy(dtype=float)
-        means, stds = self.predict_deltas(lat, lon)
+        # The GP was fit with elevation (see _fit_param_discrepancies), so prediction MUST supply
+        # it too. Fail loudly and specifically if the caller's table lacks the column, rather than
+        # letting sklearn raise a bare "X has 3 features, expecting 4" from deep inside predict.
+        if 'elevation' not in prediction_glaciers:
+            raise KeyError(
+                "ResidualWriter.write: prediction_glaciers has no 'elevation' column, but the "
+                "parameter-discrepancy GPs were fit with elevation as a third coordinate. Pass a "
+                "table carrying elevation (data.DataHandler.prediction_glaciers does).")
+        elev = prediction_glaciers['elevation'].to_numpy(dtype=float)
+        means, stds = self.predict_deltas(lat, lon, elev)
 
         lines = ['# glacier_id  delta_pf  delta_ds  delta_z0  std_pf  std_ds  std_z0']
         n_written = 0

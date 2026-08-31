@@ -1,0 +1,81 @@
+# CAMPAIGN 7 -- ELEVATION SPLIT: one calibration entity per (glacier, 10 m elevation band).
+#
+# THE PROBLEM THIS FIXES. DataHandler grouped every borehole on a glacier into ONE entity and
+# took `bh_row = gdf.iloc[0]` -- the FIRST row's borehole metadata -- as the whole glacier's
+# elevation. Grenzgletscher's boreholes span 2015-4485 m and were all assigned 4450 m (the Colle
+# Gnifetti saddle), so its 348 m-deep TONGUE borehole at 2600 m was compared against the model
+# column at the saddle, where GloGEM resolves only 35.9 m. Measured consequence on the live
+# campaign-5 emulator: 257 of 527 depth observations (48.8%) have NO emulator row at all, and the
+# drop is systematically deep (median dropped 64 m vs 18 m kept). Worse, 5 of 10 observed-
+# polythermal glaciers lose their temperate signature ENTIRELY -- every temperate observation is
+# non-emulable, so they read as 100% cold to the calibration. That is the direct cause of the
+# 22% polythermal recall, and it is a DATA-PLUMBING problem, not a likelihood problem. (A
+# depth-resolved likelihood was designed to fix the recall and was REJECTED at adversarial review
+# precisely because it would have added ~200 more shallow rows that are uniformly cold on exactly
+# those five glaciers, reinforcing the bias it was meant to cure.)
+#
+# WHAT THE SPLIT DOES. CentralEurope goes 24 -> 111 calibration entities, named 'Name@band'
+# (base_glacier_name keeps the raw glenglat name for lookups). Verified: Grenzgletscher's deepest
+# entity now comes out as Grenzgletscher@2605 at 2600 m holding observations to 347.9 m -- the
+# tongue is finally matched against the tongue, where the ice genuinely is ~350 m thick.
+#
+# HONEST SCOPE -- this campaign tests the SPLIT ALONE. Of the three measured causes of missing
+# depth coverage it addresses only the first:
+#     pooling artifact (deep borehole at a different elevation)   3 glaciers  <- FIXED here
+#     genuine band-thickness shortfall                           10 glaciers <- NOT fixed
+#     temperature module's own 259 m ceiling                      2 glaciers, 11 obs (2.1%)
+# So expect Grenzgletscher and Grubengletscher to recover their polythermal signature, but NOT
+# Tete Rousse or Alphubel South -- their deepest boreholes are already at the assigned elevation
+# and GloGEM still has ~16 m where the borehole goes 70 m. Those need the relative-depth (z/H)
+# treatment, deliberately held back so this campaign isolates one change.
+#
+# SUPPORTING CHANGES (all verified before launch):
+#  - discrepancy.py: the GP takes ELEVATION as a 4th coordinate with an ANISOTROPIC (ARD) Matern.
+#    Required, not cosmetic: after the split up to 24 entities of one glacier share essentially
+#    identical lat/lon, and on lat/lon alone the kernel treats them as one location (singular
+#    covariance, collapsing exactly the along-flow structure the split exposes). The first three
+#    columns are km on the sphere embedding, elevation is metres, so they cannot share a length
+#    scale. Verified: three points at identical lat/lon but 4450/3500/2600 m now return
+#    +0.48/+0.10/-0.38 instead of collapsing.
+#  - runner.write_glenglat_lookup now keys on the entity's BAND CENTRE, not its raw elevation
+#    rounded to 10 m (adjacent bands could round to the same value and silently hand two entities
+#    the same output file), and DEDUPLICATES per glacier_id -- two glenglat glacier names can
+#    share one RGI polygon (Breithornplateau and Gornergletscher are both 01225, and both have an
+#    entity in band 2525), which is a real duplicate the model cannot distinguish.
+#  - validation.py uses base_glacier_name for glenglat lookups.
+#
+# NO REUSE IS POSSIBLE. Entity identity changed, so campaign 5/6 training runs no longer
+# correspond to the same targets. Full fresh training: 150 points at ~237 s = ~10 h.
+# NOTE DataHandler.load() now takes ~167 s (111 entities x ERA5 supplement) and every pipeline
+# step calls it -- roughly 14 min of overhead across the five steps. Worth caching later.
+
+region: CentralEurope
+include_estimated: true
+include_unassessed: true
+run_tag: sat_test
+
+# Same (perm_frac, dT_scale) parameterisation and widened diagnostic bounds as campaign 6, so
+# the only variable versus that campaign is the elevation split itself.
+bounds_override:
+  perm_frac: [0.02, 1.0]
+  dT_scale: [0.05, 5.0]
+
+calibration_source_dir: /scratch_net/vierzack04_fourth/jabeer/GloGEM/output_template_calibrated/r6_monthly/CentralEurope/calibration
+calibration_source_files:
+  - calibrate_m1_cID9_centraleurope.dat
+  - calibrate_m1_cID9_centraleurope_final_ERA5.dat
+  - caliphase_statistics_m1_cID9_centraleurope.dat
+  - toff_m1_cID9_centraleurope.dat
+
+n_design_points: 4
+design_seed: 47
+explained_variance: 0.99
+remote_host: vierzack07
+
+n_walkers: 32
+n_steps: 30000
+burn_in: 5000
+thin: 5
+mcmc_seed: 42
+
+loo_mode: map

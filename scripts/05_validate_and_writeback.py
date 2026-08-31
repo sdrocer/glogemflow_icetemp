@@ -34,9 +34,19 @@ def main():
 
     from icetemp.calibration.calibrator import BayesianCalibrator
     from icetemp.calibration.priors import Priors
-    pipeline.priors = Priors()
+    # must honour the same bounds the posterior was sampled under -- step 5 reconstructs the
+    # calibrator, and a Priors() with default bounds would reject sub-floor posterior samples
+    # as -inf when a bounds_override was used in step 4.
+    pipeline.priors = Priors(bounds_override=config.bounds_override)
     pipeline.calibrator = BayesianCalibrator(
         emulator=pipeline.emulator, glaciers=pipeline._calibration_glaciers(), priors=pipeline.priors,
+        track='depth',  # must match pipeline.calibrate()'s fitting track -- theta in
+                        # posterior_samples.csv was fit from Track-1 rows only (see
+                        # calibrator.BayesianCalibrator's `track` docstring), so LOO/writeback
+                        # must evaluate discrepancy/residuals through the same track or theta
+                        # and delta(x) would be silently inconsistent with each other.
+        fixed_params=CalibrationPipeline.FIXED_PARAMS,  # must also match -- see that constant's
+                        # docstring (z0 cannot reach the real model's physics; perm_frac can).
     )
     pipeline.calibrator.fit_discrepancy()
     pipeline.flat_samples = pd.read_csv(config.posterior_path)[list(PARAM_NAMES)].to_numpy()

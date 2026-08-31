@@ -4,11 +4,19 @@ DataHandler: load and clean glenglat borehole data for the Tier-3 Bayesian calib
 Pipeline (per calibration_scheme_prompt.md and the locked decisions in the plan):
   1. Parse borehole.csv / profile.csv / measurement.csv (+ per-source subfolders,
      e.g. beer2026/) from the glenglat submodule.
-  2. Filter profiles to equilibrium in {'true', 'estimated'}, from 1950 onwards, with at
+  2. Filter profiles to equilibrium in {'true', 'estimated', ''}, from 1950 onwards, with at
      least one measurement in the 10-30 m depth band (the calibration-target gate).
      equilibrium=='estimated' profiles are KEPT but down-weighted via an inflated
-     observation-error sigma, rather than dropped -- widens the calibration set from the
-     strict ~55-58 glaciers (equilibrium=='true' only) to ~65.
+     observation-error sigma, rather than dropped. Blank/unassessed equilibrium ('') is ALSO
+     kept, with NO extra inflation -- mirrors glenglat's own tutorial.ipynb convention exactly
+     (equilibrium.isin(['true','estimated']) | equilibrium.isnull(), "profiles that are
+     equilibrated (or not specified)"): blank means never curator-reviewed, not judged bad.
+     Confirmed directly against the raw data that blank profiles (60% of all glenglat
+     profiles) are the dominant reason most glaciers were previously excluded, far more than
+     equilibrium=='false' (2.5% of profiles, positively judged non-equilibrium -- e.g. residual
+     drilling heat, measured hours-to-days post-drilling -- and NOT included here; a real,
+     depth-decaying warm bias was confirmed empirically, which needs its own bias correction,
+     not just a filter change, before it can be safely added).
   3. Exclude non-physical positive temperatures (glacier ice cannot exceed 0 degC).
   4. Build a FULL-DEPTH per-glacier target vector (10 m to the borehole's max depth), with
      a depth weight that up-weights the thermally-settled 10-30 m band -- deliberately not
@@ -60,7 +68,8 @@ class GlacierCalibrationData:
     """One glenglat glacier's pooled calibration target, ready for grid search / emulator
     comparison / KO likelihood evaluation."""
 
-    glacier_name: str
+    glacier_name: str          # UNIQUE entity id, 'Name@elevband' (see load()'s grouping)
+    base_glacier_name: str     # raw glenglat glacier_name, for lookups back into borehole.csv
     glacier_id: Optional[str]
     glims_id: Optional[str]
     borehole_id: Optional[str]  # representative glenglat borehole_id (traceability; runner.py)
@@ -79,7 +88,7 @@ class GlacierCalibrationData:
     is_firn: np.ndarray        # [n_obs] bool, accumulation (True) vs ablation (False) zone
     sigma: np.ndarray          # [n_obs] observation error [degC] (borehole-level, broadcast)
     n_readings: np.ndarray     # [n_obs] raw readings pooled into each depth bin (logger diagnostic)
-    equilibrium: str           # 'true' or 'estimated'
+    equilibrium: str           # 'true', 'estimated', or 'unassessed' (blank in glenglat)
     n_obs: int = field(init=False)
     has_firn_obs: bool = field(init=False)
     has_ice_obs: bool = field(init=False)
@@ -163,6 +172,7 @@ class DataHandler:
         glims_lookup_csv=GLIMS_LOOKUP_CSV,
         region=None,
         include_estimated=True,
+        include_unassessed=True,
         min_year=MIN_YEAR,
         target_depth_band=TARGET_DEPTH_BAND,
         estimated_sigma_inflation=ESTIMATED_SIGMA_INFLATION,
@@ -173,6 +183,7 @@ class DataHandler:
         self.glims_lookup_csv = Path(glims_lookup_csv)
         self.region = region
         self.include_estimated = include_estimated
+        self.include_unassessed = include_unassessed
         self.min_year = min_year
         self.target_depth_band = target_depth_band
         self.estimated_sigma_inflation = estimated_sigma_inflation
@@ -199,8 +210,18 @@ class DataHandler:
         # ── equilibrium dtype-mixing fix (documented in notebook 01 cell 4): concatenating
         # profile.csv files lets pandas infer 'equilibrium' as bool per-file when a file has
         # no blank values, silently breaking `== 'true'` string comparisons after concat.
+        # Blank values must end up as literal '' regardless of dtype -- confirmed directly
+        # that under this environment's pandas, 'equilibrium' loads as nullable StringDtype,
+        # and .astype(str) on a nullable-string column PRESERVES <NA> rather than stringifying
+        # it to 'nan' (unlike the legacy object-dtype float-NaN behaviour the '== nan' check
+        # below was written for) -- so relying on that check alone silently left ~221k blank
+        # profile rows as real NaN, which then failed every downstream isin([...]) filter
+        # instead of matching an explicit '' state. Capture the NA mask BEFORE astype(str) so
+        # this is robust to either dtype behaviour.
+        equilibrium_was_na = profile['equilibrium'].isna()
         profile['equilibrium'] = profile['equilibrium'].astype(str).str.lower()
-        profile.loc[profile['equilibrium'] == 'nan', 'equilibrium'] = ''
+        profile.loc[profile['equilibrium'] == 'nan', 'equilibrium'] = ''  # legacy object-dtype case
+        profile.loc[equilibrium_was_na, 'equilibrium'] = ''                # nullable-string-dtype case
 
         for col in ('borehole_id', 'profile_id'):
             if col in measurement.columns:
@@ -279,8 +300,29 @@ class DataHandler:
         derived = self._load_derived_covariates()
         glacier_id_lookup = self._load_glacier_id_lookup()
 
-        # profile-level filter: equilibrium + year
-        eq_states = ['true', 'estimated'] if self.include_estimated else ['true']
+        # profile-level filter: equilibrium + year. 'estimated' (an ACTIVE judgement call,
+        # extrapolated by the submitter) and '' (blank/unassessed -- simply never curator-
+        # reviewed for equilibrium, not judged bad) are two different things, both distinct
+        # from 'false' (an ACTIVE judgement that equilibrium was genuinely not reached, e.g.
+        # measurements taken hours-to-days post-drilling while residual drilling heat was
+        # still dissipating -- confirmed against real matched borehole pairs to carry a real,
+        # depth-decaying warm bias, not just extra noise; 'false' profiles are NOT included
+        # here and need a bias correction, not a filter change -- see calibrator/data
+        # discussions, not yet implemented).
+        #
+        # glenglat's own tutorial.ipynb treats blank as includable, on equal footing with
+        # true/estimated, not as suspect: equilibrium.isin(['true','estimated']) |
+        # equilibrium.isnull() -- "profiles that are equilibrated (or not specified)". This
+        # mirrors that convention exactly (rather than inventing a new weighting scheme that
+        # would need its own separate justification): blank profiles get NO extra sigma
+        # inflation, same as 'true' -- see equilibrium_label below, kept as a distinct label
+        # from 'true' purely for reporting/transparency (summary(), a methods write-up), not
+        # because they are statistically down-weighted.
+        eq_states = ['true']
+        if self.include_estimated:
+            eq_states.append('estimated')
+        if self.include_unassessed:
+            eq_states.append('')
         prof_year = pd.to_datetime(profile['date_min'], errors='coerce').dt.year
         eq_profiles = profile[
             profile['equilibrium'].isin(eq_states) & (prof_year >= self.min_year)
@@ -299,12 +341,37 @@ class DataHandler:
         self.calibration_glaciers = []
         glacier_ids_seen = set()
 
-        for glacier_name, gdf in meas.groupby('glacier_name'):
+        # Group by (glacier, 10 m elevation band), NOT by glacier alone.
+        #
+        # Grouping by glacier_name alone pooled every borehole on a glacier into ONE entity and
+        # then took `bh_row = gdf.iloc[0]` -- the FIRST row's borehole metadata -- as the whole
+        # glacier's elevation and lat/lon. Confirmed damaging: Grenzgletscher's boreholes span
+        # 2015-4485 m and were all assigned 4450 m (the Colle Gnifetti saddle), so its 348 m-deep
+        # TONGUE borehole at 2600 m was compared against the model column at the saddle, where
+        # GloGEM resolves only 35.9 m. Half of all depth observations (257/527) end up with no
+        # emulator row at all, systematically the deep ones (median dropped depth 64 m vs 18 m
+        # kept), and 5 of 10 polythermal glaciers lose their temperate signature entirely --
+        # the direct cause of the 22% polythermal recall.
+        #
+        # After the split each entity's boreholes share one 10 m band, so bh_row's elevation is
+        # representative rather than arbitrary. CentralEurope goes 24 -> 125 entities.
+        # `glacier_name` becomes a UNIQUE entity id 'Name@band' because it is the key used
+        # throughout (emulator._build_x_index, runner.parse_training_output, the discrepancy GP);
+        # `base_glacier_name` keeps the raw glenglat name for lookups back into borehole.csv
+        # (see thermal_structure.elevation_spread / borehole_tolerance).
+        meas = meas.copy()
+        meas['_elev_band'] = meas['elevation'].apply(
+            lambda e: _elevation_band(float(e)) if pd.notna(e) else None
+        )
+        meas = meas[meas['_elev_band'].notna()]
+
+        for (base_glacier_name, _band), gdf in meas.groupby(['glacier_name', '_elev_band']):
             # gate: at least one measurement in the target depth band, on ANY profile
             in_band = gdf['depth'].between(*self.target_depth_band)
             if not in_band.any():
                 continue
 
+            glacier_name = f'{base_glacier_name}@{int(_band)}'
             bh_row = gdf.iloc[0]
             glims_id = bh_row.get('glims_id')
 
@@ -316,7 +383,12 @@ class DataHandler:
             )
 
             equilibrium_states = set(gdf['equilibrium'].unique())
-            equilibrium_label = 'true' if 'true' in equilibrium_states else 'estimated'
+            if 'true' in equilibrium_states:
+                equilibrium_label = 'true'
+            elif 'estimated' in equilibrium_states:
+                equilibrium_label = 'estimated'
+            else:
+                equilibrium_label = 'unassessed'  # blank only -- see eq_states comment above
 
             if gdf['T_maat'].isna().all():
                 # not covered by glenglat_profiles_derived.csv (estimated-only glacier) ->
@@ -363,6 +435,7 @@ class DataHandler:
 
             self.calibration_glaciers.append(GlacierCalibrationData(
                 glacier_name=glacier_name,
+                base_glacier_name=base_glacier_name,
                 glacier_id=glacier_id,
                 glims_id=glims_id,
                 borehole_id=str(bh_row['borehole_id']),
@@ -403,12 +476,15 @@ class DataHandler:
     def summary(self):
         n = len(self.calibration_glaciers)
         n_est = sum(1 for g in self.calibration_glaciers if g.equilibrium == 'estimated')
+        n_unassessed = sum(1 for g in self.calibration_glaciers if g.equilibrium == 'unassessed')
+        n_true = n - n_est - n_unassessed
         n_firn = sum(1 for g in self.calibration_glaciers if g.has_firn_obs)
         n_ice = sum(1 for g in self.calibration_glaciers if g.has_ice_obs)
         n_deep = sum(1 for g in self.calibration_glaciers if g.depths.max(initial=0) > 30)
         max_pooled = max((int(g.n_readings.max()) for g in self.calibration_glaciers), default=0)
         lines = [
-            f'Calibration glaciers: {n} (equilibrium=true: {n - n_est}, estimated: {n_est})',
+            f'Calibration glaciers: {n} (equilibrium=true: {n_true}, estimated: {n_est}, '
+            f'unassessed/blank: {n_unassessed})',
             f'  with accumulation-zone (firn) obs: {n_firn}',
             f'  with ablation-zone (ice) obs:      {n_ice}',
             f'  with data below 30 m:              {n_deep}',

@@ -1,0 +1,74 @@
+# Tier-3 Bayesian (Kennedy-O'Hagan) calibration -- CentralEurope, "Option C": full-coverage
+# theta design at perm_frac=1.0 + a fixed trust-gate fallback.
+#
+# Fourth campaign in this sequence:
+#   1. bayescal_centraleurope.yaml (18 glaciers, 100-pt design)
+#   2. bayescal_centraleurope_25glaciers.yaml (25 glaciers, SAME 100-pt design -- data-sparsity
+#      test; R-hat/tau barely moved, dT_scale still pinned at its 0.2 floor, LOO still reject)
+#   3. bayescal_centraleurope_25glaciers_thetaexp.yaml (145-pt design: +45 points targeted at
+#      dT_scale in [0.2,0.5], perm_frac fixed at 1.0 -- emulator-coverage test. MCMC converged
+#      beautifully (R-hat=1.0, ESS in the 10,000s) onto dT_scale~3.93 -- but that location had
+#      ZERO real training support (nearest point 1.17 standardized units away, none anywhere
+#      with perm_frac>0.8 & dT_scale in [3.5,4.3]), LOO RMSE got WORSE (2.649 -> 4.561 degC),
+#      and the trust-gate's own isotonic curve came out completely FLAT (7.36x at every tested
+#      distance 0-3.0 -- no distance/error signal at all, plausibly because the 45 new points
+#      clustered tightly in one narrow region rather than spreading distance-diversity across
+#      LOO folds). max_trusted_distance_'s fallback (`else float(dist.max())`) then silently
+#      trusted everything out to the single farthest LOO-tested distance (1.549) with no real
+#      evidence behind it -- exactly the "exploit an admitted-but-unsupported corner" failure
+#      the hard gate exists to prevent, just relocated by the flat-curve fallback rather than
+#      blocked. See icetemp/calibration/emulator.py's calibrate_variance docstring ("FALLBACK
+#      WHEN NO JUMP IS FOUND") for the full diagnosis.
+#
+# This campaign (4, "Option C") fixes BOTH diagnosed causes together, deliberately, rather than
+# iterating on one at a time:
+#   (a) CODE FIX: calibrate_variance's no-jump fallback now uses the MEDIAN tested distance, not
+#       dist.max() -- a single lucky-far (or, as happened, signal-free) LOO fold can no longer
+#       single-handedly set the whole trust radius. Applies retroactively to every future
+#       campaign, not just this one.
+#   (b) DESIGN FIX: adds 100 NEW points (rows 145-244 of design.csv) spanning the FULL dT_scale
+#       range [0.2, 5.0] (not just the boundary strip) x full z0 loguniform[5,200], ALL at
+#       perm_frac=1.0 fixed -- genuinely dense, non-clustered coverage of the (dT_scale, z0)
+#       plane at the exact slice calibration always evaluates, rather than another narrow
+#       targeted patch. Combined with the existing 145 points, 146/245 total points now have
+#       perm_frac~1.0 (up from 11/100 in campaign 2, 56/145 in campaign 3), spread across
+#       dT_scale as: [0.2,0.5)=52, [0.5,1.5)=21, [1.5,3.0)=31, [3.0,5.0)=42 points -- including
+#       real, non-clustered density right where campaign 3's suspect posterior landed.
+#       design_seed=44 (distinct from 42/43), scipy.stats.qmc.LatinHypercube.
+#
+# training_runs/ copied wholesale from campaign 3 (all 145 real IDL outputs + .done sentinels),
+# so GloGEMRunner.run_design_point's skip_if_done logic reuses all 145 existing real runs --
+# only the 100 new points actually launch IDL this time.
+
+region: CentralEurope
+include_estimated: true
+include_unassessed: true
+run_tag: centraleurope_bayescal_25glaciers_thetaexp_v2
+
+calibration_source_dir: /scratch_net/vierzack04_fourth/jabeer/GloGEM/output_template_calibrated/r6_monthly/CentralEurope/calibration
+calibration_source_files:
+  - calibrate_m1_cID9_centraleurope.dat
+  - calibrate_m1_cID9_centraleurope_final_ERA5.dat
+  - caliphase_statistics_m1_cID9_centraleurope.dat
+  - toff_m1_cID9_centraleurope.dat
+
+# design.csv (245 rows) already written by hand (see above), NOT by 01_build_design.py -- the
+# shell wrapper's "skip step 1 if design.csv exists" logic reuses it automatically.
+n_design_points: 245
+design_seed: 44
+explained_variance: 0.99
+remote_host: vierzack04
+                    # host is found
+
+# MCMC (emcee) -- same settings as every prior campaign in this sequence, for a fair comparison.
+n_walkers: 32
+n_steps: 30000
+burn_in: 5000
+thin: 5
+mcmc_seed: 42
+
+# leave-one-out validation
+loo_mode: map
+
+# paths (output_dir left unset -> defaults to
+#   glogemflow_icetemp/data/bayescal/{run_tag}/, already seeded with design.csv + training_runs/)

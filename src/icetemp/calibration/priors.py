@@ -43,21 +43,43 @@ class Priors:
     perm_frac: object = None
     dT_scale: object = None
     z0: object = None
+    # Optional per-parameter (lo, hi) overrides, e.g. {'perm_frac': (0.02, 1.0)}. DIAGNOSTIC USE:
+    # campaign 5's posterior pinned against the LOWER bound of both free parameters
+    # (perm_frac 0.125 with a 0.1 floor, dT_scale 0.243 with a 0.2 floor, posterior sd 0.006 and
+    # 0.014), i.e. the likelihood wants to go below the parameterisation. Widening lets us locate
+    # where the unconstrained optimum actually is, which quantifies how far outside the
+    # parameterisation the model is asking to be.
+    #
+    # This is legitimate to sample because the TRAINING path does not clip: the flat override
+    # applier apply_firnicetemp_calibration.pro assigns firnice_*_b directly with no re-clip
+    # (unlike the _bayes/_knn appliers, which do clip and are NOT used by training runs). And
+    # the values in physics.py are described there as "settings.pro /
+    # apply_firnicetemp_calibration_knn.pro re-clip bounds" -- operational limits, not hard
+    # physics. Sub-floor values are a DIAGNOSTIC to locate the optimum; adopting one for
+    # production would need separate physical justification.
+    bounds_override: dict = None
 
     def __post_init__(self):
+        b = self.bounds_override or {}
         if self.perm_frac is None:
-            lo, hi = PERM_FRAC_BOUNDS
+            lo, hi = b.get('perm_frac', PERM_FRAC_BOUNDS)
             self.perm_frac = stats.uniform(loc=lo, scale=hi - lo)
         if self.dT_scale is None:
-            lo, hi = DT_SCALE_BOUNDS
-            a, b = (lo - DT_SCALE_PRIOR_MEAN) / DT_SCALE_PRIOR_STD, (hi - DT_SCALE_PRIOR_MEAN) / DT_SCALE_PRIOR_STD
-            self.dT_scale = stats.truncnorm(a, b, loc=DT_SCALE_PRIOR_MEAN, scale=DT_SCALE_PRIOR_STD)
+            lo, hi = b.get('dT_scale', DT_SCALE_BOUNDS)
+            a, bb = (lo - DT_SCALE_PRIOR_MEAN) / DT_SCALE_PRIOR_STD, (hi - DT_SCALE_PRIOR_MEAN) / DT_SCALE_PRIOR_STD
+            self.dT_scale = stats.truncnorm(a, bb, loc=DT_SCALE_PRIOR_MEAN, scale=DT_SCALE_PRIOR_STD)
         if self.z0 is None:
-            lo, hi = Z0_BOUNDS
+            lo, hi = b.get('z0', Z0_BOUNDS)
             self.z0 = stats.loguniform(lo, hi)
 
     def as_dict(self):
         return {'perm_frac': self.perm_frac, 'dT_scale': self.dT_scale, 'z0': self.z0}
+
+    def bounds(self):
+        b = self.bounds_override or {}
+        return {'perm_frac': b.get('perm_frac', PERM_FRAC_BOUNDS),
+                'dT_scale': b.get('dT_scale', DT_SCALE_BOUNDS),
+                'z0': b.get('z0', Z0_BOUNDS)}
 
     def logpdf(self, theta):
         """Joint log-prior density at theta = (perm_frac, dT_scale, z0). Returns -inf outside
@@ -73,6 +95,3 @@ class Priors:
         ds = self.dT_scale.rvs(size=size, random_state=rng)
         z0 = self.z0.rvs(size=size, random_state=rng)
         return np.column_stack([pf, ds, z0])
-
-    def bounds(self):
-        return {'perm_frac': PERM_FRAC_BOUNDS, 'dT_scale': DT_SCALE_BOUNDS, 'z0': Z0_BOUNDS}

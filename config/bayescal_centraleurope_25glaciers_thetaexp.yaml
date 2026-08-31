@@ -1,0 +1,81 @@
+# Tier-3 Bayesian (Kennedy-O'Hagan) calibration -- CentralEurope, EXPANDED theta design.
+#
+# Third campaign in this sequence: bayescal_centraleurope.yaml (18 glaciers, 100-pt design) ->
+# bayescal_centraleurope_25glaciers.yaml (25 glaciers, SAME 100-pt design -- tested whether
+# boundary-pinning was a data-sparsity artifact; result: R-hat/tau essentially unchanged
+# (1.16-1.18 vs 1.18-1.21; tau 1406-1725 vs ~1280-1410), dT_scale's 3% HDI still at 0.221
+# against its 0.2 physical floor, LOO still "DO NOT ADOPT" -- leaning against pure data
+# sparsity as the explanation) -> this campaign, which now holds the 25-glacier data FIXED
+# and instead expands the theta TRAINING DESIGN itself, isolating the emulator-coverage
+# hypothesis instead.
+#
+# Design: glogemflow_icetemp/data/bayescal/centraleurope_bayescal_25glaciers_thetaexp/design.csv
+# is 145 rows: the original 100 (rows 0-99, UNCHANGED ORDER, copied byte-identical from the
+# 25-glacier campaign) + 45 new supplemental points (rows 100-144). training_runs/ was also
+# copied wholesale from that campaign (all 100 real IDL outputs + .done sentinels), so
+# GloGEMRunner.run_design_point's skip_if_done logic reuses all 100 existing real training
+# runs -- only the 45 new points actually launch IDL.
+#
+# The 45 new points are NOT a continuation of the original LHS-from-prior methodology --
+# they're a deliberate, targeted supplement, which needs to be described as such (sequential/
+# adaptive design refinement, not a second space-filling sample) if this ends up in a paper:
+#   - perm_frac FIXED at 1.0 for all 45 (not sampled from its prior, unlike the original 100).
+#     BayesianCalibrator.fixed_perm_frac clamps perm_frac to exactly 1.0 at EVERY calibration-
+#     time evaluation (log_posterior, MCMC, LOO folds), and _within_design_coverage's nearest-
+#     neighbor trust gate (_nn_distance) operates on the FULL 3D theta including perm_frac,
+#     with no exemption for it (unlike the per-dimension box-bounds check, which only checks
+#     the free params). Only 11/100 of the original design's points have perm_frac > 0.9, so
+#     most of the original 100 real training runs contribute less to local trust at the
+#     perm_frac=1.0 plane than their dT_scale/z0 coverage alone would suggest. Fixing the new
+#     points at perm_frac=1.0 directly densifies the exact slice calibration actually explores.
+#   - dT_scale sampled Uniform(0.2, 0.5) (bounds are [0.2, 5.0]) via a 2D LHS -- NOT the prior's
+#     own truncated-normal(mean=1, std=1) shape. Only 12/100 original points have dT_scale <
+#     0.5 (matching the ~12% truncnorm mass expected there), which is exactly the region the
+#     posterior's 3% HDI keeps landing in (0.221, essentially at the 0.2 floor). The point of
+#     this supplement is deliberately OVERSAMPLING relative to the prior in a region the prior
+#     considered a priori unlikely but the data keeps pointing to.
+#   - z0 sampled loguniform(5, 200) via the same 2D LHS -- the full prior range, matching the
+#     original design's own scheme (z0's marginal coverage was already reasonable; kept that
+#     way within this new dT_scale strip for genuine 2D coverage, not narrowed to today's
+#     posterior region specifically, to avoid circularity/overfitting to one result).
+#   - design_seed=43 (distinct from the original campaigns' 42), scipy.stats.qmc.LatinHypercube.
+#
+# See glogemflow_icetemp/src/icetemp/calibration/calibrator.py's _within_design_coverage and
+# emulator.py's _nn_distance/calibrate_variance docstrings for the trust-gate mechanics this
+# design targets.
+
+region: CentralEurope
+include_estimated: true
+include_unassessed: true
+run_tag: centraleurope_bayescal_25glaciers_thetaexp
+
+# Same MB-calibration source as the 25-glacier campaign (needed for the 45 new IDL runs; the
+# 100 reused runs already have their calibration data copied into training_runs/ from before).
+calibration_source_dir: /scratch_net/vierzack04_fourth/jabeer/GloGEM/output_template_calibrated/r6_monthly/CentralEurope/calibration
+calibration_source_files:
+  - calibrate_m1_cID9_centraleurope.dat
+  - calibrate_m1_cID9_centraleurope_final_ERA5.dat
+  - caliphase_statistics_m1_cID9_centraleurope.dat
+  - toff_m1_cID9_centraleurope.dat
+
+# LHS design / emulator -- design.csv (145 rows) already written by hand (see above), NOT by
+# 01_build_design.py -- the shell wrapper's "skip step 1 if design.csv exists" logic reuses it
+# automatically. n_design_points/design_seed below are documentation only in this campaign.
+n_design_points: 145
+design_seed: 43
+explained_variance: 0.99
+remote_host: vierzack06
+                    # host is found (see that script's v4 header for the CPU-based idle check)
+
+# MCMC (emcee) -- same settings as both prior campaigns, for a fair comparison.
+n_walkers: 32
+n_steps: 30000
+burn_in: 5000
+thin: 5
+mcmc_seed: 42
+
+# leave-one-out validation
+loo_mode: map
+
+# paths (output_dir left unset -> defaults to
+#   glogemflow_icetemp/data/bayescal/{run_tag}/, already seeded with design.csv + training_runs/)

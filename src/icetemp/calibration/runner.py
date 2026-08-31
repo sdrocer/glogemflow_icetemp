@@ -279,8 +279,22 @@ class GloGEMRunner:
     # itself (calibrate_m{mm}_cID{cp}_{sub_region}_final_{reanalysis}_{catchment}.dat) --
     # copying the source files verbatim under a DIFFERENT catchment name (self.catchment)
     # leaves them undiscoverable (confirmed live: "!!! Parameter-File for centraleurope is
-    # not available !!!"). copy_calibration_data() renames catchment name only.
+    # not available !!!"). copy_calibration_data() renames catchment name only. NOTE:
+    # read_calibration_params.pro:20-26 ALSO has its own graceful fallback -- if the
+    # catchment-suffixed file isn't found, it falls back to the catchment-less, region-wide
+    # file (cc=''). A calibration_source_dir whose files never had a catchment suffix in the
+    # first place (e.g. a full-region calibration run, see calibration_source_files below)
+    # needs no renaming at all: leaving calibration_source_catchment at a value that simply
+    # doesn't occur in those filenames makes the rename step a no-op and the files land under
+    # their own natural names, which is exactly the region-wide fallback path expects.
     calibration_source_catchment: str = 'CentralEurope_glenglat'
+    # Restrict which files get pulled from calibration_source_dir, for source directories that
+    # hold many unrelated calibration-experiment variants alongside the ones actually needed
+    # (confirmed: output_template_calibrated/.../calibration/ has 94 files -- cID1..cID9,
+    # several rhodv/sensmax/sensmin sensitivity variants -- of which only a handful are the
+    # real m1/cID9/centraleurope calibration this project uses). None (default) preserves the
+    # old glob('*.dat') behaviour, for source directories that only ever held relevant files.
+    calibration_source_files: Optional[list] = None
 
     def __post_init__(self):
         self.glogem_dir = Path(self.glogem_dir)
@@ -348,7 +362,15 @@ class GloGEMRunner:
         filename it looks for (calibrate_m..._{catchment}.dat), so a verbatim copy under a
         different catchment name is silently invisible to it (confirmed live: "!!!
         Parameter-File for centraleurope is not available !!!" -- not fatal, but the run
-        then proceeds with empty/zero calibration parameters instead of real ones).
+        then proceeds with empty/zero calibration parameters instead of real ones). Files
+        whose name doesn't contain calibration_source_catchment at all copy through
+        unchanged -- see that field's docstring for why this is exactly what a catchment-less,
+        region-wide source needs (matches read_calibration_params.pro's own fallback path).
+
+        Also normalizes 'ERA5' -> 'era5' in copied filenames: settings.pro:71 sets
+        reanalysis='era5' (lowercase), which read_calibration_params.pro embeds verbatim in
+        the filename it constructs -- some source directories use uppercase ERA5, which a
+        case-sensitive filesystem lookup would silently never match.
 
         Returns the list of files copied.
         """
@@ -364,9 +386,17 @@ class GloGEMRunner:
             )
         dest = self.calibration_dest_dir
         dest.mkdir(parents=True, exist_ok=True)
+        if self.calibration_source_files is not None:
+            src_files = [self.calibration_source_dir / n for n in self.calibration_source_files]
+            missing = [f for f in src_files if not f.is_file()]
+            if missing:
+                raise FileNotFoundError(f'calibration_source_files not found: {missing}')
+        else:
+            src_files = list(self.calibration_source_dir.glob('*.dat'))
         copied = []
-        for src_file in self.calibration_source_dir.glob('*.dat'):
+        for src_file in src_files:
             dest_name = src_file.name.replace(self.calibration_source_catchment, self.catchment)
+            dest_name = dest_name.replace('ERA5', 'era5')
             dest_file = dest / dest_name
             if not dest_file.exists() or dest_file.stat().st_size != src_file.stat().st_size:
                 shutil.copy2(src_file, dest_file)
@@ -428,7 +458,14 @@ class GloGEMRunner:
         for g in glaciers:
             if not g.glacier_id:
                 continue
-            by_id.setdefault(g.glacier_id, []).append(round(g.elevation / 10.0) * 10)
+            # Use the entity's GloGEM BAND CENTRE, not its raw borehole elevation rounded to
+            # 10 m. Since the 2026-08-19 elevation split there can be many entities per
+            # glacier_id (24 for Grenzgletscher), and rounding raw elevations can COLLIDE across
+            # adjacent bands -- raw 2609.6 (band 2605) and 2610.4 (band 2615) both round to
+            # 2610, so two distinct entities would be handed the same output file and
+            # parse_training_output would silently give them identical profiles. Band centres
+            # are unique per band by construction, so the mapping stays one-to-one.
+            by_id.setdefault(g.glacier_id, []).append(int(g.elevation_band))
 
         lines = [
             '# GloGEM glacier_id -> glenglat borehole elevations (m a.s.l., rounded to 10m)',
@@ -437,7 +474,16 @@ class GloGEMRunner:
             '#   see parse_training_output for how same-id glaciers are told apart afterward)',
         ]
         for gid, elevs in by_id.items():
-            lines.append(f'{gid}  ' + '  '.join(str(int(e)) for e in elevs))
+            # DEDUPLICATE: several distinct calibration entities can legitimately map to the
+            # same (glacier_id, elevation band) -- glacier_id is the RGI polygon, and two
+            # different glenglat glacier NAMES can share one polygon (confirmed: Breithornplateau
+            # and Gornergletscher are both RGI 01225, and after the elevation split both have an
+            # entity in band 2525). They share one GloGEM column by construction, so emitting the
+            # elevation twice would only make GloGEM write two identical files. Emitting it once
+            # is correct and cheaper; parse_training_output then hands that single profile to
+            # both entities, which is the right answer -- the model genuinely cannot distinguish
+            # two boreholes on the same polygon at the same 10 m band.
+            lines.append(f'{gid}  ' + '  '.join(str(int(e)) for e in sorted(set(elevs))))
         out_path.write_text('\n'.join(lines) + '\n')
 
         self.glenglat_lookup_file = str(out_path)
@@ -578,13 +624,47 @@ class GloGEMRunner:
         seats and CPU are both shared, finite resources (see the timing-spike blocker this
         project hit from an unrelated live 48-process production run).
         """
+        import dill
+
         glacier_ids = [g.glacier_id for g in glaciers if g.glacier_id]
         results = {}
         for i, theta in enumerate(design_points):
             tag = f'design_{i:04d}'
+            out_path = self.run_dir / f'{tag}.output.pkl'
+            was_done = self._done_path(tag).exists()
             ok = self.run_design_point(glacier_ids, theta, tag, idl_bin=idl_bin, timeout=timeout)
-            results[tag] = {
-                'theta': theta, 'ok': ok,
-                'output': self.parse_training_output(glaciers) if ok else None,
-            }
+
+            if ok and not was_done:
+                # Freshly executed: the profile files on disk belong to THIS theta. Parse them
+                # now and PERSIST the parsed result next to the .done sentinel.
+                output = self.parse_training_output(glaciers)
+                with open(out_path, 'wb') as f:
+                    dill.dump(output, f)
+            elif ok and was_done:
+                # Skipped because a .done sentinel already existed. The profile files on disk do
+                # NOT belong to this theta -- GloGEM writes every run to the SAME filenames
+                # (temp_ID{n}_{glacier_id}.dat), so whatever is there is the last EXECUTED run's
+                # output. Re-parsing here is what caused a silent, severe data-integrity bug:
+                # in the 145-pt campaign 99/145 points (68.3%) and in the 245-pt campaign
+                # 144/245 (58.8%) ended up carrying byte-identical output copied from one
+                # unrelated run, because those campaigns reused .done sentinels copied from an
+                # earlier campaign's training_runs/. That in turn starved the LOO-CV variance
+                # calibration of any real error variation, producing the "flat isotonic curve"
+                # that was previously misdiagnosed as a clustered-design artifact.
+                # So: recover the persisted output if we have it, otherwise refuse to guess.
+                if out_path.exists():
+                    with open(out_path, 'rb') as f:
+                        output = dill.load(f)
+                else:
+                    ok, output = False, None   # pre-fix run: unrecoverable, exclude it
+            else:
+                output = None
+
+            results[tag] = {'theta': theta, 'ok': ok, 'output': output}
+
+        n_unrecoverable = sum(1 for r in results.values() if not r['ok'])
+        if n_unrecoverable:
+            print(f'WARNING: {n_unrecoverable} design point(s) had a .done sentinel but no '
+                  f'persisted {"{tag}"}.output.pkl -- their real output cannot be recovered and '
+                  f'they are EXCLUDED (ok=False). Delete their .done sentinels to re-run them.')
         return results
