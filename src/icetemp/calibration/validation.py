@@ -95,7 +95,17 @@ class Validator:
 
     def __post_init__(self):
         self._by_name = {g.glacier_name: g for g in self.glaciers}
+        # entity ('Name@band') -> raw glenglat glacier name. LOO folds must exclude the whole
+        # GLACIER, not one elevation band of it: since the split, 116 entities come from only
+        # 25 physical glaciers, and 102 of the 107 scored folds kept at least one sibling band in
+        # training a median 0.179 km and 14.5 m away. Under the fitted discrepancy kernel those
+        # siblings carried a median 34% of the GP's posterior weight on the held-out point
+        # (Grenzgletscher 59%, Hintereisferner 79%) -- so every pre-2026-08-31 number in
+        # loo_results.csv is a leave-one-BAND-out score, not leave-one-glacier-out.
+        self._base = {g.glacier_name: g.base_glacier_name for g in self.glaciers}
         self._borehole_df = None
+        self._ko_fold_cache = {}   # keyed by BASE glacier: 24 fits instead of 111
+        self._fold_view_cache = {}
 
     @property
     def borehole_df(self):
@@ -105,12 +115,45 @@ class Validator:
             self._borehole_df = ts.load_borehole_table()
         return self._borehole_df
 
-    def _held_out_view(self, glacier):
-        keep = glacier.depths <= self.max_depth
+    def _held_out_view(self, glacier, max_depth):
+        """Observations for a held-out glacier, capped at `max_depth` (None = no cap).
+
+        The cap exists for the ANALYTICAL SURROGATE, which is only valid to ~80 m. Until
+        2026-08-31 the single capped view was fed to the surrogate branch, the real-model branch
+        AND the ground-truth label, so the calibrator fit theta on all 695 emulable depth rows
+        while scoring saw 672 -- and the 24 rows it discarded are the deep Grenzgletscher/
+        Gornergletscher tongue rows the elevation split was specifically run to recover, i.e.
+        exactly where temperate ice at the bed would appear.
+        """
+        keep = (np.ones(len(glacier.depths), dtype=bool) if max_depth is None
+                else glacier.depths <= max_depth)
         return glacier.depths[keep], glacier.T_obs[keep], glacier.is_firn[keep]
 
+    def _emulable_view(self, glacier):
+        """Uncapped observations restricted to depths the emulator can actually predict.
+
+        This is the depth set the real-model branch and the ground-truth label both use, so truth
+        and prediction are always compared on IDENTICAL depths. Uncapping the label entirely was
+        considered and rejected: the two labels it would flip both ride on single points 0.007 and
+        0.026 degC from the melting threshold at 248 m and 318 m, where the deepest emulator row
+        is 187.7 m -- that would score a prediction the emulator never made.
+        The finite-mask depends only on the emulator's x_index (which depths it holds for this
+        entity), not on theta, so any theta may be used to probe it.
+        """
+        d, T, f = self._held_out_view(glacier, None)
+        emu = getattr(self.calibrator, 'emulator', None)
+        if emu is None or len(d) == 0:
+            return d, T, f, np.zeros(len(d), dtype=bool)
+        probe = predict_profile_emulator(emu, glacier.glacier_name,
+                                          np.asarray([0.5, 1.0, 15.0]), d)
+        m = np.isfinite(probe)
+        return d[m], T[m], f[m], m
+
     def _tier2_baseline_fold(self, held_out_name):
-        train_df = self.calib_df[self.calib_df['glacier_name'] != held_out_name]
+        # exclude every entity of the same GLACIER (see __post_init__._base)
+        train_df = self.calib_df[
+            self.calib_df['base_glacier_name'] != self._base[held_out_name]
+        ]
         return TransferModel().fit(train_df), train_df
 
     def _knn_fold(self, held_out_name, train_df, tm, target_lat, target_lon, T_maat, T_amplitude, elevation):
@@ -133,7 +176,16 @@ class Validator:
 
     def _ko_fold(self, held_out_name, mode='map'):
         held_out_glacier = self._by_name[held_out_name]
-        other_glaciers = [g for g in self.glaciers if g.glacier_name != held_out_name]
+        base = self._base[held_out_name]
+        # MEMOISE the expensive, entity-independent half. The fold's training set, discrepancy GP
+        # and theta_hat now depend only on which BASE GLACIER is held out, so 24 distinct fits
+        # serve all 111 entities instead of refitting per entity. Only delta_mean (evaluated at
+        # THIS entity's coordinates) and the theta translation are per-entity below.
+        cached = self._ko_fold_cache.get(base)
+        if cached is not None:
+            calib, theta_hat, gp = cached
+            return self._ko_fold_finish(held_out_glacier, held_out_name, calib, theta_hat, gp)
+        other_glaciers = [g for g in self.glaciers if g.base_glacier_name != base]
 
         # theta is fit from Track-1 (depth) rows only -- see calibrator.BayesianCalibrator's
         # `track` docstring: pooling Track-2 (basal) rows into theta-fitting let a handful of
@@ -164,6 +216,13 @@ class Validator:
         # delta(x) at the held-out location, from the discrepancy GP already fit on the
         # OTHER glaciers' temperature residuals
         gp = calib.discrepancy._gps['T_residual']
+        self._ko_fold_cache[base] = (calib, theta_hat, gp)
+        return self._ko_fold_finish(held_out_glacier, held_out_name, calib, theta_hat, gp)
+
+    def _ko_fold_finish(self, held_out_glacier, held_out_name, calib, theta_hat, gp):
+        """Per-ENTITY half of a KO fold: delta(x) at this entity's own coordinates, the theta
+        translation, and the basal diagnostic. Split out so the expensive per-GLACIER half
+        (training set, discrepancy GP, theta_hat) is fitted once and reused across its bands."""
         # Elevation must be supplied iff the fit supplied it -- the calibrator now passes it
         # (see BayesianCalibrator.use_elevation), so a 3-column X raises
         # "X has 3 features, but GaussianProcessRegressor is expecting 4". Keyed off the
@@ -173,13 +232,24 @@ class Validator:
                            np.array([held_out_glacier.longitude]), elev)
         delta_mean = gp.predict(X)[0]
 
-        # translate (theta_hat, delta_mean) into an effective (perm_frac, dT_scale, z0) for
-        # the held-out glacier via a bounded 1D search that reproduces the corrected mean
-        # temperature via the analytical surrogate -- same mechanism writeback.py uses.
+        # translate (theta_hat, delta_mean) into an effective (perm_frac, dT_scale, z0) for the
+        # held-out glacier via a bounded 1D search -- same mechanism writeback.py uses.
+        #
+        # Solved against the EMULATOR, not the analytical surrogate: delta_mean is an
+        # emulator-space quantity, and inverting the surrogate instead injects the ~2.7 degC
+        # surrogate-vs-emulator gap into the target, which drove half of campaign 8's folds onto
+        # DT_SCALE_BOUNDS' lower bound (see theta_plus_temperature_offset's docstring).
+        #
+        # The row/weight lookup uses self.calibrator (ALL entities), not `calib` (which excludes
+        # the held-out glacier and so has no rows for it). That is not leakage: it supplies the
+        # held-out glacier's measurement DEPTHS and depth weights -- the x-locations we are
+        # predicting at -- and never its temperatures. theta_hat and delta_mean both still come
+        # from the fold, which has never seen this glacier.
         from .writeback import theta_plus_temperature_offset
         theta_eff = theta_plus_temperature_offset(
             theta_hat, delta_mean, held_out_glacier.T_maat, held_out_glacier.dT_firn_band,
             held_out_glacier.has_firn_obs,
+            calibrator=self.calibrator, glacier_name=held_out_name,
         )
 
         # non-gating basal diagnostic: does theta_hat (fit WITHOUT ever seeing this glacier's
@@ -210,9 +280,14 @@ class Validator:
         non-gating `basal_abs_residual_ko` column (NaN for glaciers that aren't basal-eligible)."""
         rows = []
         for g in self.glaciers:
-            depths, T_obs, is_firn = self._held_out_view(g)
+            # surrogate view (capped at max_depth -- the surrogate is only valid that far)
+            depths, T_obs, is_firn = self._held_out_view(g, self.max_depth)
             if len(depths) == 0:
                 continue
+            # real-model view: uncapped, restricted to depths the emulator can predict
+            depths_r, T_obs_r, _is_firn_r, _ = self._emulable_view(g)
+            # uncapped view: the ground truth, over every observation actually made
+            depths_u, T_obs_u, _ = self._held_out_view(g, None)
 
             tm, train_df = self._tier2_baseline_fold(g.glacier_name)
             theta_t2 = tm.predict(g.T_maat, g.T_amplitude, g.elevation)
@@ -221,6 +296,7 @@ class Validator:
             theta_ko, basal_abs_residual = self._ko_fold(g.glacier_name, mode=mode)
 
             row = {'glacier_name': g.glacier_name, 'n_obs': len(depths),
+                   'n_obs_real': len(depths_r),
                    'basal_abs_residual_ko': basal_abs_residual}
 
             # Thermal-structure classification, alongside (never replacing) RMSE -- see
@@ -229,13 +305,36 @@ class Validator:
             # one, and applies the SAME depth-adjusted PMP rule to predictions and observations
             # (thermal_structure.classify_point).
             valid = ~np.isnan(T_obs)
+            valid_r = ~np.isnan(T_obs_r)
+            valid_u = ~np.isnan(T_obs_u)
             tol = ts.borehole_tolerance(g.borehole_id, self.borehole_df)
             row['tolerance'] = tol
-            if valid.any():
-                row['obs_class'] = ts.classify(T_obs[valid], depths[valid], tol)
-                row['obs_robustness'] = ts.robustness(T_obs[valid], depths[valid])
+            if valid_u.any():
+                # GROUND TRUTH IS UNCAPPED, over every observation the borehole actually made.
+                #
+                # Two narrower views were considered and REJECTED, measured 2026-09-01 over 116
+                # entities (warm/cold/unlabelled): uncapped 33/83/0, 80 m cap 31/85/0,
+                # emulable-only 24/83/9. Restricting the LABEL to depths the emulator can reach
+                # is circular -- it lets the model's own reach decide what the glacier IS:
+                #   Glacier de Tete Rousse x3  observed to 70 m, emulator reaches 15-25 m
+                #                              -> relabelled COLD (the motivating hazard glacier)
+                #   Chessjengletscher x5, Alphubel South x2, Sphinxgrat, Titlis
+                #                              -> no emulator rows at all -> unlabelled, dropped
+                #   Vadret dal Corvatsch       -> polythermal -> temperate
+                # A model that cannot see warm ice at 70 m has FAILED on that glacier; scoring it
+                # as a correct 'cold' hides exactly the limitation the project exists to measure.
+                # Predictions are still made only where the emulator has rows, and entities it
+                # cannot predict at all are dropped by adoption.check_bar -- commonly across all
+                # three methods -- rather than being scored as confident cold.
+                row['obs_class'] = ts.classify(T_obs_u[valid_u], depths_u[valid_u], tol)
+                row['obs_robustness'] = ts.robustness(T_obs_u[valid_u], depths_u[valid_u])
                 row['obs_seasonal_confidence'] = ts.seasonal_confidence(
-                    T_obs[valid], depths[valid], tol)
+                    T_obs_u[valid_u], depths_u[valid_u], tol)
+                # how much of the observed depth range the emulator can actually reach -- makes
+                # the coverage limitation visible instead of absorbing it into the label
+                row['emulable_depth_frac'] = (
+                    float(depths_r.max() / depths_u.max()) if len(depths_r) and depths_u.max() > 0
+                    else 0.0)
                 # base_glacier_name, not glacier_name: since the 2026-08-19 split, glacier_name
                 # is a per-(glacier, 10 m band) entity id like 'Grenzgletscher@2605' and would
                 # never match glenglat's own borehole.csv. NOTE the flag's meaning has changed
@@ -263,11 +362,11 @@ class Validator:
                 # replacing it, so the surrogate-vs-real gap stays visible instead of silently
                 # changing what the headline number means.
                 if emu is not None:
-                    T_real = predict_profile_emulator(emu, g.glacier_name, theta, depths)
-                    row[f'rmse_real_{method}'] = rmse(T_real, T_obs)
-                    if valid.any() and np.isfinite(T_real[valid]).any():
-                        vr = valid & np.isfinite(T_real)
-                        row[f'{method}_class_real'] = ts.classify(T_real[vr], depths[vr], tol)
+                    T_real = predict_profile_emulator(emu, g.glacier_name, theta, depths_r)
+                    row[f'rmse_real_{method}'] = rmse(T_real, T_obs_r)
+                    if valid_r.any() and np.isfinite(T_real[valid_r]).any():
+                        vr = valid_r & np.isfinite(T_real)
+                        row[f'{method}_class_real'] = ts.classify(T_real[vr], depths_r[vr], tol)
                     # Is this method's theta even inside the emulator's trusted design region?
                     # Tier-2/k-NN theta are fit in surrogate space and can land outside it, in
                     # which case their real-model score is itself an extrapolation -- flag
@@ -287,7 +386,8 @@ class Validator:
         means = {m: results[f'rmse_{m}'].mean() for m in ('tier2', 'knn', 'ko')}
         adopt = means['ko'] < means['tier2'] and means['ko'] < means['knn']
         text = (
-            f"LOO temperature-space RMSE (n={len(results)} glaciers, depth<={self.max_depth} m):\n"
+            f"LOO temperature-space RMSE (n={len(results)} entities; surrogate block "
+            f"depth<={self.max_depth} m, real-model block uncapped over emulable depths):\n"
             f"  Tier-2 only: {means['tier2']:.3f} degC\n"
             f"  k-NN:        {means['knn']:.3f} degC\n"
             f"  KO:          {means['ko']:.3f} degC\n"

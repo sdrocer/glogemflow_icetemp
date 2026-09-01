@@ -31,32 +31,66 @@ REF_DEPTH = 15.0  # m; representative depth used to translate a scalar T-offset 
 
 
 def theta_plus_temperature_offset(theta_base, delta_T, T_maat, dT_firn_band, is_firn_glacier,
-                                   ref_depth=REF_DEPTH):
-    """Find an 'effective' (perm_frac, dT_scale, z0) that reproduces theta_base's analytical
-    C&P profile shifted by delta_T (degC) at ref_depth, by adjusting ONLY the amplitude
-    parameter identifiable for this glacier's regime (dT_scale for firn/accumulation-zone
-    glaciers, perm_frac for ice/ablation-only glaciers) -- z0 (shape) is left at theta_base,
-    since delta_T is a single scalar (mean discrepancy) with no depth-resolved information to
-    separately constrain curvature. Used both by writeback (turning a posterior delta(x) into
-    per-glacier deltas) and by validation.Validator's LOO KO fold.
+                                   ref_depth=REF_DEPTH, calibrator=None, glacier_name=None):
+    """Find an 'effective' (perm_frac, dT_scale, z0) whose predicted temperature is delta_T
+    warmer than theta_base's, by adjusting ONLY the amplitude parameter identifiable for this
+    glacier's regime (dT_scale for firn/accumulation-zone glaciers, perm_frac for ice/
+    ablation-only glaciers) -- z0 (shape) is left at theta_base, since delta_T is a single scalar
+    (mean discrepancy) carrying no depth-resolved information to constrain curvature.
+
+    TWO SOLVERS. Pass `calibrator` and `glacier_name` to solve against the EMULATOR at that
+    entity's own rows -- ALWAYS PREFER THIS. Without them it falls back to inverting the
+    analytical C&P surrogate, which is what shipped through campaign 8 and is WRONG whenever
+    delta_T came from the emulator:
+
+        delta_T = obs - EMULATOR_pred   (calibrator.compute_glacier_residuals)
+        old target = SURROGATE_pred(theta_base) + delta_T
+                   = obs + (SURROGATE_pred - EMULATOR_pred)
+
+    so the target inherits the surrogate-vs-emulator gap as a systematic offset -- mean |gap| is
+    2.702 degC by predict_profile's own docstring, larger than Tier-2's entire LOO RMSE. The
+    solver then chases an unreachable target and terminates at a bound. Measured on campaign 8's
+    loo_results.csv: KO's per-fold dT_scale has median 0.2762 with p25 at 0.2000 = DT_SCALE_BOUNDS'
+    lower bound, 49% of folds at or below 0.21, and 92% below the posterior mean of 1.2294 (Tier-2
+    median 1.572, k-NN 1.555). Half the folds pinned at the coldest permitted surface scaling is
+    mechanically sufficient on its own to produce "KO predicts cold everywhere".
+
+    Solving against the emulator makes the target exactly `obs`, because the same model that
+    produced the residual now reproduces it:  EMULATOR_pred(theta_base) + (obs - EMULATOR_pred)
+    = obs. The weighted mean uses the SAME depth weights compute_glacier_residuals used, so the
+    quantity being matched is the one the residual was defined from.
     """
     pf0, ds0, z0 = theta_base
-    if is_firn_glacier:
-        target = cp_model_single(ref_depth, T_maat, dT_firn_band, ds0, z0, pf0, True) + delta_T
+    free_is_ds = bool(is_firn_glacier)
+    bounds = DT_SCALE_BOUNDS if free_is_ds else PERM_FRAC_BOUNDS
 
-        def obj(ds):
-            return (cp_model_single(ref_depth, T_maat, dT_firn_band, ds, z0, pf0, True) - target) ** 2
+    def _assemble(x):
+        return (pf0, x, z0) if free_is_ds else (x, ds0, z0)
 
-        res = minimize_scalar(obj, bounds=DT_SCALE_BOUNDS, method='bounded')
-        return clip_params(pf0, res.x, z0)
+    rows_by = getattr(calibrator, '_rows_by_glacier', None) if calibrator is not None else None
+    if rows_by is not None and glacier_name in rows_by:
+        rows = rows_by[glacier_name]
+        w = np.asarray(calibrator._weights[glacier_name], dtype=float)
+        emu = calibrator.emulator
+
+        def pred_mean(theta):
+            mean, _ = emu.predict(np.atleast_2d(np.asarray(theta, dtype=float)))
+            return float(np.sum(w * mean[0][rows]) / w.sum())
+
+        target = pred_mean(theta_base) + delta_T
+
+        def obj(x):
+            return (pred_mean(_assemble(x)) - target) ** 2
     else:
-        target = cp_model_single(ref_depth, T_maat, dT_firn_band, ds0, z0, pf0, False) + delta_T
+        def obj(x):
+            th = _assemble(x)
+            return (cp_model_single(ref_depth, T_maat, dT_firn_band, th[1], z0, th[0],
+                                     free_is_ds)
+                    - (cp_model_single(ref_depth, T_maat, dT_firn_band, ds0, z0, pf0,
+                                        free_is_ds) + delta_T)) ** 2
 
-        def obj(pf):
-            return (cp_model_single(ref_depth, T_maat, dT_firn_band, ds0, z0, pf, False) - target) ** 2
-
-        res = minimize_scalar(obj, bounds=PERM_FRAC_BOUNDS, method='bounded')
-        return clip_params(res.x, ds0, z0)
+    res = minimize_scalar(obj, bounds=bounds, method='bounded')
+    return clip_params(pf0, res.x, z0) if free_is_ds else clip_params(res.x, ds0, z0)
 
 
 def compute_calibrated_effective_params(calib_df, calibrator, theta_hat):
@@ -74,6 +108,7 @@ def compute_calibrated_effective_params(calib_df, calibrator, theta_hat):
         g = calibrator._glacier_by_name[gname]
         theta_eff = theta_plus_temperature_offset(
             theta_hat, residual[k], g.T_maat, g.dT_firn_band, g.has_firn_obs,
+            calibrator=calibrator, glacier_name=gname,
         )
         rows.append({
             'glacier_id': g.glacier_id, 'glacier_name': g.glacier_name,

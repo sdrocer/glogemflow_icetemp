@@ -68,6 +68,9 @@ def grid_search_all(glaciers, **grid_kwargs):
         pf, ds, z0, r = grid_search_glacier(g, **grid_kwargs)
         rows.append({
             'glacier_name': g.glacier_name, 'glacier_id': g.glacier_id,
+            # the raw glenglat name, WITHOUT the '@band' suffix -- validation's LOO folds group
+            # on this so that holding out one elevation band also holds out its siblings.
+            'base_glacier_name': g.base_glacier_name,
             'latitude': g.latitude, 'longitude': g.longitude,
             'T_maat': g.T_maat, 'T_amplitude': g.T_amplitude, 'elevation': g.elevation,
             'perm_frac_opt': pf, 'dT_scale_opt': ds, 'z0_opt': z0, 'rmse_opt': r,

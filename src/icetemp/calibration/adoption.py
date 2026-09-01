@@ -228,11 +228,13 @@ class BarResult:
     trivial_accuracy: float   # what "call everything cold" scores -- the honest baseline
     suffix: str
     floor_ok: dict
+    n_unscored: int = 0   # entities no method could score, dropped commonly (see check_bar)
 
     def describe(self):
         lines = [f"  bar:  {'PASS' if self.passed else 'FAIL'}   [graded on '{self.suffix}']"]
         lines.append(f"    n={self.n_glaciers} ({self.n_warm} warm / {self.n_cold} cold; "
-                      f"{self.n_polythermal} strictly polythermal)")
+                      f"{self.n_polythermal} strictly polythermal)"
+                      + (f"  [{self.n_unscored} unscorable, dropped]" if self.n_unscored else ''))
         lines.append(f"    BALANCED score (the rule):    " + ', '.join(
             f'{m}={self.balanced[m]:.1%}' for m in ('tier2', 'knn', 'ko')))
         lines.append(f"      warm found (recall):        " + ', '.join(
@@ -281,6 +283,18 @@ def check_bar(results, methods=('tier2', 'knn', 'ko'), suffix='_class_real'):
             f'check_bar: missing column(s) {missing}. Grading silently on a different column is '
             f'exactly the defect this argument exists to prevent -- pass suffix explicitly.')
 
+    # Drop entities this suffix cannot score AT ALL, ONCE and COMMONLY across methods, so all
+    # three are graded on identical rows. Previously a NaN prediction fell through `.isin(WARM)`
+    # as False -- i.e. scored as a confident COLD prediction, inflating specificity -- while
+    # `accuracy` below scored the same NaN as simply wrong. The two halves contradicted each
+    # other, and the effect was not method-neutral (it flattered Tier-2 by ~1.6 balanced points).
+    cols = list(col.values())
+    scorable = results['obs_class'].notna()
+    for c in cols:
+        scorable &= results[c].notna()
+    n_unscored = int((~scorable).sum())
+    results = results[scorable]
+
     truth = results['obs_class']
     is_warm = truth.isin(WARM_CLASSES)
     warm, cold = results[is_warm], results[~is_warm]
@@ -312,6 +326,7 @@ def check_bar(results, methods=('tier2', 'knn', 'ko'), suffix='_class_real'):
         passed=bool(passed), recall=recall, specificity=specificity, balanced=balanced,
         accuracy=accuracy, polythermal_recall=poly_recall, n_glaciers=n,
         n_warm=int(is_warm.sum()), n_cold=int((~is_warm).sum()), n_polythermal=len(poly),
+        n_unscored=n_unscored,
         trivial_accuracy=float((~is_warm).mean()) if n else float('nan'),
         suffix=suffix, floor_ok=floor_ok,
     )

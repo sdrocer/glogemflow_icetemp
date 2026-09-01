@@ -47,6 +47,13 @@ def main():
                         # and delta(x) would be silently inconsistent with each other.
         fixed_params=CalibrationPipeline.FIXED_PARAMS,  # must also match -- see that constant's
                         # docstring (z0 cannot reach the real model's physics; perm_frac can).
+        # Must ALSO match step 4's covariance, for the same reason. Until 2026-08-31 these were
+        # omitted, so step 5 silently rebuilt the calibrator at the DEFAULTS regardless of config:
+        # the s_model_variance sensitivity arms {2.3, 3.5, 5.0} therefore produced BYTE-IDENTICAL
+        # loo_results.csv (md5 ef05b5d71ad5c03b40ccbd2dcf3a1984), which was misread as evidence
+        # that the result is insensitive to the choice. It was evidence of this bug.
+        s_model_variance=config.s_model_variance,
+        s_model_length_m=config.s_model_length_m,
     )
     pipeline.calibrator.fit_discrepancy()
     pipeline.flat_samples = pd.read_csv(config.posterior_path)[list(PARAM_NAMES)].to_numpy()
