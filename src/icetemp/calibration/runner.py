@@ -38,6 +38,7 @@ from typing import Optional
 import numpy as np
 
 from . import physics
+from .priors import ADVECTION_SCALE_BOUNDS
 
 # RGI O1 region name -> 2-digit code, from GloGEM/test/data/region_batch.dat (verified
 # in-repo; standard RGI numbering). Only regions actually reachable by glenglat calibration
@@ -117,26 +118,32 @@ def write_icetemperature_batch(glaciers, path, study_id=1, profile_ratio=1.0):
 
 def write_calibration_override(theta_by_glacier_id, path):
     """Write the flat per-glacier override file read by read_firnicetemp_calibration.pro:
-        # glacier_id  perm_frac  dT_scale  z0
+        # glacier_id  perm_frac  dT_scale  advection_scale
     ALL bands of a matched glacier are overridden with these values (apply_firnicetemp_
     calibration.pro), which is exactly what a training run needs: evaluate G(x; theta) with
     theta held fixed for every calibration glacier at this design point.
 
-    theta_by_glacier_id: dict glacier_id -> (perm_frac, dT_scale, z0), OR a single
-      (perm_frac, dT_scale, z0) tuple to apply to every glacier_id supplied via `glacier_ids`
-      (see write_calibration_override_single for the common LHS-design-point case).
+    z0 is NOT written here any more (Tier-3 parameter swap, see priors.py's module docstring):
+    it stays fixed at its settings.pro default (firnice_z0_firn) on the IDL side, since
+    read_firnicetemp_calibration.pro no longer has a z0 column to read.
+
+    theta_by_glacier_id: dict glacier_id -> (perm_frac, dT_scale, advection_scale), OR a single
+      (perm_frac, dT_scale, advection_scale) tuple to apply to every glacier_id supplied via
+      `glacier_ids` (see write_calibration_override_single for the common LHS-design-point case).
     """
-    lines = ['# glacier_id  perm_frac  dT_scale  z0']
-    for gid, (pf, ds, z0) in theta_by_glacier_id.items():
-        pf, ds, z0 = physics.clip_params(pf, ds, z0)
-        lines.append(f'{gid}  {pf:.4f}  {ds:.4f}  {z0:.2f}')
+    lines = ['# glacier_id  perm_frac  dT_scale  advection_scale']
+    for gid, (pf, ds, adv) in theta_by_glacier_id.items():
+        pf = min(max(pf, physics.PERM_FRAC_BOUNDS[0]), physics.PERM_FRAC_BOUNDS[1])
+        ds = min(max(ds, physics.DT_SCALE_BOUNDS[0]), physics.DT_SCALE_BOUNDS[1])
+        adv = min(max(adv, ADVECTION_SCALE_BOUNDS[0]), ADVECTION_SCALE_BOUNDS[1])
+        lines.append(f'{gid}  {pf:.4f}  {ds:.4f}  {adv:.6f}')
     Path(path).write_text('\n'.join(lines) + '\n')
 
 
 def write_calibration_override_single(glacier_ids, theta, path):
-    """Convenience wrapper: apply ONE (perm_frac, dT_scale, z0) design point to every
-    glacier_id in `glacier_ids` -- the common case for an LHS training run, where G(x; theta)
-    is evaluated at the same theta for all calibration glaciers simultaneously."""
+    """Convenience wrapper: apply ONE (perm_frac, dT_scale, advection_scale) design point to
+    every glacier_id in `glacier_ids` -- the common case for an LHS training run, where
+    G(x; theta) is evaluated at the same theta for all calibration glaciers simultaneously."""
     write_calibration_override({gid: theta for gid in glacier_ids}, path)
 
 
