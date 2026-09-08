@@ -18,3 +18,17 @@ Run with the project interpreter (`python` is not on PATH in non-interactive she
 for new charts:
 
     $PY scripts/figures/validate_palette.py "#eb6834,#1baf7a"
+
+## Parameter-agreement analysis (2026-09-08)
+
+Answers: *fit each well-observed glacier independently against the real model — do the optimal
+parameters agree, and is any disagreement predictable from covariates?* No depth cap; all emulable
+depth rows. Run in this order:
+
+    $PY scripts/figures/per_glacier_fit.py    # per-glacier + per-band optima  (~4 min, data load)
+    $PY scripts/figures/predictability.py     # correlations + leave-one-GLACIER-out skill
+    $PY scripts/figures/fig_parameter_agreement.py   # -> figs/parameter_agreement.png/.pdf
+
+Note this deliberately does NOT use Tier-1 (`baselines.grid_search_all`): that fits the analytical
+surrogate (`physics.cp_model_single`) and caps at 80 m, so it answers a different question than
+"what does the real model want".
