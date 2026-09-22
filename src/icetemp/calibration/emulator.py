@@ -122,7 +122,7 @@ class Emulator:
     glaciers: list
     explained_variance: float = 0.99
     backend: EmulatorBackend = None
-    # Which columns of theta = (perm_frac, dT_scale, z0) the GP actually sees. Callers still
+    # Which columns of theta = (refreeze_frac, insul_scale, z0) the GP actually sees. Callers still
     # pass and receive FULL 3-vectors -- the slicing happens internally here, so calibrator /
     # validation / writeback need no changes.
     #
@@ -136,7 +136,7 @@ class Emulator:
     # standardized units and lets pure noise dominate the trust gate. Excluding the fixed
     # dimension outright is the only option that is correct in both the GP fit and the distance
     # metric. Leaving z0 free-but-varying would be wrong too -- points far apart in z0 but
-    # identical in (perm_frac, dT_scale) are functionally the SAME run, and counting that
+    # identical in (refreeze_frac, insul_scale) are functionally the SAME run, and counting that
     # separation as real distance would inflate every nn_distance.
     active_params: tuple = (0, 1, 2)
 
@@ -274,7 +274,7 @@ class Emulator:
     def _nn_distance(self, theta):
         """Standardized nearest-neighbor distance, per query theta, to self.theta_train_ (the
         emulator's actual training design) -- per-dimension standardized by theta_train_'s own
-        std so perm_frac/dT_scale/z0's very different natural scales contribute comparably.
+        std so refreeze_frac/insul_scale/z0's very different natural scales contribute comparably.
         A property of theta-space location alone, shared by every output row/glacier -- see
         calibrate_variance's docstring for why this replaced raw predicted variance as the
         covariate. Returns shape (n_theta,)."""
@@ -323,7 +323,7 @@ class Emulator:
         emulator only ever claims p uncertain coefficients, and it is ANTI-conservative in the
         directions that matter: measured on campaign 7, the diagonal understates the variance
         along the leading basis direction -- a coherent whole-profile warm/cold shift, i.e. the
-        direction dT_scale moves -- by 233x (true 201.6, diagonal 0.860). Since sigma_emu is
+        direction insul_scale moves -- by 233x (true 201.6, diagonal 0.860). Since sigma_emu is
         86-98% of the diagonal error budget, this is the dominant term, not a refinement.
         Compounding it, only 498 of campaign 7's 695 rows carry DISTINCT predictions (one
         entity's 41 observations collapse to 17), so the diagonal asserts independence between
@@ -395,7 +395,7 @@ class Emulator:
         gap a KO calibration likelihood (which divides the residual penalty by predicted
         variance) can exploit by treating a poor, edge-of-design fit as "forgivably uncertain"
         rather than genuinely untrustworthy. A single GLOBAL inflation factor was tried first
-        and confirmed insufficient at the worst corners (dT_scale still pinned at its design
+        and confirmed insufficient at the worst corners (insul_scale still pinned at its design
         ceiling after applying it) -- the true relationship needs to scale with how far into
         sparse territory a given prediction actually is.
 
@@ -442,7 +442,7 @@ class Emulator:
         silently set max_trusted_distance_ to 1.549 -- not because the data supported trusting
         that far, but because no jump was found to stop it sooner. MCMC then found and settled
         on a theta at standardized distance 1.169 from the nearest real training point (zero
-        points anywhere near perm_frac>0.8 with dT_scale in [3.5,4.3]), with R-hat=1.0 and huge
+        points anywhere near refreeze_frac>0.8 with insul_scale in [3.5,4.3]), with R-hat=1.0 and huge
         ESS (the sampler converged cleanly onto this unsupported corner), and LOO RMSE got
         WORSE than the prior campaign (2.649 -> 4.561 degC) despite the emulator's own
         diagnostics (LOO z-std, SVD components) all looking better -- i.e. exactly the

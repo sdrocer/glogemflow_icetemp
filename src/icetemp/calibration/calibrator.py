@@ -52,7 +52,7 @@ BASAL_SIGMA_INFLATION = 5.0
 # Consequence, Mahalanobis/n (should be ~1 for an honestly calibrated likelihood):
 #     62.5 at theta0 | 13.0 at campaign 7's own posterior mode | 76.5 at (0.176, 1.380)
 # i.e. the likelihood was over-sharp by one to two orders of magnitude, which is why campaign 7's
-# credible intervals came out 6-28x too narrow, why dT_scale pinned at its 5.0 bound with sd
+# credible intervals came out 6-28x too narrow, why insul_scale pinned at its 5.0 bound with sd
 # 4.1e-4, and why the high-recall region of theta-space was excluded by THOUSANDS of log-units.
 # Restoring an explicit model-error term returns Mahalanobis/n to 0.95-1.18.
 #
@@ -142,18 +142,18 @@ class BayesianCalibrator:
     fixed_params: dict = None   # e.g. {'z0': 15.0}; None/{} = calibrate all three. Parameters
     # named here are HELD FIXED and excluded from the search space; the rest are calibrated.
     #
-    # SUPERSEDES the earlier `fixed_perm_frac` field, which fixed perm_frac at 1.0 on the
-    # grounds that perm_frac and dT_scale "enter ONLY as a product (ins = perm_frac * ICE_FRAC
-    # * dT_scale * dT_firn_band) and so are structurally non-identifiable". That justification
+    # SUPERSEDES the earlier `fixed_refreeze_frac` field, which fixed refreeze_frac at 1.0 on the
+    # grounds that refreeze_frac and insul_scale "enter ONLY as a product (ins = refreeze_frac * ICE_FRAC
+    # * insul_scale * dT_firn_band) and so are structurally non-identifiable". That justification
     # was WRONG, and was disproven on 2026-08-18: it describes the PYTHON ANALYTICAL SURROGATE
     # (physics.cp_model_single:70-74), not the real IDL forward model the emulator is trained
-    # on. In the real model, perm_frac appears at exactly ONE line --
-    # firnice_temperature_model.pro:89, `z_perm_b = firnice_perm_depth * firnice_perm_frac_b`,
+    # on. In the real model, refreeze_frac appears at exactly ONE line --
+    # firnice_temperature_model.pro:89, `z_perm_b = firnice_perm_depth * firnice_refreeze_frac_b`,
     # scaling the Herron-Langway meltwater percolation depth -- and does NOT appear in the
-    # surface boundary condition at all (lines 163-168 use only dT_scale and ICE_FRAC). So
-    # perm_frac and dT_scale are INDEPENDENT physical mechanisms there (percolation depth vs
+    # surface boundary condition at all (lines 163-168 use only insul_scale and ICE_FRAC). So
+    # refreeze_frac and insul_scale are INDEPENDENT physical mechanisms there (percolation depth vs
     # surface insulation amplitude), not a confounded product. Verified empirically on the real
-    # 245-run training set: spearman(perm_frac, output) = +0.618 (p=3e-27), i.e. strongly
+    # 245-run training set: spearman(refreeze_frac, output) = +0.618 (p=3e-27), i.e. strongly
     # influential and separately identifiable. Fixing it discarded a real parameter.
     #
     # Conversely `z0` is the one that genuinely cannot be calibrated as the model currently
@@ -163,7 +163,7 @@ class BayesianCalibrator:
     # builds the profile; lines 422/425/428 then write the array, with nothing recomputing the
     # profile). So a design point's z0 can never reach the physics. Verified empirically:
     # spearman(z0, output) = -0.031, p=0.63 -- indistinguishable from zero, against a validated
-    # control (dT_scale 0.203 vs 4.989 changes output by 11.35 degC, and all 245 output vectors
+    # control (insul_scale 0.203 vs 4.989 changes output by 11.35 degC, and all 245 output vectors
     # are distinct). This is why z0's posterior never narrowed in any of the four campaigns.
     #
     # See emulator.BASAL. theta should still be FIT from track='depth' only: fitting against a
@@ -179,12 +179,12 @@ class BayesianCalibrator:
         if self.track not in ('all', 'depth', 'basal'):
             raise ValueError(f"track must be 'all', 'depth', or 'basal', got {self.track!r}")
         # Per-dimension bounds of the emulator's ACTUAL training design (not the nominal prior
-        # range) -- see log_posterior's design-coverage gate. dT_scale's prior is a truncated
+        # range) -- see log_posterior's design-coverage gate. insul_scale's prior is a truncated
         # Gaussian(mean=1,std=1) on [0.2,5.0]; a 100-point LHS draw from that naturally puts
         # almost no samples near the 4-sigma tail, so the real design covers only ~[0.22,4.01]
         # despite the nominal upper bound of 5.0. Confirmed the emulator's predictive variance
         # inflates ~100-200x approaching that unsampled edge (from ~0.02-0.13 near the design's
-        # center to ~9+ at dT_scale=5), and the KO likelihood -- dividing the residual penalty
+        # center to ~9+ at insul_scale=5), and the KO likelihood -- dividing the residual penalty
         # by that variance -- rewards this as "forgivably uncertain" fit rather than correctly
         # distrusting an unsampled, extrapolated region; MCMC/MAP exploit it by walking straight
         # for the edge regardless of whether the underlying physics is actually ambiguous there.
@@ -357,7 +357,7 @@ class BayesianCalibrator:
 
         if theta0 is None:
             theta0 = np.array([
-                self.priors.perm_frac.mean(), self.priors.dT_scale.mean(), self.priors.z0.mean(),
+                self.priors.refreeze_frac.mean(), self.priors.insul_scale.mean(), self.priors.z0.mean(),
             ])
         residual0, sigma_obs2_0, sigma_emu2_0 = self.compute_glacier_residuals(theta0)
 
@@ -454,7 +454,7 @@ class BayesianCalibrator:
 
     def _expand_theta(self, theta_free):
         """theta_free is the vector actually being searched/sampled (the FREE parameters, in
-        _FULL_NAMES order). Returns the full (perm_frac, dT_scale, z0) 3-tuple every likelihood
+        _FULL_NAMES order). Returns the full (refreeze_frac, insul_scale, z0) 3-tuple every likelihood
         method (log_posterior, compute_glacier_residuals, ...) expects -- those methods are
         UNCHANGED by which parameters are fixed, only the search space is."""
         if not self.fixed_params:
@@ -468,7 +468,7 @@ class BayesianCalibrator:
         fixed = self.fixed_params or {}
         return tuple(n for n in self._FULL_NAMES if n not in fixed)
 
-    _FULL_NAMES = ('perm_frac', 'dT_scale', 'z0')
+    _FULL_NAMES = ('refreeze_frac', 'insul_scale', 'z0')
 
     def _within_design_coverage(self, theta):
         """Reject (-inf, via log_posterior) any theta outside the emulator's ACTUAL training
@@ -481,7 +481,7 @@ class BayesianCalibrator:
         Also rejects theta whose NEAREST-NEIGHBOR distance to the real training design exceeds
         emulator.max_trusted_distance_ (see Emulator.calibrate_variance) -- the per-dimension
         box check above admits "corners" that sit inside every dimension's individual range but
-        are still far from any real training combination (e.g. dT_scale near its max together
+        are still far from any real training combination (e.g. insul_scale near its max together
         with z0 near its min, when the real design never actually explored that combination
         jointly). Confirmed empirically that no amount of honest variance inflation prevents the
         KO likelihood from preferring exactly such a corner over a well-covered, better-fitting
@@ -518,13 +518,13 @@ class BayesianCalibrator:
         """Multi-start Nelder-Mead MAP search. A SINGLE start (even from the prior mean) is
         unreliable for this likelihood: an LHS sweep against real production data found local
         optima differing by tens of thousands of log-posterior units depending on the start,
-        with perm_frac/dT_scale racing to their prior bounds and z0 landing essentially
+        with refreeze_frac/insul_scale racing to their prior bounds and z0 landing essentially
         anywhere in [5,200] once they do. LHS-sample diverse starts across the EFFECTIVE bounds
         (prior bounds intersected with the emulator's actual training design coverage -- see
         _effective_bounds/_within_design_coverage; z0 sampled log-uniformly, matching its
         prior) and keep the best converged optimum -- used both to seed run_mcmc()'s walkers
-        and by validation.Validator's per-fold MAP mode. Always returns a full (perm_frac,
-        dT_scale, z0) 3-tuple, even when some parameters are fixed (see _expand_theta) -- every
+        and by validation.Validator's per-fold MAP mode. Always returns a full (refreeze_frac,
+        insul_scale, z0) 3-tuple, even when some parameters are fixed (see _expand_theta) -- every
         downstream consumer expects the full theta."""
         from scipy.optimize import minimize
         from scipy.stats import qmc
@@ -579,7 +579,7 @@ class BayesianCalibrator:
         agree with EACH OTHER, not whether they found the best region -- and run_mcmc starts all
         of them in a 1e-2*prior_std ball around a single find_map result, so a shared bad start
         produces confident agreement on the wrong answer. Independent searches also disagreed
-        about where the old likelihood's MAP was (three grids gave three different dT_scale
+        about where the old likelihood's MAP was (three grids gave three different insul_scale
         locations), which is itself a symptom of the over-sharp covariance this class now fixes.
 
         Cost at the default: 41^2 = 1681 evaluations at ~1.2 ms = ~2 s. Negligible next to MCMC.
@@ -598,7 +598,7 @@ class BayesianCalibrator:
     # ── MCMC ────────────────────────────────────────────────────────────────────────
     def run_mcmc(self, n_walkers=32, n_steps=2000, burn_in=500, thin=5, seed=42,
                   progress=False):
-        """Sample the KO posterior over theta = (perm_frac, dT_scale, z0) with emcee.
+        """Sample the KO posterior over theta = (refreeze_frac, insul_scale, z0) with emcee.
         Returns (sampler, flat_samples) -- flat_samples has burn-in removed and is thinned.
 
         Walkers start in a small ball around a MAP point estimate, NOT scattered across the
@@ -620,14 +620,14 @@ class BayesianCalibrator:
         map_theta = self.find_map(seed=seed)  # always a full 3-tuple, see _expand_theta
         free_names = self._free_param_names()
         ndim = len(free_names)
-        prior_stds = {'perm_frac': self.priors.perm_frac.std(), 'dT_scale': self.priors.dT_scale.std(),
+        prior_stds = {'refreeze_frac': self.priors.refreeze_frac.std(), 'insul_scale': self.priors.insul_scale.std(),
                       'z0': self.priors.z0.std()}
         prior_std = np.array([prior_stds[n] for n in free_names])
-        full_names = ('perm_frac', 'dT_scale', 'z0')
+        full_names = ('refreeze_frac', 'insul_scale', 'z0')
         map_free = np.array([map_theta[full_names.index(n)] for n in free_names])
 
         # Perturb by a small fraction of each parameter's OWN prior std, not a fixed
-        # absolute jitter -- z0 (std ~tens) and perm_frac (std ~0.1-0.3) are on completely
+        # absolute jitter -- z0 (std ~tens) and refreeze_frac (std ~0.1-0.3) are on completely
         # different scales, so one constant ball radius would be wildly wrong for one of them.
         p0 = map_free + 1e-2 * prior_std * rng.standard_normal((n_walkers, ndim))
         eff_bounds = self._effective_bounds()  # prior bounds ∩ emulator's actual design
@@ -667,7 +667,7 @@ class BayesianCalibrator:
         if not self.fixed_params:
             flat_samples = flat_free
         else:
-            # re-expand to the full (perm_frac, dT_scale, z0) shape downstream consumers expect
+            # re-expand to the full (refreeze_frac, insul_scale, z0) shape downstream consumers expect
             # (posterior_samples.csv, PARAM_NAMES-keyed reads, ResidualWriter, ...) -- each
             # fixed parameter's column is simply constant, never sampled.
             flat_samples = np.column_stack([
@@ -681,7 +681,7 @@ class BayesianCalibrator:
         """R-hat (split-chain) and effective sample size via arviz, plus emcee's own
         integrated-autocorrelation-time estimate. Only over the parameters actually sampled
         (see _free_param_names) -- when a parameter is fixed, `sampler` itself is a lower-dim emcee
-        sampler (run_mcmc's ndim), so there is no perm_frac column to report R-hat on."""
+        sampler (run_mcmc's ndim), so there is no refreeze_frac column to report R-hat on."""
         import arviz as az
 
         chain = sampler.get_chain(discard=burn_in, thin=thin)  # (n_steps, n_walkers, ndim)

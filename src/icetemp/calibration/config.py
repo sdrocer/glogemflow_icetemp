@@ -36,7 +36,7 @@ class CalibrationConfig:
     calibration_source_files: list = None
 
     # Optional per-parameter (lo, hi) prior-bound overrides, e.g.
-    #   bounds_override: {perm_frac: [0.02, 1.0], dT_scale: [0.05, 5.0]}
+    #   bounds_override: {refreeze_frac: [0.02, 1.0], insul_scale: [0.05, 5.0]}
     # DIAGNOSTIC: campaign 5's posterior pinned against the LOWER physical bound of BOTH free
     # parameters, meaning the likelihood wants to go below the parameterisation. Widening
     # locates the unconstrained optimum. Safe to sample because the training override path does

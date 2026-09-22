@@ -1,8 +1,8 @@
 """
-Priors: prior distributions for the KO calibration parameters (perm_frac, dT_scale,
+Priors: prior distributions for the KO calibration parameters (refreeze_frac, insul_scale,
 advection_scale).
 
-theta = (perm_frac, dT_scale, advection_scale) are GLOBAL scalars shared across all
+theta = (refreeze_frac, insul_scale, advection_scale) are GLOBAL scalars shared across all
 calibration glaciers in one GloGEM training run (see runner.write_calibration_override_single).
 
 z0 (formerly the third calibrated parameter) has been RETIRED from theta: calibrator.py's own
@@ -19,12 +19,20 @@ firnice_temperature_model.pro), so -- unlike z0 -- it genuinely reaches the tran
 produces the output being calibrated against. Prior: Gaussian, mean 1.0 (unscaled baseline
 physics, GloGEM/procedures/initialise/settings.pro:173's firnice_adv_scale default), std 0.25,
 truncated to [0.3, 1.7] -- informative around the physical baseline (an advection field 3x too
-fast or 70% suppressed is not a plausible correction), unlike dT_scale's much wider, only mildly
+fast or 70% suppressed is not a plausible correction), unlike insul_scale's much wider, only mildly
 informative prior below.
 
-perm_frac keeps its uniform prior on physical bounds only (no directional prior belief) and
-dT_scale keeps its Gaussian prior centered on the settings.pro default -- both unchanged from
-before this swap.
+refreeze_frac (f_ref) replaces perm_frac, retired because it was dead on bare ice, limited by
+water availability rather than by depth, and coarsely quantised by the layer grid. f_ref scales
+the melt+rain entering the column directly (fit_water in firnice_temperature_model.pro), so it
+acts wherever there is any melt at all. Uniform prior on [0, 1] -- a fraction, no directional
+belief.
+
+insul_scale (f_ins) replaces dT_scale, retired with the CART decision tree that supplied its
+offset: the tree jumped discontinuously across T_amplitude and elevation thresholds, and the
+offset it scaled was an empirical surface-temperature correction rather than a physical process.
+f_ins instead multiplies the Calonne (2011) snow/firn conductivity, so winter snow insulation
+emerges from the seasonally varying snowpack the model already tracks.
 """
 
 from dataclasses import dataclass
@@ -32,15 +40,15 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
-from .physics import PERM_FRAC_BOUNDS, DT_SCALE_BOUNDS
+from .physics import REFREEZE_FRAC_BOUNDS, INSUL_SCALE_BOUNDS
 
-PARAM_NAMES = ('perm_frac', 'dT_scale', 'advection_scale')
+PARAM_NAMES = ('refreeze_frac', 'insul_scale', 'advection_scale')
 
-# Gaussian prior for dT_scale: mean = settings.pro default (1.0, "no correction" baseline);
-# std = 1.0 -- wide enough that +/-2 std roughly spans the full [0.2, 5.0] bound, so the prior
-# is only mildly informative and lets the KO likelihood dominate once data is available.
-DT_SCALE_PRIOR_MEAN = 1.0
-DT_SCALE_PRIOR_STD = 1.0
+# Gaussian prior for insul_scale: mean = 1.0 (Calonne 2011 as published); std = 0.35, so
+# +/-2 std spans roughly [0.3, 1.7] -- the span of the published snow-conductivity relations
+# (Sturm 1997 at 0.59, Yen 1981 at 1.09) plus room on either side.
+INSUL_SCALE_PRIOR_MEAN = 1.0
+INSUL_SCALE_PRIOR_STD = 0.35
 
 # Gaussian prior for advection_scale: mean = settings.pro default (1.0, unscaled baseline
 # physics); std = 0.25, truncated to [0.3, 1.7] (+/-2.8 std) -- see module docstring.
@@ -51,7 +59,7 @@ ADVECTION_SCALE_BOUNDS = (0.3, 1.7)
 
 @dataclass
 class Priors:
-    """Prior distributions for (perm_frac, dT_scale, advection_scale), as scipy.stats frozen
+    """Prior distributions for (refreeze_frac, insul_scale, advection_scale), as scipy.stats frozen
     distributions.
 
     Each distribution exposes .pdf/.logpdf/.ppf/.rvs, used respectively by:
@@ -60,12 +68,12 @@ class Priors:
       - plots.py: prior-density curves to compare against the posterior (.pdf)
     """
 
-    perm_frac: object = None
-    dT_scale: object = None
+    refreeze_frac: object = None
+    insul_scale: object = None
     advection_scale: object = None
-    # Optional per-parameter (lo, hi) overrides, e.g. {'perm_frac': (0.02, 1.0)}. DIAGNOSTIC USE:
+    # Optional per-parameter (lo, hi) overrides, e.g. {'refreeze_frac': (0.02, 1.0)}. DIAGNOSTIC USE:
     # campaign 5's posterior pinned against the LOWER bound of both free parameters
-    # (perm_frac 0.125 with a 0.1 floor, dT_scale 0.243 with a 0.2 floor, posterior sd 0.006 and
+    # (refreeze_frac 0.125 with a 0.1 floor, insul_scale 0.243 with a 0.2 floor, posterior sd 0.006 and
     # 0.014), i.e. the likelihood wants to go below the parameterisation. Widening lets us locate
     # where the unconstrained optimum actually is, which quantifies how far outside the
     # parameterisation the model is asking to be.
@@ -81,13 +89,13 @@ class Priors:
 
     def __post_init__(self):
         b = self.bounds_override or {}
-        if self.perm_frac is None:
-            lo, hi = b.get('perm_frac', PERM_FRAC_BOUNDS)
-            self.perm_frac = stats.uniform(loc=lo, scale=hi - lo)
-        if self.dT_scale is None:
-            lo, hi = b.get('dT_scale', DT_SCALE_BOUNDS)
-            a, bb = (lo - DT_SCALE_PRIOR_MEAN) / DT_SCALE_PRIOR_STD, (hi - DT_SCALE_PRIOR_MEAN) / DT_SCALE_PRIOR_STD
-            self.dT_scale = stats.truncnorm(a, bb, loc=DT_SCALE_PRIOR_MEAN, scale=DT_SCALE_PRIOR_STD)
+        if self.refreeze_frac is None:
+            lo, hi = b.get('refreeze_frac', REFREEZE_FRAC_BOUNDS)
+            self.refreeze_frac = stats.uniform(loc=lo, scale=hi - lo)
+        if self.insul_scale is None:
+            lo, hi = b.get('insul_scale', INSUL_SCALE_BOUNDS)
+            a, bb = (lo - INSUL_SCALE_PRIOR_MEAN) / INSUL_SCALE_PRIOR_STD, (hi - INSUL_SCALE_PRIOR_MEAN) / INSUL_SCALE_PRIOR_STD
+            self.insul_scale = stats.truncnorm(a, bb, loc=INSUL_SCALE_PRIOR_MEAN, scale=INSUL_SCALE_PRIOR_STD)
         if self.advection_scale is None:
             lo, hi = b.get('advection_scale', ADVECTION_SCALE_BOUNDS)
             a, bb = ((lo - ADVECTION_SCALE_PRIOR_MEAN) / ADVECTION_SCALE_PRIOR_STD,
@@ -96,27 +104,27 @@ class Priors:
                 a, bb, loc=ADVECTION_SCALE_PRIOR_MEAN, scale=ADVECTION_SCALE_PRIOR_STD)
 
     def as_dict(self):
-        return {'perm_frac': self.perm_frac, 'dT_scale': self.dT_scale,
+        return {'refreeze_frac': self.refreeze_frac, 'insul_scale': self.insul_scale,
                 'advection_scale': self.advection_scale}
 
     def bounds(self):
         b = self.bounds_override or {}
-        return {'perm_frac': b.get('perm_frac', PERM_FRAC_BOUNDS),
-                'dT_scale': b.get('dT_scale', DT_SCALE_BOUNDS),
+        return {'refreeze_frac': b.get('refreeze_frac', REFREEZE_FRAC_BOUNDS),
+                'insul_scale': b.get('insul_scale', INSUL_SCALE_BOUNDS),
                 'advection_scale': b.get('advection_scale', ADVECTION_SCALE_BOUNDS)}
 
     def logpdf(self, theta):
-        """Joint log-prior density at theta = (perm_frac, dT_scale, advection_scale). Returns
+        """Joint log-prior density at theta = (refreeze_frac, insul_scale, advection_scale). Returns
         -inf outside the support of any marginal (keeps emcee's random walk inside physical
         bounds)."""
         pf, ds, adv = theta
-        lp = (self.perm_frac.logpdf(pf) + self.dT_scale.logpdf(ds) + self.advection_scale.logpdf(adv))
+        lp = (self.refreeze_frac.logpdf(pf) + self.insul_scale.logpdf(ds) + self.advection_scale.logpdf(adv))
         return lp if np.isfinite(lp) else -np.inf
 
     def rvs(self, size=1, random_state=None):
         """Draw `size` samples of theta directly from the prior (e.g. emcee walker init)."""
         rng = np.random.default_rng(random_state)
-        pf = self.perm_frac.rvs(size=size, random_state=rng)
-        ds = self.dT_scale.rvs(size=size, random_state=rng)
+        pf = self.refreeze_frac.rvs(size=size, random_state=rng)
+        ds = self.insul_scale.rvs(size=size, random_state=rng)
         adv = self.advection_scale.rvs(size=size, random_state=rng)
         return np.column_stack([pf, ds, adv])

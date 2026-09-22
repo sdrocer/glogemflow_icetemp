@@ -88,7 +88,7 @@ class Discrepancy:
       - calibrator.BayesianCalibrator.fit_discrepancy(): ONE fit, on a temperature-space
         residual ('T_residual'), whose kernel this analytically marginalises into the KO
         likelihood -- the delta(x) term proper.
-      - writeback.ResidualWriter: one fit PER calibration parameter (perm_frac/dT_scale/z0),
+      - writeback.ResidualWriter: one fit PER calibration parameter (refreeze_frac/insul_scale/z0),
         on (posterior-calibrated value - Tier-2 transfer-model prediction), to fan the KO
         result out from the ~65 calibrated glaciers to all 217 glenglat glaciers (and beyond)
         -- the direct, reviewed replacement for the undamped k-NN residual copy.
@@ -102,8 +102,8 @@ class Discrepancy:
     """
 
     nugget_floor: dict = field(default_factory=lambda: {
-        'perm_frac': (0.2) ** 2 / 12,   # PERM_FRAC_GRID step = 0.2
-        'dT_scale': (0.1) ** 2 / 12,    # DT_SCALE_GRID step = 0.1
+        'refreeze_frac': (0.2) ** 2 / 12,   # REFREEZE_FRAC_GRID step = 0.2
+        'insul_scale': (0.1) ** 2 / 12,    # INSUL_SCALE_GRID step = 0.1
         'z0': (5.0) ** 2 / 12,          # Z0_GRID step = 5.0
     })
     random_state: int = 42
@@ -138,7 +138,7 @@ class Discrepancy:
         return gp
 
     def fit(self, param_name, latitudes, longitudes, residuals, elevations=None):
-        """Fit the spatial residual GP for one parameter ('perm_frac' | 'dT_scale' | 'z0').
+        """Fit the spatial residual GP for one parameter ('refreeze_frac' | 'insul_scale' | 'z0').
 
         residuals: calibrated_value - global_transfer_model_prediction, one per glacier (see
         writeback.compute_residuals). normalize_y=False keeps the prior mean exactly 0 --

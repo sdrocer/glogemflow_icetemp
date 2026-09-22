@@ -16,12 +16,12 @@ from ..plots import apply_style
 from .priors import PARAM_NAMES
 
 PARAM_LABELS = {
-    'perm_frac': 'perm_frac', 'dT_scale': 'dT_scale', 'z0': 'z0 [m]',
+    'refreeze_frac': 'refreeze_frac', 'insul_scale': 'insul_scale', 'z0': 'z0 [m]',
 }
 
 
 def plot_posterior_vs_prior(flat_samples, priors, truths=None):
-    """Corner plot of the KO posterior (perm_frac, dT_scale, z0) with each parameter's prior
+    """Corner plot of the KO posterior (refreeze_frac, insul_scale, z0) with each parameter's prior
     density overlaid on its own marginal (diagonal) panel -- the 'success = posterior narrower
     than prior' comparison the deliverables ask for. `truths` (optional) marks a known value
     per parameter (e.g. for a synthetic/recovery test)."""

@@ -19,7 +19,7 @@ best available tool for the deliverable the project actually cares about.
 WHY A GATE AT ALL, rather than just comparing classification scores: because a classification
 score alone can be passed by a fit that is known-broken for unrelated reasons. Confirmed
 against real campaign history -- the 145-point theta-expansion campaign produced a posterior at
-dT_scale~3.93 with ZERO real training support within any reasonable radius (nearest real design
+insul_scale~3.93 with ZERO real training support within any reasonable radius (nearest real design
 point 1.17 standardized units away; a trust-gate fallback bug, since fixed, let it through) and
 its LOO RMSE nearly doubled -- yet it would have PASSED a classification-only bar (40% recall,
 beating both baselines), because its systematic cold bias happened to align with this sample's

@@ -19,12 +19,12 @@ from scipy.optimize import minimize_scalar
 from .baselines import TransferModel
 from .discrepancy import Discrepancy
 from .physics import (
-    cp_model_single, clip_params, DT_SCALE_BOUNDS, PERM_FRAC_BOUNDS,
+    cp_model_single, clip_params, INSUL_SCALE_BOUNDS, REFREEZE_FRAC_BOUNDS,
 )
 
 WRITEBACK_NUGGET_FLOOR = {
-    'perm_frac': (0.2) ** 2 / 12,
-    'dT_scale': (0.1) ** 2 / 12,
+    'refreeze_frac': (0.2) ** 2 / 12,
+    'insul_scale': (0.1) ** 2 / 12,
     'z0': (5.0) ** 2 / 12,
 }
 REF_DEPTH = 15.0  # m; representative depth used to translate a scalar T-offset into theta
@@ -32,9 +32,9 @@ REF_DEPTH = 15.0  # m; representative depth used to translate a scalar T-offset 
 
 def theta_plus_temperature_offset(theta_base, delta_T, T_maat, dT_firn_band, is_firn_glacier,
                                    ref_depth=REF_DEPTH, calibrator=None, glacier_name=None):
-    """Find an 'effective' (perm_frac, dT_scale, z0) whose predicted temperature is delta_T
+    """Find an 'effective' (refreeze_frac, insul_scale, z0) whose predicted temperature is delta_T
     warmer than theta_base's, by adjusting ONLY the amplitude parameter identifiable for this
-    glacier's regime (dT_scale for firn/accumulation-zone glaciers, perm_frac for ice/
+    glacier's regime (insul_scale for firn/accumulation-zone glaciers, refreeze_frac for ice/
     ablation-only glaciers) -- z0 (shape) is left at theta_base, since delta_T is a single scalar
     (mean discrepancy) carrying no depth-resolved information to constrain curvature.
 
@@ -50,7 +50,7 @@ def theta_plus_temperature_offset(theta_base, delta_T, T_maat, dT_firn_band, is_
     so the target inherits the surrogate-vs-emulator gap as a systematic offset -- mean |gap| is
     2.702 degC by predict_profile's own docstring, larger than Tier-2's entire LOO RMSE. The
     solver then chases an unreachable target and terminates at a bound. Measured on campaign 8's
-    loo_results.csv: KO's per-fold dT_scale has median 0.2762 with p25 at 0.2000 = DT_SCALE_BOUNDS'
+    loo_results.csv: KO's per-fold insul_scale has median 0.2762 with p25 at 0.2000 = INSUL_SCALE_BOUNDS'
     lower bound, 49% of folds at or below 0.21, and 92% below the posterior mean of 1.2294 (Tier-2
     median 1.572, k-NN 1.555). Half the folds pinned at the coldest permitted surface scaling is
     mechanically sufficient on its own to produce "KO predicts cold everywhere".
@@ -62,7 +62,7 @@ def theta_plus_temperature_offset(theta_base, delta_T, T_maat, dT_firn_band, is_
     """
     pf0, ds0, z0 = theta_base
     free_is_ds = bool(is_firn_glacier)
-    bounds = DT_SCALE_BOUNDS if free_is_ds else PERM_FRAC_BOUNDS
+    bounds = INSUL_SCALE_BOUNDS if free_is_ds else REFREEZE_FRAC_BOUNDS
 
     def _assemble(x):
         return (pf0, x, z0) if free_is_ds else (x, ds0, z0)
@@ -94,7 +94,7 @@ def theta_plus_temperature_offset(theta_base, delta_T, T_maat, dT_firn_band, is_
 
 
 def compute_calibrated_effective_params(calib_df, calibrator, theta_hat):
-    """Per calibration glacier: the 'KO-calibrated' effective (perm_frac, dT_scale, z0) =
+    """Per calibration glacier: the 'KO-calibrated' effective (refreeze_frac, insul_scale, z0) =
     theta_hat (global posterior point estimate) corrected by that glacier's OWN temperature
     residual (obs - emulator prediction at theta_hat), via theta_plus_temperature_offset. This
     is the per-parameter analogue of calibrator.compute_glacier_residuals's temperature-space
@@ -114,7 +114,7 @@ def compute_calibrated_effective_params(calib_df, calibrator, theta_hat):
             'glacier_id': g.glacier_id, 'glacier_name': g.glacier_name,
             'latitude': g.latitude, 'longitude': g.longitude,
             'T_maat': g.T_maat, 'T_amplitude': g.T_amplitude, 'elevation': g.elevation,
-            'perm_frac_eff': theta_eff[0], 'dT_scale_eff': theta_eff[1], 'z0_eff': theta_eff[2],
+            'refreeze_frac_eff': theta_eff[0], 'insul_scale_eff': theta_eff[1], 'z0_eff': theta_eff[2],
         })
     return rows
 
@@ -142,7 +142,7 @@ class ResidualWriter:
         # of one glacier onto a single location exactly as the temperature discrepancy did.
         self._elev = np.array([r['elevation'] for r in self._effective])
         for name, eff_key, base_idx in [
-            ('perm_frac', 'perm_frac_eff', 0), ('dT_scale', 'dT_scale_eff', 1), ('z0', 'z0_eff', 2),
+            ('refreeze_frac', 'refreeze_frac_eff', 0), ('insul_scale', 'insul_scale_eff', 1), ('z0', 'z0_eff', 2),
         ]:
             residuals = []
             for r in self._effective:
@@ -189,8 +189,8 @@ class ResidualWriter:
             gid = getattr(row, 'glacier_id', None)
             if not gid or (isinstance(gid, float) and np.isnan(gid)):
                 continue
-            d_pf, d_ds, d_z0 = means['perm_frac'][i], means['dT_scale'][i], means['z0'][i]
-            s_pf, s_ds, s_z0 = stds['perm_frac'][i], stds['dT_scale'][i], stds['z0'][i]
+            d_pf, d_ds, d_z0 = means['refreeze_frac'][i], means['insul_scale'][i], means['z0'][i]
+            s_pf, s_ds, s_z0 = stds['refreeze_frac'][i], stds['insul_scale'][i], stds['z0'][i]
             lines.append(
                 f'{gid}  {d_pf:.4f}  {d_ds:.4f}  {d_z0:.2f}  {s_pf:.4f}  {s_ds:.4f}  {s_z0:.2f}'
             )

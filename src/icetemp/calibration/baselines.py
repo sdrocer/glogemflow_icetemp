@@ -18,8 +18,8 @@ from sklearn.preprocessing import StandardScaler
 
 from .physics import cp_model_single, rmse, clip_params
 
-PERM_FRAC_GRID = np.array([0.2, 0.4, 0.6, 0.8, 1.0])
-DT_SCALE_GRID = np.arange(0.1, 5.01, 0.1)
+REFREEZE_FRAC_GRID = np.array([0.2, 0.4, 0.6, 0.8, 1.0])
+INSUL_SCALE_GRID = np.arange(0.1, 5.01, 0.1)
 Z0_GRID = np.arange(5.0, 201.0, 5.0)
 
 PREDICTORS = ('T_maat', 'T_amplitude', 'elevation')
@@ -36,12 +36,12 @@ PREDICTORS = ('T_maat', 'T_amplitude', 'elevation')
 SURROGATE_MAX_DEPTH = 80.0
 
 
-def grid_search_glacier(glacier, pf_grid=PERM_FRAC_GRID, ds_grid=DT_SCALE_GRID, z0_grid=Z0_GRID,
+def grid_search_glacier(glacier, pf_grid=REFREEZE_FRAC_GRID, ds_grid=INSUL_SCALE_GRID, z0_grid=Z0_GRID,
                          max_depth=SURROGATE_MAX_DEPTH):
-    """Tier-1: 3D grid search over (perm_frac, dT_scale, z0) minimizing RMSE against one
+    """Tier-1: 3D grid search over (refreeze_frac, insul_scale, z0) minimizing RMSE against one
     glacier's own pooled observations (data.GlacierCalibrationData) -- restricted to
     depth <= max_depth (see SURROGATE_MAX_DEPTH) -- via the analytical C&P surrogate. Returns
-    (perm_frac_opt, dT_scale_opt, z0_opt, rmse_opt); all-NaN if no points pass the depth cap.
+    (refreeze_frac_opt, insul_scale_opt, z0_opt, rmse_opt); all-NaN if no points pass the depth cap.
     """
     keep = glacier.depths <= max_depth
     depths, T_obs, is_firn = glacier.depths[keep], glacier.T_obs[keep], glacier.is_firn[keep]
@@ -61,8 +61,8 @@ def grid_search_glacier(glacier, pf_grid=PERM_FRAC_GRID, ds_grid=DT_SCALE_GRID, 
 
 
 def grid_search_all(glaciers, **grid_kwargs):
-    """Tier-1 over a list of glaciers -> DataFrame with one row per glacier (perm_frac_opt,
-    dT_scale_opt, z0_opt, rmse_opt, has_firn_obs, has_ice_obs, + covariates)."""
+    """Tier-1 over a list of glaciers -> DataFrame with one row per glacier (refreeze_frac_opt,
+    insul_scale_opt, z0_opt, rmse_opt, has_firn_obs, has_ice_obs, + covariates)."""
     rows = []
     for g in glaciers:
         pf, ds, z0, r = grid_search_glacier(g, **grid_kwargs)
@@ -73,7 +73,7 @@ def grid_search_all(glaciers, **grid_kwargs):
             'base_glacier_name': g.base_glacier_name,
             'latitude': g.latitude, 'longitude': g.longitude,
             'T_maat': g.T_maat, 'T_amplitude': g.T_amplitude, 'elevation': g.elevation,
-            'perm_frac_opt': pf, 'dT_scale_opt': ds, 'z0_opt': z0, 'rmse_opt': r,
+            'refreeze_frac_opt': pf, 'insul_scale_opt': ds, 'z0_opt': z0, 'rmse_opt': r,
             'has_firn_obs': g.has_firn_obs, 'has_ice_obs': g.has_ice_obs,
         })
     return pd.DataFrame(rows)
@@ -82,19 +82,19 @@ def grid_search_all(glaciers, **grid_kwargs):
 class TransferModel:
     """Tier-2: global linear transfer model `param = c0 + c1*T_maat + c2*T_amplitude +
     c3*elevation`, fit separately per parameter via sklearn LinearRegression+StandardScaler
-    (perm_frac on ice-observation glaciers only, dT_scale/z0 on firn-observation glaciers
-    only -- perm_frac is only identifiable where ablation-zone data exists)."""
+    (refreeze_frac on ice-observation glaciers only, insul_scale/z0 on firn-observation glaciers
+    only -- refreeze_frac is only identifiable where ablation-zone data exists)."""
 
     def __init__(self):
         self._models = {}   # name -> (LinearRegression, StandardScaler)
 
     def fit(self, calib_df):
-        df_pf = calib_df[calib_df['has_ice_obs']].dropna(subset=['perm_frac_opt'])
-        df_ds = calib_df[calib_df['has_firn_obs']].dropna(subset=['dT_scale_opt', 'z0_opt'])
+        df_pf = calib_df[calib_df['has_ice_obs']].dropna(subset=['refreeze_frac_opt'])
+        df_ds = calib_df[calib_df['has_firn_obs']].dropna(subset=['insul_scale_opt', 'z0_opt'])
 
         for name, df, target in [
-            ('perm_frac', df_pf, 'perm_frac_opt'),
-            ('dT_scale', df_ds, 'dT_scale_opt'),
+            ('refreeze_frac', df_pf, 'refreeze_frac_opt'),
+            ('insul_scale', df_ds, 'insul_scale_opt'),
             ('z0', df_ds, 'z0_opt'),
         ]:
             X = df[list(PREDICTORS)].values
@@ -104,23 +104,23 @@ class TransferModel:
         return self
 
     def predict(self, T_maat, T_amplitude, elevation):
-        """Return clipped (perm_frac, dT_scale, z0) at one glacier's climate covariates."""
+        """Return clipped (refreeze_frac, insul_scale, z0) at one glacier's climate covariates."""
         X = np.array([[T_maat, T_amplitude, elevation]])
-        pf = float(self._models['perm_frac'][0].predict(self._models['perm_frac'][1].transform(X))[0])
-        ds = float(self._models['dT_scale'][0].predict(self._models['dT_scale'][1].transform(X))[0])
+        pf = float(self._models['refreeze_frac'][0].predict(self._models['refreeze_frac'][1].transform(X))[0])
+        ds = float(self._models['insul_scale'][0].predict(self._models['insul_scale'][1].transform(X))[0])
         z0 = float(self._models['z0'][0].predict(self._models['z0'][1].transform(X))[0])
         return clip_params(pf, ds, z0)
 
     def r2(self, calib_df):
-        """R^2 per PARAMETER (perm_frac/dT_scale/z0) on its own training subset -- a rougher,
+        """R^2 per PARAMETER (refreeze_frac/insul_scale/z0) on its own training subset -- a rougher,
         noisier diagnostic than the calibration_scheme_prompt.md headline figure ("R^2~0.66,
         RMSE~2.4 degC"), which is a TEMPERATURE-space validation metric (predicted vs observed
         profile), not this parameter-space regression fit. See validation.Validator for the
         comparable temperature-space metric."""
         out = {}
         for name, target, mask_col in [
-            ('perm_frac', 'perm_frac_opt', 'has_ice_obs'),
-            ('dT_scale', 'dT_scale_opt', 'has_firn_obs'),
+            ('refreeze_frac', 'refreeze_frac_opt', 'has_ice_obs'),
+            ('insul_scale', 'insul_scale_opt', 'has_firn_obs'),
             ('z0', 'z0_opt', 'has_firn_obs'),
         ]:
             df = calib_df[calib_df[mask_col]].dropna(subset=[target])

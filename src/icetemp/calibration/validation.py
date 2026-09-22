@@ -20,7 +20,7 @@ Per held-out glacier i:
      mode='mcmc' for the more rigorous, far slower alternative), then delta(x_i) is predicted
      at the held-out glacier's own location.
 
-Every method's predicted (perm_frac, dT_scale, z0) is turned into a predicted T(z) profile via
+Every method's predicted (refreeze_frac, insul_scale, z0) is turned into a predicted T(z) profile via
 the analytical C&P surrogate (physics.cp_model_single, depth-capped exactly like baselines.py's
 grid search -- see SURROGATE_MAX_DEPTH), and scored by RMSE against the glacier's own held-out
 observations.
@@ -50,7 +50,7 @@ def predict_profile(depths, is_firn, T_maat, dT_firn_band, theta):
     posterior mean, mean |IDL emulator - surrogate| over the 22 CentralEurope calibration
     glaciers is 2.702 degC (worst: Lysgletscher 6.86, Mont Blanc 6.55), which is LARGER than
     Tier-2's entire LOO RMSE of 2.113 degC. The parameter semantics also differ: z0 is inert in
-    the real model but shapes the profile here, and perm_frac scales percolation depth in the
+    the real model but shapes the profile here, and refreeze_frac scales percolation depth in the
     real model but multiplies the ice-band insulation amplitude here. See
     predict_profile_emulator for the real-model-space alternative, which Validator now scores
     alongside this."""
@@ -163,8 +163,8 @@ class Validator:
         train_df = train_df.assign(
             pf_base=pred.apply(lambda t: t[0]), ds_base=pred.apply(lambda t: t[1]),
             z0_base=pred.apply(lambda t: t[2]),
-            delta_pf=lambda d: d['perm_frac_opt'] - d['pf_base'],
-            delta_ds=lambda d: d['dT_scale_opt'] - d['ds_base'],
+            delta_pf=lambda d: d['refreeze_frac_opt'] - d['pf_base'],
+            delta_ds=lambda d: d['insul_scale_opt'] - d['ds_base'],
             delta_z0=lambda d: d['z0_opt'] - d['z0_base'],
         )
         d = haversine_km(target_lat, target_lon, train_df['latitude'].values, train_df['longitude'].values)
@@ -232,13 +232,13 @@ class Validator:
                            np.array([held_out_glacier.longitude]), elev)
         delta_mean = gp.predict(X)[0]
 
-        # translate (theta_hat, delta_mean) into an effective (perm_frac, dT_scale, z0) for the
+        # translate (theta_hat, delta_mean) into an effective (refreeze_frac, insul_scale, z0) for the
         # held-out glacier via a bounded 1D search -- same mechanism writeback.py uses.
         #
         # Solved against the EMULATOR, not the analytical surrogate: delta_mean is an
         # emulator-space quantity, and inverting the surrogate instead injects the ~2.7 degC
         # surrogate-vs-emulator gap into the target, which drove half of campaign 8's folds onto
-        # DT_SCALE_BOUNDS' lower bound (see theta_plus_temperature_offset's docstring).
+        # INSUL_SCALE_BOUNDS' lower bound (see theta_plus_temperature_offset's docstring).
         #
         # The row/weight lookup uses self.calibrator (ALL entities), not `calib` (which excludes
         # the held-out glacier and so has no rows for it). That is not leakage: it supplies the

@@ -141,15 +141,15 @@ class CalibrationPipeline:
         return self.emulator
 
     # -- 04_calibrate --------------------------------------------------------------------
-    # Calibrate (perm_frac, dT_scale); hold z0 fixed at settings.pro:170's own default (15.0 m).
+    # Calibrate (refreeze_frac, insul_scale); hold z0 fixed at settings.pro:170's own default (15.0 m).
     #
-    # REVERSED from campaigns 1-4, which did the opposite (fixed perm_frac at 1.0, calibrated
-    # dT_scale and z0). That earlier choice rested on a non-identifiability argument that was
+    # REVERSED from campaigns 1-4, which did the opposite (fixed refreeze_frac at 1.0, calibrated
+    # insul_scale and z0). That earlier choice rested on a non-identifiability argument that was
     # disproven on 2026-08-18 -- it described the Python analytical surrogate, not the real IDL
     # forward model. See BayesianCalibrator.fixed_params' docstring for the full evidence; in
     # short, verified on the real 245-run training set:
-    #     spearman(perm_frac, output) = +0.618 (p=3e-27)  -> strongly influential, keep free
-    #     spearman(dT_scale,  output) = +0.691 (p=4e-36)  -> strongly influential, keep free
+    #     spearman(refreeze_frac, output) = +0.618 (p=3e-27)  -> strongly influential, keep free
+    #     spearman(insul_scale,  output) = +0.691 (p=4e-36)  -> strongly influential, keep free
     #     spearman(z0,        output) = -0.031 (p=0.63)   -> NO detectable effect, fix it
     # z0 is inert because it is read only when the initial C&P profile is built
     # (initialise_firnicetemp_spinup.pro:189) while the per-glacier override that carries the
