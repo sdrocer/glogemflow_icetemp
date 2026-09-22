@@ -44,6 +44,15 @@ class CalibrationConfig:
     bounds_override: dict = None
 
     # -- design / training ----------------------------------------------------------------
+    # 'y' runs GloGEM's equilibrium thermal spinup in the training runs. Needed once the
+    # analytical initial profile is isothermal: without it the deep temperature is fixed by
+    # climate alone and no theta can move it.
+    thermal_spinup: str = 'n'
+    # 'y' calibrates in the same configuration production runs in: u comes from the coupled
+    # flow model instead of the standalone SIA estimate. Needs glacier_retreat='y' too.
+    use_flow_model: str = 'n'
+    glacier_retreat: str = 'n'
+    write_velocity: str = 'n'   # dump the applied velocity field for train/apply checks
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.99

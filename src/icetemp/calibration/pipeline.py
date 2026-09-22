@@ -81,7 +81,11 @@ class CalibrationPipeline:
         regardless of catchment_selection, the opposite of the fast/targeted path needed
         here. See runner.GloGEMRunner.write_catchment_file / TRAINING_CONFIG_TEMPLATE.
         """
-        runner_kwargs = dict(run_dir=self.config.training_dir, remote_host=self.config.remote_host)
+        runner_kwargs = dict(run_dir=self.config.training_dir, remote_host=self.config.remote_host,
+                             thermal_spinup=self.config.thermal_spinup,
+                             use_flow_model=self.config.use_flow_model,
+                             glacier_retreat=self.config.glacier_retreat,
+                             write_velocity=self.config.write_velocity)
         if self.config.calibration_source_dir is not None:
             runner_kwargs['calibration_source_dir'] = self.config.calibration_source_dir
         if self.config.calibration_source_files is not None:

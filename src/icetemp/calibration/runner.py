@@ -184,8 +184,9 @@ calibrate       = 'n'
 read_parameters = 'y'
 
 refreezing_parametrised = 'y'
-glacier_retreat  = 'n'   ; fixed geometry -- isolate the firn/ice temperature module
-use_flow_model   = 'n'  ; full coupled flow model not needed for a fixed-geometry run;
+glacier_retreat  = '{glacier_retreat}'   ; 'n' = fixed geometry, isolates the thermal module
+use_flow_model   = '{use_flow_model}'  ; 'n' = standalone SIA velocity; 'y' = the coupled flow
+                         ; model supplies u_flowmodel, as production runs do;
                          ; enable_advection below still gets a standalone SIA velocity
                          ; estimate (driving stress + Glen's flow law) as a fallback
 frontal_ablation = 'n'
@@ -197,7 +198,9 @@ write_file       = 'n'
 ; Pinned explicitly -- see config_centraleurope_glenglat_knn.pro's own note: `.r glogem`
 ; re-runs in the SAME IDL session do not reset variables this config doesn't mention.
 firnice_batch           = 'n'
-firnice_thermal_spinup  = 'n'   ; training runs skip spinup -- fast path, per feasibility spike
+firnice_thermal_spinup  = '{thermal_spinup}'   ; 'n' = fast path (the analytical initial
+                         ; profile IS the deep answer); 'y' = run the equilibrium spinup so the
+                         ; deep profile is built by the physics instead of prescribed
 enable_advection        = 'y'   ; large glaciers' T(z) is materially shaped by ice advection
                          ; (cold-ice transport downglacier, emergence near the terminus) --
                          ; excluding it would structurally bias the emulator against what the
@@ -213,7 +216,20 @@ firnice_temp_calib_file     = '{override_file}'
 firnice_temp_calib_bayes_file = ''  ; not used during training
 
 firnice_glenglat_lookup = '{glenglat_lookup_file}'
+firnice_write = ['y', 'y', '{write_velocity}']  ; 3rd = full T(band,layer) + applied velocity field
+
+; settings.pro defaults find_startyear='y', which forces glacier_retreat='n' until each
+; glacier's survey year. With use_flow_model='y' that keeps glogemflow_coupled from ever
+; running, so flow_initialised is never set and glogem.pro:554 skips the temperature model
+; for every year -- profile files get headers and no rows. Moot when glacier_retreat='n'.
+find_startyear   = 'n'
+hindcast_dynamic = 'n'
 """
+
+
+# IDL's own fatal marker. It prints this and stops, but the process still exits 0, so a
+# returncode check alone cannot see a dead run.
+IDL_FATAL = '% Execution halted'
 
 
 @dataclass
@@ -240,6 +256,10 @@ class GloGEMRunner:
     # that a later climate.py bugfix recovered) -- write_catchment_file() generates this
     # fresh from the actual calibration glacier set each time, so it always matches exactly.
     catchment: str = 'CentralEurope_bayescal'
+    thermal_spinup: str = 'n'   # 'y' runs the equilibrium thermal spinup (see the template)
+    use_flow_model: str = 'n'   # 'y' takes u from the coupled flow model, as production does
+    glacier_retreat: str = 'n'  # must be 'y' for the flow model to evolve geometry
+    write_velocity: str = 'n'   # 'y' dumps the applied velocity field (fit_u_sum)
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -428,6 +448,10 @@ class GloGEMRunner:
             year_max=self.year_max,
             override_file=str(self.override_path),
             glenglat_lookup_file=self.glenglat_lookup_file or '',
+            thermal_spinup=self.thermal_spinup,
+            use_flow_model=self.use_flow_model,
+            glacier_retreat=self.glacier_retreat,
+            write_velocity=self.write_velocity,
         )
         out_path.write_text(text)
         return out_path
@@ -500,7 +524,7 @@ class GloGEMRunner:
         return self.run_dir / f'{tag}.done'
 
     def run_design_point(self, glacier_ids, theta, tag, idl_bin='idl', timeout=1800,
-                          skip_if_done=True):
+                          skip_if_done=True, extra_env=None):
         """Evaluate G(x; theta) for one LHS design point: write the override file, launch
         `echo '.r glogem' | idl` (locally, or over ssh on self.remote_host) with GLOGEM_CONFIG
         set to the training config (see write_training_config / module docstring), and mark
@@ -529,9 +553,11 @@ class GloGEMRunner:
         # be embedded in the command string (not passed via Popen's env=) because ssh does not
         # forward the local Python process's environment to the remote host.
         run_marker = f'{tag}_{os.getpid()}'
+        # extra_env is embedded the same way, for diagnostics that GloGEM reads via getenv()
+        extra = ''.join(f"{k}='{v}' " for k, v in (extra_env or {}).items())
         inner_cmd = (
             f"cd {self.glogem_dir} && GLOGEM_CONFIG='{self.training_config_path}' "
-            f"GLOGEM_RUN_TAG='{run_marker}' bash -c \"echo '.r glogem' | {idl_bin}\""
+            f"GLOGEM_RUN_TAG='{run_marker}' {extra}bash -c \"echo '.r glogem' | {idl_bin}\""
         )
         if self.remote_host:
             cmd = ['ssh', '-o', 'BatchMode=yes', self.remote_host, inner_cmd]
@@ -566,6 +592,12 @@ class GloGEMRunner:
 
         log_path.write_text(stdout + '\n' + stderr)
         if proc.returncode != 0:
+            return False
+        # IDL exits 0 even after "% Execution halted", so returncode alone marks a DEAD run as
+        # successful; .done then hides it from every re-run. Scan for IDL's own fatal marker.
+        halted = [ln for ln in (stdout + stderr).splitlines() if IDL_FATAL in ln]
+        if halted:
+            print(f'  {tag}: IDL HALTED -- {halted[0].strip()[:90]} (see {log_path})')
             return False
         done.touch()
         return True
