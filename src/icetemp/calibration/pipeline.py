@@ -87,6 +87,7 @@ class CalibrationPipeline:
                              spinup_min_cycles=self.config.spinup_min_cycles,
                              spinup_max_cycles=self.config.spinup_max_cycles,
                              spinup_tol=self.config.spinup_tol,
+                             spinup_solver=self.config.spinup_solver,
                              use_flow_model=self.config.use_flow_model,
                              glacier_retreat=self.config.glacier_retreat,
                              write_velocity=self.config.write_velocity)

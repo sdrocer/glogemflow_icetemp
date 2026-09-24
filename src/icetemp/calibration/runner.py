@@ -201,6 +201,7 @@ firnice_batch           = 'n'
 firnice_spinup_min_cycles = {spinup_min_cycles}
 firnice_spinup_max_cycles = {spinup_max_cycles}
 firnice_spinup_tol        = {spinup_tol}d
+firnice_spinup_solver     = '{spinup_solver}'
 firnice_implicit        = '{implicit}'   ; 'y' = backward-Euler Thomas solver, unconditionally
                          ; stable. The explicit branch carries a /2. factor that halves the
                          ; diffusivity -- without it, 1 m ice layers are unstable at a 10-day step.
@@ -267,6 +268,7 @@ class GloGEMRunner:
     spinup_min_cycles: int = 200
     spinup_max_cycles: int = 500
     spinup_tol: float = 0.05
+    spinup_solver: str = 'cycle'
     use_flow_model: str = 'n'   # 'y' takes u from the coupled flow model, as production does
     glacier_retreat: str = 'n'  # must be 'y' for the flow model to evolve geometry
     write_velocity: str = 'n'   # 'y' dumps the applied velocity field (fit_u_sum)
@@ -463,6 +465,7 @@ class GloGEMRunner:
             spinup_min_cycles=self.spinup_min_cycles,
             spinup_max_cycles=self.spinup_max_cycles,
             spinup_tol=self.spinup_tol,
+            spinup_solver=self.spinup_solver,
             use_flow_model=self.use_flow_model,
             glacier_retreat=self.glacier_retreat,
             write_velocity=self.write_velocity,
