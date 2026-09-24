@@ -32,7 +32,8 @@ commits.
 Figures sit in the text where the concept is explained:
 
 - **SVG schematics and plots** in `figures/`, made by one script per chapter
-  (`figures/make_chNN.py`). Rerun a script to redraw its figures when numbers change; pass a
+  (`figures/make_chNN.py`) or by the notebook named in the chapter. Rerun it to redraw the
+  figures when numbers change; for a script, pass a
   folder as argument to also get PNG previews there.
 - **Mermaid diagrams** written directly in the Markdown for step-by-step processes. GitHub and the
   VS Code preview draw them automatically.

@@ -7,8 +7,8 @@
 > physics from the main run. **Main lesson: the spin-up is part of the model, not a
 > preliminary — it must run the same physics, and it must actually reach equilibrium.**
 >
-> *This chapter is written as the work lands. Status: problems measured and plan approved
-> (2026-09-24); Phase 0 in progress.*
+> *This chapter is written as the work lands. Status (2026-09-24): Phase 0 done; drift correction
+> prototyped on one column; IDL implementation next.*
 
 ## What we believed
 
@@ -85,11 +85,60 @@ the thickest band:
 
 On Grenz/Gorner the along-glacier effect alone is larger than any calibration parameter's.
 
-<!-- FIGURE: spin-up convergence of the deep layers, brute force vs stopping rules; source: truthref_w0 / truthref2_w0 design_0000.log -->
-
 ## What we changed and why
 
 *(Filled in as each phase lands; see the plan for the full reasoning.)*
+
+### Phase 0: clearing the ground (2026-09-24)
+
+- The refreezing loop now uses the same slice of ice as conduction (GloGEM `f9024f3`,
+  chapter 4).
+- Column to the borehole depth committed (GloGEM `6d05a87`).
+- Convergence checked from the first node at or below 15 m (GloGEM `59e9835`).
+- The interim stopping rules (30-cycle minimum, projected drift) were reverted: the drift
+  correction replaces them.
+
+### Phase 1: the drift correction, tested on one column
+
+`notebooks/05_spinup_drift_correction.ipynb` copies one IDL column into Python: the same grid,
+time step, boundary conditions, melting-point clamp and upwind advection. Its exact equilibrium
+can be computed directly, so every result is checked against the true answer.
+
+![Brute force vs drift correction on one column](figures/ch05_drift_vs_bruteforce.svg)
+
+On seven test columns (cold and warm, 39–259 m, burial, strong emergence, seasonal snow the jump
+does not know about), the drift correction reaches the exact equilibrium to ≤ 0.0003 °C in
+**11–17 simulated years**. Brute force still has 4.2 °C left after 200 years on the cold 259 m
+column, and 0.09 °C after 3000.
+
+**What we learned on the way.** The first version failed on every column whose base reaches the
+melting point. There were two separate reasons:
+
+1. *The jump did not know that ice cannot pass 0 °C.* From a cold start it predicted warming of
+   up to +95 °C at depth; the clamp cut it off and the next jump swung back, in a loop. Fix: the
+   melting point is built into the jump. Layers that would pass it are held at it, and layers
+   already there and still being warmed stay there.
+2. *The bed behaves differently once it melts.* With a cold bed the geothermal **flux** is fixed.
+   Under emergence, a uniform warming of the column can then only escape by diffusing down
+   against rising ice, which takes about 9000 years. So the jump read a drift of 0.001 °C/yr as
+   "8 °C still to go". Once the bed is at the melting point, the model fixes its
+   **temperature** instead and the extra heat melts ice. The jump now switches its bed
+   condition to match.
+
+```mermaid
+flowchart LR
+    A[measured drift D] --> B{bed at the<br/>melting point?}
+    B -- no --> C[fixed-flux bed]
+    B -- yes --> D[fixed-temperature bed]
+    C --> E[solve the jump;<br/>hold layers at 0 °C]
+    D --> E
+    E --> F[add the jump,<br/>run 3 real years]
+```
+
+**Relative depth.** The notebook also derives the burial speed that matches relative-depth
+advection: *surface balance × (1 − share of the ice flux passing above that level)*. It equals
+the surface balance at the surface and is zero at the bed by construction. The current code
+uses *surface balance × (1 − ζ)*, which is only right for plug flow.
 
 The approach, in one diagram:
 
@@ -117,8 +166,10 @@ Decisions taken (2026-09-24):
 
 ## What is still open
 
-Everything in the plan's Phases 1–3: the drift correction, making the spin-up physics match
-the main run, then rerunning the sensitivity ensemble.
+- The drift correction in IDL, including the along-glacier coupling between bands, validated
+  against the 3000-cycle brute-force run `truthref2_w0`.
+- Making the spin-up physics match the main run (plan Phase 2), then rerunning the sensitivity
+  ensemble (Phase 3).
 
 ## Sources
 
