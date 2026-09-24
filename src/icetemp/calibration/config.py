@@ -48,6 +48,10 @@ class CalibrationConfig:
     # analytical initial profile is isothermal: without it the deep temperature is fixed by
     # climate alone and no theta can move it.
     thermal_spinup: str = 'n'
+    implicit: str = 'y'
+    spinup_min_cycles: int = 200
+    spinup_max_cycles: int = 500
+    spinup_tol: float = 0.05
     # 'y' calibrates in the same configuration production runs in: u comes from the coupled
     # flow model instead of the standalone SIA estimate. Needs glacier_retreat='y' too.
     use_flow_model: str = 'n'

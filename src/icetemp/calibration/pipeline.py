@@ -83,6 +83,10 @@ class CalibrationPipeline:
         """
         runner_kwargs = dict(run_dir=self.config.training_dir, remote_host=self.config.remote_host,
                              thermal_spinup=self.config.thermal_spinup,
+                             implicit=self.config.implicit,
+                             spinup_min_cycles=self.config.spinup_min_cycles,
+                             spinup_max_cycles=self.config.spinup_max_cycles,
+                             spinup_tol=self.config.spinup_tol,
                              use_flow_model=self.config.use_flow_model,
                              glacier_retreat=self.config.glacier_retreat,
                              write_velocity=self.config.write_velocity)
