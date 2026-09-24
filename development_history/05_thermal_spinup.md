@@ -7,8 +7,8 @@
 > physics from the main run. **Main lesson: the spin-up is part of the model, not a
 > preliminary — it must run the same physics, and it must actually reach equilibrium.**
 >
-> *This chapter is written as the work lands. Status (2026-09-24): Phase 0 done; drift correction
-> prototyped on one column; IDL implementation next.*
+> *This chapter is written as the work lands. Status (2026-09-24): Phases 0 and 1 done — the drift
+> correction matches a 3000-cycle spin-up to 0.001 °C in ~20 years. Next: Phase 2 (physics).*
 
 ## What we believed
 
@@ -135,7 +135,30 @@ flowchart LR
     E --> F[add the jump,<br/>run 3 real years]
 ```
 
-**Relative depth.** The notebook also derives the burial speed that matches relative-depth
+### Phase 1: the drift correction in GloGEM (GloGEM `ab7cab3`)
+
+The IDL version runs the real model, so the jump operator is built from the conduction
+coefficients the model itself used over the measured year, including the seasonal snow and firn
+conductivity. It sits behind `firnice_spinup_solver = 'drift'`; the default `'cycle'` stays
+bit-identical.
+
+Tested on Tête Rousse and Grenz/Gorner (32 profiles, same parameters), against a brute-force
+spin-up of 3000 cycles:
+
+| spin-up | simulated years | runtime (3 glaciers) | largest difference to 3000 cycles, all depths, 1991–2020 |
+|---|---|---|---|
+| 3000 cycles (reference) | 3000 | 4078 s | — |
+| 200 cycles (old default) | 200 | 369 s | **1.57 °C** (Grenz/Gorner), 0.97 °C (01230), 0.002 °C (Tête Rousse) |
+| drift correction | 18–24 | 127 s | **≤ 0.001 °C** |
+
+The first IDL version failed its own check: after "converging", 5 plain years still moved the
+deep layers by up to 1.3 °C. That was not drift. The jump had also rewritten the bed node and the
+unused slots below it, which the model resets every step with that month's conductivity and the
+melting point of each slot's depth. The jump now changes the interior layers only, and the check
+starts one year after the last jump. After that, 5 plain years move the deep layers by
+≤ 0.0007 °C.
+
+ the burial speed that matches relative-depth
 advection: *surface balance × (1 − share of the ice flux passing above that level)*. It equals
 the surface balance at the surface and is zero at the bed by construction. The current code
 uses *surface balance × (1 − ζ)*, which is only right for plug flow.
@@ -166,8 +189,8 @@ Decisions taken (2026-09-24):
 
 ## What is still open
 
-- The drift correction in IDL, including the along-glacier coupling between bands, validated
-  against the 3000-cycle brute-force run `truthref2_w0`.
+- The along-glacier coupling between bands in the jump (needed once advection runs in the
+  spin-up, Phase 2).
 - Making the spin-up physics match the main run (plan Phase 2), then rerunning the sensitivity
   ensemble (Phase 3).
 
