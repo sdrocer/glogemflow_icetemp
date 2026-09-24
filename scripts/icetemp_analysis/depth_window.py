@@ -1,9 +1,10 @@
 import pickle
+import sys
 from pathlib import Path
 import numpy as np, pandas as pd
 from icetemp.calibration import CalibrationConfig, CalibrationPipeline
 
-TAGS=['alps_sensitivity_w0','alps_sensitivity_w1','alps_sensitivity_w2']
+TAGS = sys.argv[1:] or ['alps_sensitivity_w0', 'alps_sensitivity_w1', 'alps_sensitivity_w2']
 base=CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
 def cfg(t): return CalibrationConfig(region=base.region, include_estimated=base.include_estimated,
     include_unassessed=base.include_unassessed, run_tag=t,
