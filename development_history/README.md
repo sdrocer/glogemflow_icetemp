@@ -8,7 +8,7 @@ be defended later, in a paper, a thesis or a talk.
 
 | # | chapter | period | one-line summary |
 |---|---|---|---|
-| 1 | [Starting point](01_starting_point.md) | Jun–Aug 2026 | glenglat, the first calibration framework, `perm_frac` / `dT_scale` |
+| 1 | [Starting point](01_starting_point.md) | Jun – 1 Sep 2026 | glenglat, the first calibration framework, `perm_frac` / `dT_scale` |
 | 2 | [Parameter redesign](02_parameter_redesign.md) | Aug–Sep 2026 | `f_ref`, `f_ins`, `f_adv`; energy and mass kept separate |
 | 3 | [Why the parameters look alike](03_why_the_parameters_look_alike.md) | Sep 2026 | `f_ref` and `f_ins` confounded; the depth window is too narrow |
 | 4 | [The depth window](04_depth_window.md) | Sep 2026 | bed node, implicit solver, conduction stencil, column to the borehole |
