@@ -51,6 +51,7 @@ class CalibrationPipeline:
         self.data_handler = DataHandler(
             region=self.config.region, include_estimated=self.config.include_estimated,
             include_unassessed=self.config.include_unassessed,
+            run_year_min=self.config.year_min, run_year_max=self.config.year_max,
         )
         self.data_handler.load()
         self.data_handler.summary()
@@ -88,6 +89,7 @@ class CalibrationPipeline:
                              spinup_max_cycles=self.config.spinup_max_cycles,
                              spinup_tol=self.config.spinup_tol,
                              spinup_solver=self.config.spinup_solver,
+                             year_min=self.config.year_min, year_max=self.config.year_max,
                              use_flow_model=self.config.use_flow_model,
                              glacier_retreat=self.config.glacier_retreat,
                              write_velocity=self.config.write_velocity)

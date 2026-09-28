@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+from .data import RUN_YEAR_MIN, RUN_YEAR_MAX
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -52,6 +54,10 @@ class CalibrationConfig:
     spinup_max_cycles: int = 500
     spinup_tol: float = 0.05
     spinup_solver: str = 'drift'    # 'drift' jumps to equilibrium; 'cycle' repeats the year
+    # model run window, hydrological years; observations are compared at their own month inside
+    # it, and the spin-up uses the 30 years before it (see data.RUN_YEAR_MIN)
+    year_min: int = RUN_YEAR_MIN
+    year_max: int = RUN_YEAR_MAX
     # 'y' calibrates in the same configuration production runs in: u comes from the coupled
     # flow model instead of the standalone SIA estimate. Needs glacier_retreat='y' too.
     use_flow_model: str = 'n'

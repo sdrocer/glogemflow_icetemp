@@ -61,6 +61,12 @@ ESTIMATED_SIGMA_INFLATION = 3.0     # sigma multiplier for equilibrium=='estimat
 DEFAULT_SIGMA = 0.1                 # degC, median of borehole.temperature_uncertainty (n=551)
 ELEVATION_BAND_WIDTH = 10.0         # GloGEM elevation band width [m] (process_hypsometry_data.pro)
 DEPTH_BIN_WIDTH = 1.0                # m; pools continuous-logger time series onto one point/bin
+# Model run window, hydrological years (Oct..Sep in the northern hemisphere): readings outside it
+# cannot be compared with the model at their own month and are dropped. The training runs use
+# the same window (runner.GloGEMRunner / config.CalibrationConfig year_min, year_max).
+RUN_YEAR_MIN = 1972
+RUN_YEAR_MAX = 2025
+BAL_MONTH = 10                       # first month of the hydrological year (GloGEM bal_month)
 
 
 @dataclass
@@ -89,6 +95,9 @@ class GlacierCalibrationData:
     sigma: np.ndarray          # [n_obs] observation error [degC] (borehole-level, broadcast)
     n_readings: np.ndarray     # [n_obs] raw readings pooled into each depth bin (logger diagnostic)
     equilibrium: str           # 'true', 'estimated', or 'unassessed' (blank in glenglat)
+    # [n_obs] per point: (months as year*100+month, number of readings in each), so the model
+    # can be averaged over the same months with the same weights as the observation
+    obs_months: Optional[list] = None
     n_obs: int = field(init=False)
     has_firn_obs: bool = field(init=False)
     has_ice_obs: bool = field(init=False)
@@ -119,7 +128,7 @@ def _depth_weight(depth):
     return DEPTH_WEIGHT_IN_BAND if (lo <= depth <= hi) else 1.0
 
 
-def _pool_by_depth_bin(depths, T_obs, is_firn, bin_width=DEPTH_BIN_WIDTH):
+def _pool_by_depth_bin(depths, T_obs, is_firn, bin_width=DEPTH_BIN_WIDTH, months=None):
     """Collapse repeated temporal readings at (near-)identical depths onto one point per
     depth bin (mean temperature, majority is_firn), keeping the count of raw readings pooled.
 
@@ -136,6 +145,7 @@ def _pool_by_depth_bin(depths, T_obs, is_firn, bin_width=DEPTH_BIN_WIDTH):
     T_obs = np.asarray(T_obs, dtype=float)
     is_firn = np.asarray(is_firn, dtype=bool)
     bin_id = np.round(depths / bin_width).astype(int)
+    months = None if months is None else np.asarray(months, dtype=int)
 
     uniq_bins, inverse = np.unique(bin_id, return_inverse=True)
     n_bins = len(uniq_bins)
@@ -143,15 +153,21 @@ def _pool_by_depth_bin(depths, T_obs, is_firn, bin_width=DEPTH_BIN_WIDTH):
     T_out = np.zeros(n_bins)
     firn_out = np.zeros(n_bins, dtype=bool)
     n_out = np.zeros(n_bins, dtype=int)
+    months_out = [None] * n_bins
     for k in range(n_bins):
         sel = inverse == k
         depth_out[k] = depths[sel].mean()
         T_out[k] = T_obs[sel].mean()
         firn_out[k] = np.mean(is_firn[sel]) >= 0.5   # majority vote
         n_out[k] = int(sel.sum())
+        if months is not None:
+            months_out[k] = np.unique(months[sel], return_counts=True)
 
     order = np.argsort(depth_out)
-    return depth_out[order], T_out[order], firn_out[order], n_out[order]
+    out = depth_out[order], T_out[order], firn_out[order], n_out[order]
+    if months is None:
+        return out
+    return out + ([months_out[k] for k in order],)
 
 
 class DataHandler:
@@ -174,6 +190,9 @@ class DataHandler:
         include_estimated=True,
         include_unassessed=True,
         min_year=MIN_YEAR,
+        run_year_min=RUN_YEAR_MIN,
+        run_year_max=RUN_YEAR_MAX,
+        bal_month=BAL_MONTH,
         target_depth_band=TARGET_DEPTH_BAND,
         estimated_sigma_inflation=ESTIMATED_SIGMA_INFLATION,
         default_sigma=DEFAULT_SIGMA,
@@ -185,6 +204,9 @@ class DataHandler:
         self.include_estimated = include_estimated
         self.include_unassessed = include_unassessed
         self.min_year = min_year
+        self.run_year_min = run_year_min
+        self.run_year_max = run_year_max
+        self.bal_month = bal_month
         self.target_depth_band = target_depth_band
         self.estimated_sigma_inflation = estimated_sigma_inflation
         self.default_sigma = default_sigma
@@ -326,9 +348,20 @@ class DataHandler:
         prof_year = pd.to_datetime(profile['date_min'], errors='coerce').dt.year
         eq_profiles = profile[
             profile['equilibrium'].isin(eq_states) & (prof_year >= self.min_year)
-        ][['borehole_id', 'id', 'equilibrium']].rename(columns={'id': 'profile_id'})
+        ][['borehole_id', 'id', 'equilibrium', 'date_min']].rename(
+            columns={'id': 'profile_id', 'date_min': 'date_meas'})
 
         meas = measurement.merge(eq_profiles, on=['borehole_id', 'profile_id'], how='inner')
+        # each reading's month; keep only months inside the model run window (hydrological years
+        # run_year_min..run_year_max, i.e. from bal_month of run_year_min-1)
+        t_meas = pd.to_datetime(meas['date_meas'], errors='coerce')
+        meas['_ym'] = (t_meas.dt.year * 100 + t_meas.dt.month).astype('Int64')
+        ym_lo = (self.run_year_min - 1) * 100 + self.bal_month
+        ym_hi = self.run_year_max * 100 + (self.bal_month - 1)
+        in_window = meas['_ym'].notna() & meas['_ym'].between(ym_lo, ym_hi)
+        self.n_outside_window = int((~in_window).sum())
+        meas = meas[in_window].copy()
+        meas['_ym'] = meas['_ym'].astype(int)
         meas = meas.merge(borehole, left_on='borehole_id', right_on='id', how='left',
                            suffixes=('', '_bh'))
 
@@ -423,8 +456,8 @@ class DataHandler:
             raw_depths = gdf['depth'].to_numpy(dtype=float)
             raw_T_obs = gdf['temperature'].to_numpy(dtype=float)
             raw_is_firn = gdf['mass_balance_area'].apply(_classify_firn).to_numpy(dtype=bool)
-            depths, T_obs, is_firn, n_readings = _pool_by_depth_bin(
-                raw_depths, raw_T_obs, raw_is_firn
+            depths, T_obs, is_firn, n_readings, obs_months = _pool_by_depth_bin(
+                raw_depths, raw_T_obs, raw_is_firn, months=gdf['_ym'].to_numpy(dtype=int)
             )
             weights = np.array([_depth_weight(d) for d in depths])
             sigma = np.full(len(depths), sigma_bh)
@@ -452,7 +485,7 @@ class DataHandler:
                     if gdf['glogem_region'].notna().any() else None
                 ),
                 depths=depths, T_obs=T_obs, weights=weights, is_firn=is_firn, sigma=sigma,
-                n_readings=n_readings, equilibrium=equilibrium_label,
+                n_readings=n_readings, equilibrium=equilibrium_label, obs_months=obs_months,
             ))
 
         self.prediction_glaciers = (
@@ -490,6 +523,9 @@ class DataHandler:
             f'  with data below 30 m:              {n_deep}',
             f'  largest depth-bin pooling factor:  {max_pooled} raw readings -> 1 point '
             f'(continuous-logger dedup)',
+            f'  readings outside the model window {self.run_year_min - 1}-{self.bal_month:02d}..'
+            f'{self.run_year_max}-{self.bal_month - 1:02d} (dropped): '
+            f'{getattr(self, "n_outside_window", 0)}',
             f'Prediction (all glenglat) glaciers:  '
             f'{len(self.prediction_glaciers) if self.prediction_glaciers is not None else 0}',
         ]

@@ -38,6 +38,7 @@ from typing import Optional
 import numpy as np
 
 from . import physics
+from .data import RUN_YEAR_MIN, RUN_YEAR_MAX
 from .priors import ADVECTION_SCALE_BOUNDS
 
 # RGI O1 region name -> 2-digit code, from GloGEM/test/data/region_batch.dat (verified
@@ -202,6 +203,7 @@ firnice_spinup_min_cycles = {spinup_min_cycles}
 firnice_spinup_max_cycles = {spinup_max_cycles}
 firnice_spinup_tol        = {spinup_tol}d
 firnice_spinup_solver     = '{spinup_solver}'
+firnice_spinup_ref_period = [{ref_y0}, {ref_y1}]   ; the 30 hydrological years before tran[0]
 firnice_implicit        = '{implicit}'   ; 'y' = backward-Euler Thomas solver, unconditionally
                          ; stable. The explicit branch carries a /2. factor that halves the
                          ; diffusivity -- without it, 1 m ice layers are unstable at a 10-day step.
@@ -238,6 +240,60 @@ hindcast_dynamic = 'n'
 IDL_FATAL = '% Execution halted'
 # printed by spinup_firnicetemp_thermal.pro when plain cycling also fails to converge
 SPINUP_UNCONVERGED = 'Phase 1 did not converge'
+
+
+
+def match_model_to_obs(df, g):
+    """The model seen the way each observation point of `g` was measured.
+
+    df: a GloGEM profile file (icetemp.io.read_profile_file): one row per model month, labelled
+    with the HYDROLOGICAL year (GloGEM writes ye+tran[0]; the first row is bal_month of the
+    calendar year before), plus one column per node depth.
+    For each observation point: the model node nearest its depth, accepted within half the
+    local grid spacing (Emulator._local_tolerance, as before), averaged over the calendar months
+    of the readings pooled into that point with the same weights (g.obs_months). NaN where the
+    node is not resolved or none of the months lies in the run.
+    Appended last: the deepest resolved node, averaged over all the point months, for the
+    emulator's basal row.
+    Returns (depths, temperatures), the observation depths first.
+    """
+    from .emulator import Emulator
+    depth_cols = [c for c in df.columns if c not in ('year', 'month')]
+    zgrid = np.asarray(depth_cols, dtype=float)
+    T = df[depth_cols].to_numpy(dtype=float)
+    hyd_year = df['year'].to_numpy(dtype=int)
+    month = df['month'].to_numpy(dtype=int)
+    bal = month[0]
+    cal_year = hyd_year - (month >= bal)
+    row_of = {int(y) * 100 + int(m): r for r, (y, m) in enumerate(zip(cal_year, month))}
+
+    def weighted(rows_w, k):
+        rows = [row_of[ym] for ym, w in rows_w if ym in row_of]
+        w = np.array([w for ym, w in rows_w if ym in row_of], dtype=float)
+        if not rows:
+            return np.nan
+        v = T[rows, k]
+        ok = np.isfinite(v)
+        return float(np.sum(v[ok] * w[ok]) / np.sum(w[ok])) if ok.all() else np.nan
+
+    vals = []
+    all_w = {}
+    for d, (yms, counts) in zip(g.depths, g.obs_months):
+        pairs = list(zip(yms.tolist(), counts.tolist()))
+        for ym, c in pairs:
+            all_w[ym] = all_w.get(ym, 0) + c
+        k = int(np.argmin(np.abs(zgrid - d)))
+        if abs(zgrid[k] - d) > Emulator._local_tolerance(zgrid, k):
+            vals.append(np.nan)
+        else:
+            vals.append(weighted(pairs, k))
+    resolved = np.flatnonzero(np.isfinite(T).any(axis=0))
+    depths_out = list(np.asarray(g.depths, dtype=float))
+    if resolved.size:
+        kb = int(resolved.max())
+        depths_out.append(float(zgrid[kb]))
+        vals.append(weighted(list(all_w.items()), kb))
+    return np.asarray(depths_out), np.asarray(vals, dtype=float)
 
 
 @dataclass
@@ -285,8 +341,8 @@ class GloGEMRunner:
     # region (prepare_output_firnicetemp.pro's dir_region, from assign_region_parameters.pro's
     # region_loop_data lookup table) -- confirmed against real on-disk output from the k-NN
     # reference run: .../monthly/CentralEurope/PAST/firnice_temperature/temp_ID*.dat.
-    year_min: int = 1991
-    year_max: int = 2020
+    year_min: int = RUN_YEAR_MIN   # run window, hydrological years (see data.RUN_YEAR_MIN)
+    year_max: int = RUN_YEAR_MAX
     # catchment_selection.pro reads catchments/RGI{code}_{catchment}.dat from
     # main_dir+'data/', where main_dir defaults (settings.pro) to /itet-stor/{user}/glogem/ --
     # a SHARED production location (like calibration_source_dir), not dirres/run_dir-relative.
@@ -459,6 +515,8 @@ class GloGEMRunner:
             catchment=self.catchment,
             year_min=self.year_min,
             year_max=self.year_max,
+            ref_y0=self.year_min - 30,
+            ref_y1=self.year_min - 1,
             override_file=str(self.override_path),
             glenglat_lookup_file=self.glenglat_lookup_file or '',
             thermal_spinup=self.thermal_spinup,
@@ -642,14 +700,12 @@ class GloGEMRunner:
         boreholes on the same RGI polygon, like Breithornplateau/Gornergletscher both ->
         '01225'), producing MULTIPLE temp_ID*_<gid>.dat candidate files for that one id. Each
         is disambiguated by matching the closest output elevation to the glacier's own
-        borehole elevation (firnice_glenglat_lookup places each profile at its real borehole
-        elevation, so this reliably separates same-id, different-borehole outputs).
+        borehole elevation.
 
-        Each glacier's monthly (year, month, *depth) time series is collapsed to ONE
-        representative temperature per depth by averaging the last `n_avg_months` (default:
-        the final simulated year) -- the training run's transient window (see
-        TRAINING_CONFIG_TEMPLATE's tran=[1991,2020], firnice_thermal_spinup='n') needs time to
-        approach a quasi-equilibrium; the final year is the best available estimate of it.
+        Glaciers with obs_months (data.DataHandler): the model is compared with each observation
+        point at the time it was measured -- averaged over the same months, with the same
+        weights, as the readings pooled into that point (match_model_to_obs). Without
+        obs_months (older data objects): the mean of the last `n_avg_months`.
 
         Returns dict glacier_name -> (depths, temperatures).
         """
@@ -678,6 +734,9 @@ class GloGEMRunner:
             _, depths, df = best_parsed
             if df.empty:
                 out[g.glacier_name] = None
+                continue
+            if getattr(g, 'obs_months', None) is not None:
+                out[g.glacier_name] = match_model_to_obs(df, g)
                 continue
             depth_cols = [c for c in df.columns if c not in ('year', 'month')]
             tail = df.tail(n_avg_months)
