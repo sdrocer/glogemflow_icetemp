@@ -5,7 +5,7 @@ Step 1/5 of the Tier-3 Bayesian calibration: load glenglat data, build the LHS d
 Usage:
     python scripts/01_build_design.py [config.yaml]
 
-Writes {output_dir}/design.csv (the theta = (perm_frac, dT_scale, z0) design matrix). Does
+Writes {output_dir}/design.csv (the theta = (refreeze_frac, insul_scale, advection_scale) design matrix). Does
 NOT touch IDL or config.pro.
 """
 

@@ -20,10 +20,12 @@ Per held-out glacier i:
      mode='mcmc' for the more rigorous, far slower alternative), then delta(x_i) is predicted
      at the held-out glacier's own location.
 
-Every method's predicted (refreeze_frac, insul_scale, z0) is turned into a predicted T(z) profile via
+Tier-2/k-NN predict the surrogate's (refreeze_frac, insul_scale, z0); KO predicts the real model's
+(refreeze_frac, insul_scale, advection_scale). Each is turned into a predicted T(z) profile via
 the analytical C&P surrogate (physics.cp_model_single, depth-capped exactly like baselines.py's
-grid search -- see SURROGATE_MAX_DEPTH), and scored by RMSE against the glacier's own held-out
-observations.
+grid search -- see SURROGATE_MAX_DEPTH) and via the emulator, the parameter a model lacks held at
+its IDL default (as_surrogate_theta / as_emulator_theta), and scored by RMSE against the glacier's
+own held-out observations.
 """
 
 from dataclasses import dataclass, field
@@ -37,7 +39,18 @@ from . import thermal_structure as ts
 from .baselines import TransferModel, SURROGATE_MAX_DEPTH, haversine_km
 from .discrepancy import Discrepancy, latlon_to_xyz
 from .emulator import BASAL
-from .physics import cp_model_single, rmse
+from .physics import cp_model_single, rmse, IDL_DEFAULTS, Z0_FIRN_DEFAULT
+
+
+def as_surrogate_theta(method, theta):
+    """(refreeze_frac, insul_scale, z0) for the surrogate; KO's advection_scale has no place there."""
+    return (theta[0], theta[1], Z0_FIRN_DEFAULT) if method == 'ko' else tuple(theta)
+
+
+def as_emulator_theta(method, theta):
+    """(refreeze_frac, insul_scale, advection_scale) for the emulator; the baselines' z0 has no
+    place there."""
+    return tuple(theta) if method == 'ko' else (theta[0], theta[1], IDL_DEFAULTS['advection_scale'])
 
 
 def predict_profile(depths, is_firn, T_maat, dT_firn_band, theta):
@@ -145,7 +158,7 @@ class Validator:
         if emu is None or len(d) == 0:
             return d, T, f, np.zeros(len(d), dtype=bool)
         probe = predict_profile_emulator(emu, glacier.glacier_name,
-                                          np.asarray([0.5, 1.0, 15.0]), d)
+                                          np.asarray([0.5, 1.0, 1.0]), d)
         m = np.isfinite(probe)
         return d[m], T[m], f[m], m
 
@@ -190,7 +203,7 @@ class Validator:
         # theta is fit from Track-1 (depth) rows only -- see calibrator.BayesianCalibrator's
         # `track` docstring: pooling Track-2 (basal) rows into theta-fitting let a handful of
         # rows comparing the model's own thickness-capped node against a much deeper real
-        # borehole reading drag z0 to its prior ceiling, confirmed to score ~23,000
+        # borehole reading drag theta to a prior bound, confirmed to score ~23,000
         # log-posterior units worse than the true Track-1-only optimum under Track-1-only data.
         # INHERIT the parent's covariance settings. These are dataclass fields with defaults, so
         # omitting them silently gave every LOO fold the DEFAULT model-error amplitude regardless
@@ -232,7 +245,7 @@ class Validator:
                            np.array([held_out_glacier.longitude]), elev)
         delta_mean = gp.predict(X)[0]
 
-        # translate (theta_hat, delta_mean) into an effective (refreeze_frac, insul_scale, z0) for the
+        # translate (theta_hat, delta_mean) into an effective (refreeze_frac, insul_scale, advection_scale) for the
         # held-out glacier via a bounded 1D search -- same mechanism writeback.py uses.
         #
         # Solved against the EMULATOR, not the analytical surrogate: delta_mean is an
@@ -351,7 +364,8 @@ class Validator:
 
             emu = getattr(self.calibrator, 'emulator', None)
             for method, theta in [('tier2', theta_t2), ('knn', theta_knn), ('ko', theta_ko)]:
-                T_pred = predict_profile(depths, is_firn, g.T_maat, g.dT_firn_band, theta)
+                T_pred = predict_profile(depths, is_firn, g.T_maat, g.dT_firn_band,
+                                         as_surrogate_theta(method, theta))
                 row[f'rmse_{method}'] = rmse(T_pred, T_obs)
                 row[f'theta_{method}'] = theta
                 if valid.any():
@@ -362,7 +376,8 @@ class Validator:
                 # replacing it, so the surrogate-vs-real gap stays visible instead of silently
                 # changing what the headline number means.
                 if emu is not None:
-                    T_real = predict_profile_emulator(emu, g.glacier_name, theta, depths_r)
+                    theta_emu = as_emulator_theta(method, theta)
+                    T_real = predict_profile_emulator(emu, g.glacier_name, theta_emu, depths_r)
                     row[f'rmse_real_{method}'] = rmse(T_real, T_obs_r)
                     if valid_r.any() and np.isfinite(T_real[valid_r]).any():
                         vr = valid_r & np.isfinite(T_real)
@@ -372,7 +387,7 @@ class Validator:
                     # which case their real-model score is itself an extrapolation -- flag
                     # rather than quietly report a number.
                     try:
-                        nn = float(emu._nn_distance(np.atleast_2d(np.asarray(theta, float)))[0])
+                        nn = float(emu._nn_distance(np.atleast_2d(np.asarray(theta_emu, float)))[0])
                         row[f'{method}_nn_dist'] = nn
                         mtd = getattr(emu, 'max_trusted_distance_', None)
                         row[f'{method}_in_design'] = None if mtd is None else bool(nn <= mtd)

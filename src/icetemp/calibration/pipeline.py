@@ -152,39 +152,21 @@ class CalibrationPipeline:
         return self.emulator
 
     # -- 04_calibrate --------------------------------------------------------------------
-    # Calibrate (refreeze_frac, insul_scale); hold z0 fixed at settings.pro:170's own default (15.0 m).
-    #
-    # REVERSED from campaigns 1-4, which did the opposite (fixed refreeze_frac at 1.0, calibrated
-    # insul_scale and z0). That earlier choice rested on a non-identifiability argument that was
-    # disproven on 2026-08-18 -- it described the Python analytical surrogate, not the real IDL
-    # forward model. See BayesianCalibrator.fixed_params' docstring for the full evidence; in
-    # short, verified on the real 245-run training set:
-    #     spearman(refreeze_frac, output) = +0.618 (p=3e-27)  -> strongly influential, keep free
-    #     spearman(insul_scale,  output) = +0.691 (p=4e-36)  -> strongly influential, keep free
-    #     spearman(z0,        output) = -0.031 (p=0.63)   -> NO detectable effect, fix it
-    # z0 is inert because it is read only when the initial C&P profile is built
-    # (initialise_firnicetemp_spinup.pro:189) while the per-glacier override that carries the
-    # design point's value is applied afterwards (glogem.pro:420 builds, 422/425/428 override,
-    # nothing recomputes) -- so calibrating it spends design points and IDL hours on a parameter
-    # that cannot reach the physics. Fixing it at the settings default is the honest
-    # representation of what the model actually does today. If the glogem.pro ordering is ever
-    # fixed so z0 genuinely shapes the initial condition, revisit this.
-    FIXED_PARAMS = {'z0': 15.0}
+    # Parameters held fixed (name -> value, names from PARAM_NAMES); empty = calibrate all three
+    # (refreeze_frac, insul_scale, advection_scale), matching the training design.
+    FIXED_PARAMS = {}
 
     def calibrate(self):
         """Fits theta from Track-1 (depth) rows only -- see calibrator.BayesianCalibrator's
         `track` field docstring. Pooling Track-2 (basal) rows into the same likelihood let a
         handful of rows comparing the model's own thickness-capped node against a much deeper
-        real borehole reading drag z0 to its prior ceiling; confirmed empirically that even
-        heavily downweighting those rows just flips z0 to the OPPOSITE bound rather than
+        real borehole reading drag theta to a prior bound; confirmed empirically that even
+        heavily downweighting those rows just flips it to the OPPOSITE bound rather than
         settling at an interior value, and that the pooled-fit theta scores ~23,000
         log-posterior units worse than the true Track-1-only optimum under Track-1-only data --
         i.e. basal rows were pulling theta somewhere the shallow profile-shape data actively
         rejects. Track-2 is still evaluated afterwards (calibrate_basal_diagnostic), just never
         allowed to influence theta.
-
-        z0 is held fixed (FIXED_PARAMS) rather than calibrated -- see that constant's docstring
-        for the evidence that it cannot influence the real model at all.
         """
         if self.priors is None:
             self.priors = Priors(bounds_override=self.config.bounds_override)
@@ -322,7 +304,7 @@ class CalibrationPipeline:
             mahalanobis=diag.get('mahalanobis_per_dof'), mode_gap=diag.get('mode_gap'),
         )
         print(class_text)
-        self.writer = ResidualWriter(calib_df=self.calib_df, calibrator=self.calibrator, theta_hat=theta_hat)
+        self.writer = ResidualWriter(calibrator=self.calibrator, theta_hat=theta_hat)
         n = self.writer.write(self.data_handler.prediction_glaciers, self.config.residual_file_path)
         print(f'wrote {n} glaciers -> {self.config.residual_file_path}')
         if not adopt:

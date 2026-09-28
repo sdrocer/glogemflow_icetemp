@@ -45,8 +45,7 @@ def main():
                         # calibrator.BayesianCalibrator's `track` docstring), so LOO/writeback
                         # must evaluate discrepancy/residuals through the same track or theta
                         # and delta(x) would be silently inconsistent with each other.
-        fixed_params=CalibrationPipeline.FIXED_PARAMS,  # must also match -- see that constant's
-                        # docstring (z0 cannot reach the real model's physics; perm_frac can).
+        fixed_params=CalibrationPipeline.FIXED_PARAMS,  # must also match step 4
         # Must ALSO match step 4's covariance, for the same reason. Until 2026-08-31 these were
         # omitted, so step 5 silently rebuilt the calibrator at the DEFAULTS regardless of config:
         # the s_model_variance sensitivity arms {2.3, 3.5, 5.0} therefore produced BYTE-IDENTICAL

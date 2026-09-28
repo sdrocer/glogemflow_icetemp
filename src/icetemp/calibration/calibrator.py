@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .emulator import BASAL
+from .priors import PARAM_NAMES
 
 # 'basal' rows (see emulator.BASAL) compare the model's deepest RESOLVED grid node against a
 # glacier's deepest AVAILABLE glenglat observation -- these are rarely at the same physical
@@ -139,8 +140,9 @@ class BayesianCalibrator:
     use_elevation: bool = True         # pass elevation as a 3rd discrepancy coordinate
     use_emulator_factor: bool = True   # carry the emulator's rank-p covariance FACTOR instead of
     # its diagonal (see Emulator.predict_factor). False restores pre-2026-08-20 behaviour.
-    fixed_params: dict = None   # e.g. {'z0': 15.0}; None/{} = calibrate all three. Parameters
-    # named here are HELD FIXED and excluded from the search space; the rest are calibrated.
+    fixed_params: dict = None   # e.g. {'advection_scale': 1.0}; None/{} = calibrate all three.
+    # Parameters named here are HELD FIXED and excluded from the search space; the rest are
+    # calibrated.
     #
     # SUPERSEDES the earlier `fixed_refreeze_frac` field, which fixed refreeze_frac at 1.0 on the
     # grounds that refreeze_frac and insul_scale "enter ONLY as a product (ins = refreeze_frac * ICE_FRAC
@@ -165,6 +167,7 @@ class BayesianCalibrator:
     # spearman(z0, output) = -0.031, p=0.63 -- indistinguishable from zero, against a validated
     # control (insul_scale 0.203 vs 4.989 changes output by 11.35 degC, and all 245 output vectors
     # are distinct). This is why z0's posterior never narrowed in any of the four campaigns.
+    # z0 has since been retired; advection_scale took its slot (see priors.py).
     #
     # See emulator.BASAL. theta should still be FIT from track='depth' only: fitting against a
     # POOLED depth+basal residual let a handful of basal rows, comparing the model's own
@@ -178,6 +181,9 @@ class BayesianCalibrator:
     def __post_init__(self):
         if self.track not in ('all', 'depth', 'basal'):
             raise ValueError(f"track must be 'all', 'depth', or 'basal', got {self.track!r}")
+        unknown = set(self.fixed_params or {}) - set(self._FULL_NAMES)
+        if unknown:
+            raise ValueError(f'fixed_params {sorted(unknown)} are not in {self._FULL_NAMES}')
         # Per-dimension bounds of the emulator's ACTUAL training design (not the nominal prior
         # range) -- see log_posterior's design-coverage gate. insul_scale's prior is a truncated
         # Gaussian(mean=1,std=1) on [0.2,5.0]; a 100-point LHS draw from that naturally puts
@@ -356,9 +362,8 @@ class BayesianCalibrator:
         from .discrepancy import Discrepancy
 
         if theta0 is None:
-            theta0 = np.array([
-                self.priors.refreeze_frac.mean(), self.priors.insul_scale.mean(), self.priors.z0.mean(),
-            ])
+            prior = self.priors.as_dict()
+            theta0 = self._expand_theta([prior[n].mean() for n in self._free_param_names()])
         residual0, sigma_obs2_0, sigma_emu2_0 = self.compute_glacier_residuals(theta0)
 
         # 'T_residual' is a temperature-space discrepancy, not one of Discrepancy's default
@@ -454,7 +459,7 @@ class BayesianCalibrator:
 
     def _expand_theta(self, theta_free):
         """theta_free is the vector actually being searched/sampled (the FREE parameters, in
-        _FULL_NAMES order). Returns the full (refreeze_frac, insul_scale, z0) 3-tuple every likelihood
+        _FULL_NAMES order). Returns the full (refreeze_frac, insul_scale, advection_scale) 3-tuple every likelihood
         method (log_posterior, compute_glacier_residuals, ...) expects -- those methods are
         UNCHANGED by which parameters are fixed, only the search space is."""
         if not self.fixed_params:
@@ -468,7 +473,7 @@ class BayesianCalibrator:
         fixed = self.fixed_params or {}
         return tuple(n for n in self._FULL_NAMES if n not in fixed)
 
-    _FULL_NAMES = ('refreeze_frac', 'insul_scale', 'z0')
+    _FULL_NAMES = PARAM_NAMES
 
     def _within_design_coverage(self, theta):
         """Reject (-inf, via log_posterior) any theta outside the emulator's ACTUAL training
@@ -482,7 +487,7 @@ class BayesianCalibrator:
         emulator.max_trusted_distance_ (see Emulator.calibrate_variance) -- the per-dimension
         box check above admits "corners" that sit inside every dimension's individual range but
         are still far from any real training combination (e.g. insul_scale near its max together
-        with z0 near its min, when the real design never actually explored that combination
+        with advection_scale near its min, when the real design never actually explored that combination
         jointly). Confirmed empirically that no amount of honest variance inflation prevents the
         KO likelihood from preferring exactly such a corner over a well-covered, better-fitting
         point -- this is a hard exclusion, not a softer reweighting, because the right response
@@ -518,37 +523,23 @@ class BayesianCalibrator:
         """Multi-start Nelder-Mead MAP search. A SINGLE start (even from the prior mean) is
         unreliable for this likelihood: an LHS sweep against real production data found local
         optima differing by tens of thousands of log-posterior units depending on the start,
-        with refreeze_frac/insul_scale racing to their prior bounds and z0 landing essentially
-        anywhere in [5,200] once they do. LHS-sample diverse starts across the EFFECTIVE bounds
-        (prior bounds intersected with the emulator's actual training design coverage -- see
-        _effective_bounds/_within_design_coverage; z0 sampled log-uniformly, matching its
-        prior) and keep the best converged optimum -- used both to seed run_mcmc()'s walkers
-        and by validation.Validator's per-fold MAP mode. Always returns a full (refreeze_frac,
-        insul_scale, z0) 3-tuple, even when some parameters are fixed (see _expand_theta) -- every
-        downstream consumer expects the full theta."""
+        with refreeze_frac/insul_scale racing to their prior bounds. LHS-sample diverse starts
+        across the EFFECTIVE bounds (prior bounds intersected with the emulator's actual training
+        design coverage -- see _effective_bounds/_within_design_coverage) and keep the best
+        converged optimum -- used both to seed run_mcmc()'s walkers and by
+        validation.Validator's per-fold MAP mode. Always returns a full 3-tuple in PARAM_NAMES
+        order, even when some parameters are fixed (see _expand_theta) -- every downstream
+        consumer expects the full theta."""
         from scipy.optimize import minimize
         from scipy.stats import qmc
 
         eff_bounds = self._effective_bounds()
         free_names = self._free_param_names()
         ndim = len(free_names)
-        lo = np.array([eff_bounds[n][0] if n != 'z0' else np.log(eff_bounds[n][0]) for n in free_names])
-        hi = np.array([eff_bounds[n][1] if n != 'z0' else np.log(eff_bounds[n][1]) for n in free_names])
-        # z0's starts are drawn LOG-uniformly to match its loguniform prior, so its column (and
-        # only its column) is exponentiated back. Guarded because z0 is not necessarily a free
-        # parameter any more: since 2026-08-18 the default is to hold z0 FIXED (it cannot reach
-        # the real model's physics -- see fixed_params), in which case it is absent from
-        # free_names entirely and an unguarded .index('z0') raises
-        # "ValueError: tuple.index(x): x not in tuple". That is exactly what killed campaign 5's
-        # step 4 after its 150 IDL runs had already completed.
-        if 'z0' in free_names:
-            z0_col = free_names.index('z0')
-        else:
-            z0_col = None
+        lo = np.array([eff_bounds[n][0] for n in free_names])
+        hi = np.array([eff_bounds[n][1] for n in free_names])
         u = qmc.LatinHypercube(d=ndim, seed=seed).random(n_starts)
         starts = lo + u * (hi - lo)
-        if z0_col is not None:
-            starts[:, z0_col] = np.exp(starts[:, z0_col])
         nm_bounds = [eff_bounds[n] for n in free_names]  # explicit optimizer-level bounds too,
         # not just the log_posterior -inf gate -- Nelder-Mead's simplex can otherwise wander
         # (and occasionally get stuck) once several vertices land on a -inf plateau.
@@ -598,7 +589,7 @@ class BayesianCalibrator:
     # ── MCMC ────────────────────────────────────────────────────────────────────────
     def run_mcmc(self, n_walkers=32, n_steps=2000, burn_in=500, thin=5, seed=42,
                   progress=False):
-        """Sample the KO posterior over theta = (refreeze_frac, insul_scale, z0) with emcee.
+        """Sample the KO posterior over theta = (refreeze_frac, insul_scale, advection_scale) with emcee.
         Returns (sampler, flat_samples) -- flat_samples has burn-in removed and is thinned.
 
         Walkers start in a small ball around a MAP point estimate, NOT scattered across the
@@ -620,15 +611,12 @@ class BayesianCalibrator:
         map_theta = self.find_map(seed=seed)  # always a full 3-tuple, see _expand_theta
         free_names = self._free_param_names()
         ndim = len(free_names)
-        prior_stds = {'refreeze_frac': self.priors.refreeze_frac.std(), 'insul_scale': self.priors.insul_scale.std(),
-                      'z0': self.priors.z0.std()}
-        prior_std = np.array([prior_stds[n] for n in free_names])
-        full_names = ('refreeze_frac', 'insul_scale', 'z0')
-        map_free = np.array([map_theta[full_names.index(n)] for n in free_names])
+        prior = self.priors.as_dict()
+        prior_std = np.array([prior[n].std() for n in free_names])
+        map_free = np.array([map_theta[self._FULL_NAMES.index(n)] for n in free_names])
 
         # Perturb by a small fraction of each parameter's OWN prior std, not a fixed
-        # absolute jitter -- z0 (std ~tens) and refreeze_frac (std ~0.1-0.3) are on completely
-        # different scales, so one constant ball radius would be wildly wrong for one of them.
+        # absolute jitter -- the parameters are on different scales.
         p0 = map_free + 1e-2 * prior_std * rng.standard_normal((n_walkers, ndim))
         eff_bounds = self._effective_bounds()  # prior bounds ∩ emulator's actual design
         # coverage (see _within_design_coverage) -- walkers must start where log_posterior can
@@ -667,7 +655,7 @@ class BayesianCalibrator:
         if not self.fixed_params:
             flat_samples = flat_free
         else:
-            # re-expand to the full (refreeze_frac, insul_scale, z0) shape downstream consumers expect
+            # re-expand to the full PARAM_NAMES shape downstream consumers expect
             # (posterior_samples.csv, PARAM_NAMES-keyed reads, ResidualWriter, ...) -- each
             # fixed parameter's column is simply constant, never sampled.
             flat_samples = np.column_stack([

@@ -88,8 +88,8 @@ class Discrepancy:
       - calibrator.BayesianCalibrator.fit_discrepancy(): ONE fit, on a temperature-space
         residual ('T_residual'), whose kernel this analytically marginalises into the KO
         likelihood -- the delta(x) term proper.
-      - writeback.ResidualWriter: one fit PER calibration parameter (refreeze_frac/insul_scale/z0),
-        on (posterior-calibrated value - Tier-2 transfer-model prediction), to fan the KO
+      - writeback.ResidualWriter: one fit per spatially corrected parameter (refreeze_frac,
+        insul_scale), on (per-glacier effective value - theta_hat), to fan the KO
         result out from the ~65 calibrated glaciers to all 217 glenglat glaciers (and beyond)
         -- the direct, reviewed replacement for the undamped k-NN residual copy.
 
@@ -104,7 +104,6 @@ class Discrepancy:
     nugget_floor: dict = field(default_factory=lambda: {
         'refreeze_frac': (0.2) ** 2 / 12,   # REFREEZE_FRAC_GRID step = 0.2
         'insul_scale': (0.1) ** 2 / 12,    # INSUL_SCALE_GRID step = 0.1
-        'z0': (5.0) ** 2 / 12,          # Z0_GRID step = 5.0
     })
     random_state: int = 42
 
@@ -138,11 +137,10 @@ class Discrepancy:
         return gp
 
     def fit(self, param_name, latitudes, longitudes, residuals, elevations=None):
-        """Fit the spatial residual GP for one parameter ('refreeze_frac' | 'insul_scale' | 'z0').
+        """Fit the spatial residual GP for one named field (a parameter, or 'T_residual').
 
-        residuals: calibrated_value - global_transfer_model_prediction, one per glacier (see
-        writeback.compute_residuals). normalize_y=False keeps the prior mean exactly 0 --
-        "no nearby data => trust the global Tier-2 model unmodified".
+        residuals: one per glacier (see writeback.ResidualWriter). normalize_y=False keeps the
+        prior mean exactly 0 -- "no nearby data => no local correction".
         """
         X = latlon_to_xyz(np.asarray(latitudes), np.asarray(longitudes), elevations)
         gp = self._fit_one(X, np.asarray(residuals), self.nugget_floor[param_name])
@@ -167,7 +165,7 @@ class Discrepancy:
         return mean, std
 
     def predict_all(self, latitudes, longitudes, elevations=None):
-        """Posterior (mean, std) for all three parameters at once. Returns two dicts keyed by
+        """Posterior (mean, std) for every fitted field at once. Returns two dicts keyed by
         param name, each mapping to an array of shape (n_locations,)."""
         means, stds = {}, {}
         for name in self._gps:

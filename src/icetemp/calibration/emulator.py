@@ -122,22 +122,13 @@ class Emulator:
     glaciers: list
     explained_variance: float = 0.99
     backend: EmulatorBackend = None
-    # Which columns of theta = (refreeze_frac, insul_scale, z0) the GP actually sees. Callers still
-    # pass and receive FULL 3-vectors -- the slicing happens internally here, so calibrator /
-    # validation / writeback need no changes.
+    # Which columns of theta (priors.PARAM_NAMES) the GP actually sees. Callers still pass and
+    # receive FULL 3-vectors -- the slicing happens internally here.
     #
-    # WHY THIS EXISTS: from 2026-08-18 the calibration holds z0 fixed (it provably cannot reach
-    # the real model's physics -- see BayesianCalibrator.fixed_params), which makes its design
-    # column CONSTANT. A constant column is degenerate for the GP: confirmed live that
-    # surmise PCGPwM then dies with `LinAlgError: Eigenvalues did not converge`, while the
-    # identical training data with a varying z0 column fits fine. Adding tiny jitter to lift the
-    # degeneracy "works" but is a TRAP: _nn_distance standardizes per dimension by that
-    # dimension's own std, so jitter of sd ~0.05 m turns a 0.1 m z0 difference into ~1.8
-    # standardized units and lets pure noise dominate the trust gate. Excluding the fixed
-    # dimension outright is the only option that is correct in both the GP fit and the distance
-    # metric. Leaving z0 free-but-varying would be wrong too -- points far apart in z0 but
-    # identical in (refreeze_frac, insul_scale) are functionally the SAME run, and counting that
-    # separation as real distance would inflate every nn_distance.
+    # A held-fixed parameter has a CONSTANT design column, which is degenerate for the GP
+    # (surmise PCGPwM dies with `LinAlgError: Eigenvalues did not converge`). Jitter is not a fix:
+    # _nn_distance standardizes per dimension by that dimension's own std, so jitter would
+    # dominate the trust gate. Excluding the fixed dimension is correct for both.
     active_params: tuple = (0, 1, 2)
 
     x_index: list = field(init=False, default=None)
@@ -274,7 +265,7 @@ class Emulator:
     def _nn_distance(self, theta):
         """Standardized nearest-neighbor distance, per query theta, to self.theta_train_ (the
         emulator's actual training design) -- per-dimension standardized by theta_train_'s own
-        std so refreeze_frac/insul_scale/z0's very different natural scales contribute comparably.
+        std so the parameters' different natural scales contribute comparably.
         A property of theta-space location alone, shared by every output row/glacier -- see
         calibrate_variance's docstring for why this replaced raw predicted variance as the
         covariate. Returns shape (n_theta,)."""

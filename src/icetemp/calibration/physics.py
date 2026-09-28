@@ -45,6 +45,10 @@ REFREEZE_FRAC_BOUNDS = (0.0, 1.0)
 INSUL_SCALE_BOUNDS = (0.3, 2.0)
 Z0_BOUNDS = (5.0, 200.0)
 
+# Flat per-band start values in IDL (settings.pro firnice_refreeze_frac / firnice_insul_scale /
+# firnice_adv_scale); the _knn/_bayes residual files are added to these.
+IDL_DEFAULTS = {'refreeze_frac': 1.0, 'insul_scale': 1.0, 'advection_scale': 1.0}
+
 
 def cart_dT_firn(T_amplitude, elevation):
     """CART decision-tree: firn insulation correction dT_firn_band (degC).
