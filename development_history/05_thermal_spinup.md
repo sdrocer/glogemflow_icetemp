@@ -7,9 +7,9 @@
 > physics from the main run. **Main lesson: the spin-up is part of the model, not a
 > preliminary — it must run the same physics, and it must actually reach equilibrium.**
 >
-> *This chapter is written as the work lands. Status (2026-09-28): Phases 0–2 done. The spin-up
-> runs the main run's physics, including advection, and matches a 3000-cycle spin-up to 0.002 °C
-> in 15–30 years. Next: Phase 3 (make it the default, rerun the sensitivity ensemble).*
+> *Status (2026-09-28): all three phases done. The spin-up runs the main run's physics, including
+> advection, matches a 3000-cycle spin-up to 0.002 °C in 15–30 years, and is the default. The fit
+> to the boreholes improved; the three calibration parameters are still not separable.*
 
 ## What we believed
 
@@ -232,9 +232,9 @@ Over all 482 observations, RMSE fell from 3.75 to 2.51 °C and bias from +2.64 t
    ≤ 0.002 °C from a 3000-cycle spin-up with the same physics.
 
 
-- Phase 3: make the drift correction and the new physics the default, reject runs whose spin-up
-  did not converge, and rerun the sensitivity ensemble to see whether the parameters can now be
-  told apart.
+- Which parameters to calibrate, given one effective knob: reduce the set, or look for a
+  parameter with its own depth signature.
+- Why the drift correction stalls on Hintereisferner.
 - The accumulation profile at high elevation (lesson 2 above).
 
 ## Sources
