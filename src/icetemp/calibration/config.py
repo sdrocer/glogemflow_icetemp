@@ -44,15 +44,14 @@ class CalibrationConfig:
     bounds_override: dict = None
 
     # -- design / training ----------------------------------------------------------------
-    # 'y' runs GloGEM's equilibrium thermal spinup in the training runs. Needed once the
-    # analytical initial profile is isothermal: without it the deep temperature is fixed by
-    # climate alone and no theta can move it.
-    thermal_spinup: str = 'n'
+    # 'y' runs GloGEM's thermal spin-up in the training runs: the deep ice the boreholes sample
+    # is almost entirely spin-up state, and the analytical initial profile is isothermal.
+    thermal_spinup: str = 'y'
     implicit: str = 'y'
     spinup_min_cycles: int = 200
     spinup_max_cycles: int = 500
     spinup_tol: float = 0.05
-    spinup_solver: str = 'cycle'    # 'drift' jumps to equilibrium instead of cycling
+    spinup_solver: str = 'drift'    # 'drift' jumps to equilibrium; 'cycle' repeats the year
     # 'y' calibrates in the same configuration production runs in: u comes from the coupled
     # flow model instead of the standalone SIA estimate. Needs glacier_retreat='y' too.
     use_flow_model: str = 'n'

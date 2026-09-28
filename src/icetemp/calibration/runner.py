@@ -205,9 +205,8 @@ firnice_spinup_solver     = '{spinup_solver}'
 firnice_implicit        = '{implicit}'   ; 'y' = backward-Euler Thomas solver, unconditionally
                          ; stable. The explicit branch carries a /2. factor that halves the
                          ; diffusivity -- without it, 1 m ice layers are unstable at a 10-day step.
-firnice_thermal_spinup  = '{thermal_spinup}'   ; 'n' = fast path (the analytical initial
-                         ; profile IS the deep answer); 'y' = run the equilibrium spinup so the
-                         ; deep profile is built by the physics instead of prescribed
+firnice_thermal_spinup  = '{thermal_spinup}'   ; 'y' = spin up the deep profile with the main
+                         ; run's physics; 'n' = start from the isothermal initial profile
 enable_advection        = 'y'   ; large glaciers' T(z) is materially shaped by ice advection
                          ; (cold-ice transport downglacier, emergence near the terminus) --
                          ; excluding it would structurally bias the emulator against what the
@@ -237,6 +236,8 @@ hindcast_dynamic = 'n'
 # IDL's own fatal marker. It prints this and stops, but the process still exits 0, so a
 # returncode check alone cannot see a dead run.
 IDL_FATAL = '% Execution halted'
+# printed by spinup_firnicetemp_thermal.pro when plain cycling also fails to converge
+SPINUP_UNCONVERGED = 'Phase 1 did not converge'
 
 
 @dataclass
@@ -263,12 +264,12 @@ class GloGEMRunner:
     # that a later climate.py bugfix recovered) -- write_catchment_file() generates this
     # fresh from the actual calibration glacier set each time, so it always matches exactly.
     catchment: str = 'CentralEurope_bayescal'
-    thermal_spinup: str = 'n'   # 'y' runs the equilibrium thermal spinup (see the template)
+    thermal_spinup: str = 'y'   # 'y' runs the thermal spin-up (see the template)
     implicit: str = 'y'         # 'n' falls back to the explicit solver
     spinup_min_cycles: int = 200
     spinup_max_cycles: int = 500
     spinup_tol: float = 0.05
-    spinup_solver: str = 'cycle'
+    spinup_solver: str = 'drift'
     use_flow_model: str = 'n'   # 'y' takes u from the coupled flow model, as production does
     glacier_retreat: str = 'n'  # must be 'y' for the flow model to evolve geometry
     write_velocity: str = 'n'   # 'y' dumps the applied velocity field (fit_u_sum)
@@ -621,6 +622,12 @@ class GloGEMRunner:
         halted = [ln for ln in (stdout + stderr).splitlines() if IDL_FATAL in ln]
         if halted:
             print(f'  {tag}: IDL HALTED -- {halted[0].strip()[:90]} (see {log_path})')
+            return False
+        # A spin-up that never reached equilibrium (drift correction and the plain-cycling
+        # fallback both failed) leaves the deep profile - what the boreholes sample - undefined.
+        unconverged = [ln for ln in stdout.splitlines() if SPINUP_UNCONVERGED in ln]
+        if unconverged:
+            print(f'  {tag}: THERMAL SPIN-UP DID NOT CONVERGE -- {unconverged[0].strip()[:90]} (see {log_path})')
             return False
         done.touch()
         return True
