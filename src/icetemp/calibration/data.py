@@ -67,6 +67,11 @@ DEPTH_BIN_WIDTH = 1.0                # m; pools continuous-logger time series on
 RUN_YEAR_MIN = 1972
 RUN_YEAR_MAX = 2025
 BAL_MONTH = 10                       # first month of the hydrological year (GloGEM bal_month)
+WGMS_OVERVIEW_CSV = Path('/itet-stor/jabeer/glogem/data/WGMS/'
+                         'WGMS-FoG-2017-06-E-MASS-BALANCE-OVERVIEW.csv')
+# glenglat glacier_name -> WGMS NAME, for glaciers whose unlabelled boreholes an ELA series resolves
+WGMS_ELA_NAMES = {'Hintereisferner': 'HINTEREIS F.'}
+FIRN_ELA_YEARS = 5                   # balance years before a reading whose mean ELA decides firn/ice
 
 
 @dataclass
@@ -98,6 +103,8 @@ class GlacierCalibrationData:
     # [n_obs] per point: (months as year*100+month, number of readings in each), so the model
     # can be averaged over the same months with the same weights as the observation
     obs_months: Optional[list] = None
+    # [n_obs] 'firn' | 'ice' | 'unknown'; is_firn counts unknown as firn
+    firn_label: Optional[np.ndarray] = None
     n_obs: int = field(init=False)
     has_firn_obs: bool = field(init=False)
     has_ice_obs: bool = field(init=False)
@@ -116,11 +123,25 @@ def _elevation_band(elev):
 
 
 def _classify_firn(mba):
-    """is_firn: accumulation -> True; ablation -> False; unknown -> True (conservative;
-    matches notebook 05 cell 5's classify_firn)."""
-    if isinstance(mba, str) and mba.strip() == 'ablation':
-        return False
-    return True
+    """glenglat mass_balance_area -> 'firn' (accumulation), 'ice' (ablation) or 'unknown'
+    (blank or equilibrium)."""
+    mba = mba.strip() if isinstance(mba, str) else ''
+    return {'accumulation': 'firn', 'ablation': 'ice'}.get(mba, 'unknown')
+
+
+def _load_wgms_ela(path=WGMS_OVERVIEW_CSV, names=WGMS_ELA_NAMES):
+    """glenglat glacier_name -> observed ELA per balance year (pd.Series indexed by year)."""
+    try:
+        wgms = pd.read_csv(path, encoding='latin-1', usecols=['NAME', 'Year', 'ELA'])
+    except OSError:
+        warnings.warn(f'WGMS overview not readable ({path}); unlabelled boreholes stay unknown')
+        return {}
+    out = {}
+    for glenglat_name, wgms_name in names.items():
+        sel = wgms[(wgms.NAME == wgms_name) & wgms.ELA.notna()]
+        if not sel.empty:
+            out[glenglat_name] = sel.set_index('Year')['ELA'].sort_index()
+    return out
 
 
 def _depth_weight(depth):
@@ -128,9 +149,10 @@ def _depth_weight(depth):
     return DEPTH_WEIGHT_IN_BAND if (lo <= depth <= hi) else 1.0
 
 
-def _pool_by_depth_bin(depths, T_obs, is_firn, bin_width=DEPTH_BIN_WIDTH, months=None):
+def _pool_by_depth_bin(depths, T_obs, labels, bin_width=DEPTH_BIN_WIDTH, months=None):
     """Collapse repeated temporal readings at (near-)identical depths onto one point per
-    depth bin (mean temperature, majority is_firn), keeping the count of raw readings pooled.
+    depth bin (mean temperature, majority is_firn, most common firn label of that side),
+    keeping the count of raw readings pooled.
 
     Continuous-logging boreholes report thousands of near-duplicate readings at a fixed set
     of depths over time (e.g. one CentralEurope glacier had 45,342 raw rows at just 25 unique
@@ -143,7 +165,7 @@ def _pool_by_depth_bin(depths, T_obs, is_firn, bin_width=DEPTH_BIN_WIDTH, months
     """
     depths = np.asarray(depths, dtype=float)
     T_obs = np.asarray(T_obs, dtype=float)
-    is_firn = np.asarray(is_firn, dtype=bool)
+    labels = np.asarray(labels, dtype=object)
     bin_id = np.round(depths / bin_width).astype(int)
     months = None if months is None else np.asarray(months, dtype=int)
 
@@ -152,19 +174,24 @@ def _pool_by_depth_bin(depths, T_obs, is_firn, bin_width=DEPTH_BIN_WIDTH, months
     depth_out = np.zeros(n_bins)
     T_out = np.zeros(n_bins)
     firn_out = np.zeros(n_bins, dtype=bool)
+    label_out = np.empty(n_bins, dtype=object)
     n_out = np.zeros(n_bins, dtype=int)
     months_out = [None] * n_bins
     for k in range(n_bins):
         sel = inverse == k
         depth_out[k] = depths[sel].mean()
         T_out[k] = T_obs[sel].mean()
-        firn_out[k] = np.mean(is_firn[sel]) >= 0.5   # majority vote
+        lab = labels[sel]
+        firn_out[k] = np.mean(lab != 'ice') >= 0.5   # majority vote
+        side = lab[(lab != 'ice') == firn_out[k]]
+        vals, counts = np.unique(side.astype(str), return_counts=True)
+        label_out[k] = vals[np.argmax(counts)]
         n_out[k] = int(sel.sum())
         if months is not None:
             months_out[k] = np.unique(months[sel], return_counts=True)
 
     order = np.argsort(depth_out)
-    out = depth_out[order], T_out[order], firn_out[order], n_out[order]
+    out = depth_out[order], T_out[order], firn_out[order], n_out[order], label_out[order]
     if months is None:
         return out
     return out + ([months_out[k] for k in order],)
@@ -317,7 +344,28 @@ class DataHandler:
         return match['glacier_id'].iloc[0] if not match.empty else None
 
     # ── main entry point ─────────────────────────────────────────────────────────────────
+    def _resolve_unknown_firn(self, glacier_name, labels, gdf):
+        """Unlabelled readings on a glacier with an observed ELA series: firn if the site lies
+        above the mean ELA of the FIRN_ELA_YEARS balance years before the reading (GloGEM's own
+        5-year firn rule), else ice. Others stay 'unknown'."""
+        ela = self._wgms_ela.get(glacier_name)
+        unknown = np.flatnonzero(labels == 'unknown')
+        if ela is None or len(unknown) == 0:
+            return labels
+        ym = gdf['_ym'].to_numpy(dtype=int)
+        hyd_year = ym // 100 + (ym % 100 >= self.bal_month)
+        elev = gdf['elevation'].to_numpy(dtype=float)
+        out = labels.copy()
+        for k in unknown:
+            prev = ela.loc[hyd_year[k] - FIRN_ELA_YEARS:hyd_year[k] - 1]
+            if len(prev) == FIRN_ELA_YEARS:
+                out[k] = 'firn' if elev[k] > prev.mean() else 'ice'
+                self.n_firn_from_wgms += 1
+        return out
+
     def load(self):
+        self._wgms_ela = _load_wgms_ela()
+        self.n_firn_from_wgms = 0
         borehole, profile, measurement = self._load_raw()
         derived = self._load_derived_covariates()
         glacier_id_lookup = self._load_glacier_id_lookup()
@@ -455,9 +503,10 @@ class DataHandler:
 
             raw_depths = gdf['depth'].to_numpy(dtype=float)
             raw_T_obs = gdf['temperature'].to_numpy(dtype=float)
-            raw_is_firn = gdf['mass_balance_area'].apply(_classify_firn).to_numpy(dtype=bool)
-            depths, T_obs, is_firn, n_readings, obs_months = _pool_by_depth_bin(
-                raw_depths, raw_T_obs, raw_is_firn, months=gdf['_ym'].to_numpy(dtype=int)
+            raw_label = gdf['mass_balance_area'].apply(_classify_firn).to_numpy(dtype=object)
+            raw_label = self._resolve_unknown_firn(base_glacier_name, raw_label, gdf)
+            depths, T_obs, is_firn, n_readings, firn_label, obs_months = _pool_by_depth_bin(
+                raw_depths, raw_T_obs, raw_label, months=gdf['_ym'].to_numpy(dtype=int)
             )
             weights = np.array([_depth_weight(d) for d in depths])
             sigma = np.full(len(depths), sigma_bh)
@@ -486,6 +535,7 @@ class DataHandler:
                 ),
                 depths=depths, T_obs=T_obs, weights=weights, is_firn=is_firn, sigma=sigma,
                 n_readings=n_readings, equilibrium=equilibrium_label, obs_months=obs_months,
+                firn_label=firn_label,
             ))
 
         self.prediction_glaciers = (
@@ -515,12 +565,17 @@ class DataHandler:
         n_ice = sum(1 for g in self.calibration_glaciers if g.has_ice_obs)
         n_deep = sum(1 for g in self.calibration_glaciers if g.depths.max(initial=0) > 30)
         max_pooled = max((int(g.n_readings.max()) for g in self.calibration_glaciers), default=0)
+        labels = np.concatenate([g.firn_label for g in self.calibration_glaciers]) \
+            if self.calibration_glaciers else np.array([])
         lines = [
             f'Calibration glaciers: {n} (equilibrium=true: {n_true}, estimated: {n_est}, '
             f'unassessed/blank: {n_unassessed})',
             f'  with accumulation-zone (firn) obs: {n_firn}',
             f'  with ablation-zone (ice) obs:      {n_ice}',
             f'  with data below 30 m:              {n_deep}',
+            f'  pooled points firn/ice/unknown:    {(labels == "firn").sum()}/'
+            f'{(labels == "ice").sum()}/{(labels == "unknown").sum()} '
+            f'({self.n_firn_from_wgms} raw readings labelled from WGMS ELA)',
             f'  largest depth-bin pooling factor:  {max_pooled} raw readings -> 1 point '
             f'(continuous-logger dedup)',
             f'  readings outside the model window {self.run_year_min - 1}-{self.bal_month:02d}..'
