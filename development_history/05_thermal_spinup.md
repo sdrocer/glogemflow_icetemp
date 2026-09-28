@@ -7,8 +7,9 @@
 > physics from the main run. **Main lesson: the spin-up is part of the model, not a
 > preliminary — it must run the same physics, and it must actually reach equilibrium.**
 >
-> *This chapter is written as the work lands. Status (2026-09-24): Phases 0 and 1 done — the drift
-> correction matches a 3000-cycle spin-up to 0.001 °C in ~20 years. Next: Phase 2 (physics).*
+> *This chapter is written as the work lands. Status (2026-09-28): Phases 0–2 done. The spin-up
+> runs the main run's physics, including advection, and matches a 3000-cycle spin-up to 0.002 °C
+> in 15–30 years. Next: Phase 3 (make it the default, rerun the sensitivity ensemble).*
 
 ## What we believed
 
@@ -187,17 +188,61 @@ Decisions taken (2026-09-24):
 | ice arriving from upglacier | mapped by relative depth, with vertical motion in the same coordinate | ice flows roughly parallel to the bed; a thinner band above has no ice at the same absolute depth |
 | convergence depth | 15 m | the depth of zero annual amplitude on Alpine glaciers |
 
-## What is still open
+### Phase 2: the spin-up runs the main run's physics (2026-09-24 to 2026-09-28)
 
-- The along-glacier coupling between bands in the jump (needed once advection runs in the
-  spin-up, Phase 2).
-- Making the spin-up physics match the main run (plan Phase 2), then rerunning the sensitivity
-  ensemble (Phase 3).
+One change at a time, each tested on Tête Rousse and Grenz/Gorner and scored against their 482
+borehole observations with the same parameters throughout, so every step's effect is visible on
+its own. Bias is model minus borehole, final-year profiles.
+
+![How each Phase 2 step moved the fit to the boreholes](figures/ch05_phase2_steps.svg)
+
+| step | GloGEM commit | what changed | effect (bias, °C) |
+|---|---|---|---|
+| 1961–1990 climate | `672a1fc` | mean of the full reanalysis series, not 1990 alone; ends Sep 1990 where the main run starts | deep ice up to 0.9 colder |
+| snow, rain, full melt | `cea254f` | the main run's own mass-balance files (switched off from its bookkeeping), replayed per month | melt bands warm strongly |
+| no meltwater heat into ice | `97dfbf2` | on ice bands the meltwater used to refreeze into the snow-occupied top of the ice column | Grenz tongue +1.80 → +1.40 |
+| firn mask from the balance | `ba3c5d0` | firn = positive 1961–1990 balance, as the main run itself uses after year 5 | small |
+| lapse-rate rule | `2fa83eb` | reanalysis rate below the climate cell, at least 6.5 °C/km above, in spin-up and main run | Colle Gnifetti +2.83 → +2.08 |
+| burial from the balance | `784effd` | vertical motion = the band's balance × (1 − share of the flux above that level) | Colle Gnifetti → +0.74, Monte Rosa +4.32 → +2.35 |
+| relative depth | `08c4092` | ice from the band above taken at the same fraction of the thickness | Grenz tongue +1.43 → **+0.40** |
+| advection in the spin-up | `c9a8a41`, `48fe98b` | the jump couples the bands, top of the glacier down | < 0.1 (the main run already had it) |
+
+Over all 482 observations, RMSE fell from 3.75 to 2.51 °C and bias from +2.64 to +0.99 °C.
+
+**What we learned on the way.**
+
+1. *Meltwater makes the problem non-linear.* Where meltwater refreezes in firn, the spin-up's
+   jump kept stopping short: warmer firn has less cold content, so the water reaches deeper and
+   warms it further, a feedback the straight-line jump does not contain. Two additions fixed it:
+   layers that meltwater brings to 0 °C are left alone by the jump (refreezing, not conduction,
+   sets them each summer), and each band's jump starts from the best mix of its last three
+   measured years (*Anderson mixing*), which captures what the jump misses. Checked against a
+   3000-cycle spin-up with the same physics: 0.001 °C, in 146 s instead of 4289 s.
+2. *The model's accumulation profile is steep.* Under the 1961–1990 climate the calibrated mass
+   balance puts firn down to ~2500 m on Gorner and 5–7 m w.e. per year at 3900–4100 m, far above
+   what is measured at Colle Gnifetti. Averaging the thirty real years instead of their mean
+   climate gives nearly the same numbers, so this is the mass-balance model itself, not the
+   spin-up. The burial step's large improvement at Colle Gnifetti may partly be right for the
+   wrong reason; this stays open.
+3. *Coupling the bands can amplify.* With advection in the spin-up, each band's jump depends on
+   the change of the band above. On Grenz/Gorner the jumps first grew to 40–200 °C: the jump
+   itself cannot amplify, but each band's Anderson mixing added ~10 % that was passed down and
+   grew from band to band. Now only the solved jump is passed down, and bands that receive ice
+   from above are not mixed. Result: 2 / 5 / 7 jumps (Tête Rousse / Grenz-Gorner / 01230), and
+   ≤ 0.002 °C from a 3000-cycle spin-up with the same physics.
+
+
+- Phase 3: make the drift correction and the new physics the default, reject runs whose spin-up
+  did not converge, and rerun the sensitivity ensemble to see whether the parameters can now be
+  told apart.
+- The accumulation profile at high elevation (lesson 2 above).
 
 ## Sources
 
 - Plan: [plans/2026-09-24_thermal_spinup_plan.md](plans/2026-09-24_thermal_spinup_plan.md)
 - Runs: `data/bayescal/truthref_w0` (3000 cycles, before the refreezing fix), `truthref2_w0`
-  (after it), `tol001_w0`, `projdrift_w0`, `longspin_w0`
+  (after it), `tol001_w0`, `projdrift_w0`, `longspin_w0`; Phase 2: `p2s1_w0` … `p2s7d_w0`, and the
+  3000-cycle references `truthref_p2s2_w0` and `truthref_p2s7_w0`
+- Figures: `development_history/figures/make_ch05.py`
 - Code: `GloGEM/procedures/initialise/spinup_firnicetemp_thermal.pro`,
   `procedures/processing/downscale_gcmdata_monthly.pro`, `procedures/flow/spinup_flowmodel.pro`
