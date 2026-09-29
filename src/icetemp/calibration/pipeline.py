@@ -102,6 +102,7 @@ class CalibrationPipeline:
         print(f'copied {len(copied)} MB-calibration file(s) into {self.runner.calibration_dest_dir} '
               f'(from {self.runner.calibration_source_dir})')
         glaciers = self._calibration_glaciers()
+        self.runner.check_calibration_areas([g.glacier_id for g in glaciers])
         catchment_path, n_catchment = self.runner.write_catchment_file(glaciers)
         print(f'wrote catchment file ({n_catchment} glaciers) -> {catchment_path}')
         lookup_path, n_ids, n_elevs = self.runner.write_glenglat_lookup(glaciers)

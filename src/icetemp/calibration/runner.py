@@ -38,7 +38,7 @@ from typing import Optional
 import numpy as np
 
 from . import physics
-from .data import RUN_YEAR_MIN, RUN_YEAR_MAX
+from .data import RUN_YEAR_MIN, RUN_YEAR_MAX, GLIMS_LOOKUP_CSV
 from .priors import ADVECTION_SCALE_BOUNDS
 
 # RGI O1 region name -> 2-digit code, from GloGEM/test/data/region_batch.dat (verified
@@ -56,6 +56,11 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 GLOGEM_DIR = REPO_ROOT / 'GloGEM'
 # raw monthly profiles of every training run, gzipped, outside the 10 GB home quota
 PROFILE_ARCHIVE_DIR = Path('/itet-stor/jabeer/net_scratch/icetemp_profiles')
+# RGI7 mass-balance calibration covering all of CentralEurope (mhuss; identical to Lander's copy)
+MB_CALIBRATION_DIR = Path('/scratch_net/iceberg_second/mhuss/r7spec_global_results/monthly/'
+                          'CentralEurope/calibration')
+# relative area mismatch above which a calibration row belongs to a different glacier
+CALIB_AREA_TOLERANCE = 0.25
 
 
 def _rgi_id_field(glacier_id, region_code):
@@ -379,10 +384,7 @@ class GloGEMRunner:
     # OWN header comment: "Mass-balance calibration is reused (copied) from the existing
     # CentralEurope_glenglat_calib run rather than re-calibrated", confirmed by the user).
     # copy_calibration_data() must run before ANY training IDL invocation.
-    calibration_source_dir: Path = Path(
-        '/scratch_net/vierzack04_fourth/jabeer/GloGEM/glogemflow_development/'
-        'CentralEurope_glenglat_calib/monthly/CentralEurope/calibration'
-    )
+    calibration_source_dir: Path = MB_CALIBRATION_DIR
     # read_calibration_params.pro embeds catchment_selection in the calibration filename
     # itself (calibrate_m{mm}_cID{cp}_{sub_region}_final_{reanalysis}_{catchment}.dat) --
     # copying the source files verbatim under a DIFFERENT catchment name (self.catchment)
@@ -510,6 +512,33 @@ class GloGEMRunner:
                 shutil.copy2(src_file, dest_file)
                 copied.append(dest_file)
         return copied
+
+    def check_calibration_areas(self, glacier_ids, lookup_csv=GLIMS_LOOKUP_CSV):
+        """Stop unless every glacier has a row in the copied MB calibration whose Area matches
+        its RGI7 inventory area within CALIB_AREA_TOLERANCE. A file numbered differently (e.g.
+        RGI6) still has rows for the same IDs, but for other glaciers, whose DDF/c_prec/T_off
+        would then be applied silently."""
+        import warnings
+        import pandas as pd
+        if not Path(lookup_csv).is_file():
+            warnings.warn(f'no inventory areas ({lookup_csv}); calibration areas not checked')
+            return
+        inv = pd.read_csv(lookup_csv)
+        inv = inv.set_index(inv['rgi7_glogem'].str[-5:])['area_km2']
+        files = sorted(self.calibration_dest_dir.glob('calibrate_m*_final_*.dat'))
+        if not files:
+            raise FileNotFoundError(f'no calibrate_m*_final_*.dat in {self.calibration_dest_dir}')
+        for f in files:
+            cal = pd.read_csv(f, sep=r'\s+', dtype={'ID': str}).set_index('ID')['Area']
+            bad = []
+            for gid in sorted(set(glacier_ids)):
+                if gid not in cal.index:
+                    bad.append(f'{gid}: missing')
+                elif gid in inv.index and abs(cal[gid] - inv[gid]) > CALIB_AREA_TOLERANCE * inv[gid]:
+                    bad.append(f'{gid}: {cal[gid]:.3f} km2 vs inventory {inv[gid]:.3f} km2')
+            if bad:
+                raise ValueError(f'MB calibration {f} does not match the RGI7 glaciers '
+                                 f'(different numbering?): ' + '; '.join(bad))
 
     @property
     def training_config_path(self):
