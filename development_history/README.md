@@ -12,7 +12,8 @@ be defended later, in a paper, a thesis or a talk.
 | 2 | [Parameter redesign](02_parameter_redesign.md) | Aug–Sep 2026 | `f_ref`, `f_ins`, `f_adv`; energy and mass kept separate |
 | 3 | [Why the parameters look alike](03_why_the_parameters_look_alike.md) | Sep 2026 | `f_ref` and `f_ins` confounded; the depth window is too narrow |
 | 4 | [The depth window](04_depth_window.md) | Sep 2026 | bed node, implicit solver, conduction stencil, column to the borehole |
-| 5 | [The thermal spin-up](05_thermal_spinup.md) | Sep 2026 – | a one-year climate, a slow spin-up, and the drift correction |
+| 5 | [The thermal spin-up](05_thermal_spinup.md) | 24–28 Sep 2026 | a one-year climate, a slow spin-up, and the drift correction |
+| 6 | [Firn extent and the mass-balance calibration](06_firn_extent_and_calibration.md) | 28 Sep 2026 – | not water in ice but the firn line; the runs used other glaciers' mass-balance parameters |
 
 ## How chapters are written
 

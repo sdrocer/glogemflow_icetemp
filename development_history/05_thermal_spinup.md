@@ -10,6 +10,10 @@
 > *Status (2026-09-28): all three phases done. The spin-up runs the main run's physics, including
 > advection, matches a 3000-cycle spin-up to 0.002 °C in 15–30 years, and is the default. The fit
 > to the boreholes improved; the three calibration parameters are still not separable.*
+>
+> *Note (2026-09-29): all runs in this chapter used mass-balance parameters from an RGI6-numbered
+> calibration file, i.e. of other glaciers (chapter 6). The comparisons between runs hold as
+> relative tests; the absolute borehole fits do not.*
 
 ## What we believed
 
