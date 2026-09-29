@@ -10,9 +10,9 @@
 >
 > *Status (2026-09-29): calibration source fixed and guarded (icetemp `65de865`). With the right
 > parameters every glacier reproduces its own calibrated ELA, and the Hintereisferner ELA follows
-> the WGMS series. The high firn is now 2–3 °C too warm with the old thermal parameters; a new
-> sensitivity ensemble (`alps_r7`) is running to see how the parameters behave under the correct
-> mass balance.*
+> the WGMS series. Under the correct mass balance the best fit improves slightly (RMSE 2.34 °C)
+> with the refreezing parameter inside its range; the ablation-zone ice and the deep ice of cold
+> firn remain too cold and too warm respectively, beyond what the parameters can reach.*
 
 ## What we believed
 
@@ -138,13 +138,40 @@ the thermal parameters — chosen while the mass balance was wrong — no longer
 absolute borehole fit before 2026-09-29 was made with the wrong mass balance**; comparisons between
 runs with the same parameters (chapter 5, Phase 2) remain valid as relative tests.
 
+## The thermal parameters under the correct mass balance
+
+The 32-point Alpine sensitivity ensemble was rerun with the RGI7 calibration (`alps_r7`, same design
+as `alps_dm`) and scored on the 689 readings matched in every design point:
+
+| | RGI6-numbered file (`alps_dm`) | RGI7 file (`alps_r7`) |
+|---|---|---|
+| best / median RMSE | 2.37 / 2.92 °C | 2.34 / 2.66 °C |
+| best design points, f_ref | 0.62–0.94 (at the edge) | 0.38–0.54 (inside the range) |
+| strength f_ref / f_ins / f_adv | 0.43 / 0.15 / 0.10 °C per sd | 0.83 / 0.44 / 0.15 °C per sd |
+| depth-shape similarity ref~ins / ref~adv | −0.91 / +0.91 | −0.94 / +0.93 |
+| strength on ice sites (ref / ins / adv) | — | 0.12 / 0.13 / 0.24 °C per sd |
+
+With the right mass balance the fit is slightly better, much less refreezing heat is needed, and
+the best value now lies inside the parameter range. The three parameters still leave nearly the
+same pattern with depth, so they remain close to one knob. On ice sites none of them acts, so the
+cold Hintereisferner tongue cannot be calibrated away.
+
+Two misfits remain at the best design point:
+
+- **Hintereisferner ice** (−3.5 °C): the tongue's equilibrium is cold because its surface
+  averages about −5.5 °C. The spin-up does reach equilibrium; a surface held at 0 °C in melt months
+  (`firnice_melt_surface`) moves it by only ~0.5 °C and warms the cold firn by ~1 °C, so it stays
+  off; the mass-balance model refreezes almost nothing on the tongue.
+- **Colle Gnifetti below 40 m** (1.3–1.7 °C too warm): the measured ice gets colder with depth,
+  down to −12.4 °C, a memory of the colder 19th century. The spin-up starts from an equilibrium with
+  the 1942–1971 climate and cannot hold it.
+
 ## What is still open
 
-- **How the thermal parameters behave under the correct mass balance.** The 32-point Alpine
-  sensitivity ensemble is rerunning with the RGI7 calibration (`alps_r7`).
-- **The Hintereisferner ice boreholes** are still 4–5 °C too cold, now with the firn line in the
-  right place. This is the one signature that could need water in ice, or advection of temperate
-  firn-area ice, and is the next thing to look at.
+- **The ablation-zone ice** (Hintereisferner): which missing process keeps real tongue ice near
+  0 °C — winter snow insulation, refreezing of snowmelt on the cold ice surface in spring, or water
+  in crevasses (the backup).
+- **The climate before 1942** for cold, high firn (Colle Gnifetti).
 - **Firn memory** (a band turns to ice only once its firn has melted) and **snowline calibration**:
   both were planned against the "too sensitive" firn line, which turned out to be an artefact.
   To be re-decided after the ensemble.
