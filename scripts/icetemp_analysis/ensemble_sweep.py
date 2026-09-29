@@ -90,6 +90,7 @@ def main():
             output = pl.runner.parse_training_output(gs)
             with open(out_dir / 'training_runs' / f'{tag}.output.pkl', 'wb') as f:
                 dill.dump(output, f)
+            pl.runner.archive_profiles(tag)
             n_ok = sum(1 for v in output.values() if v is not None)
             print(f'{tag}: OK  theta={np.round(theta, 3)}  '
                   f'{n_ok}/{len(output)} entities with profiles', flush=True)
