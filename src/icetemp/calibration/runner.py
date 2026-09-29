@@ -54,6 +54,8 @@ RGI_REGION_CODES = {
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 GLOGEM_DIR = REPO_ROOT / 'GloGEM'
+# raw monthly profiles of every training run, gzipped, outside the 10 GB home quota
+PROFILE_ARCHIVE_DIR = Path('/itet-stor/jabeer/net_scratch/icetemp_profiles')
 
 
 def _rgi_id_field(glacier_id, region_code):
@@ -249,15 +251,13 @@ def match_model_to_obs(df, g):
     df: a GloGEM profile file (icetemp.io.read_profile_file): one row per model month, labelled
     with the HYDROLOGICAL year (GloGEM writes ye+tran[0]; the first row is bal_month of the
     calendar year before), plus one column per node depth.
-    For each observation point: the model node nearest its depth, accepted within half the
-    local grid spacing (Emulator._local_tolerance, as before), averaged over the calendar months
-    of the readings pooled into that point with the same weights (g.obs_months). NaN where the
-    node is not resolved or none of the months lies in the run.
+    For each observation point: the model at its depth, averaged over the calendar months of the
+    readings pooled into that point with the same weights (g.obs_months). NaN where the depth is
+    not resolved or none of the months lies in the run.
     Appended last: the deepest resolved node, averaged over all the point months, for the
     emulator's basal row.
     Returns (depths, temperatures), the observation depths first.
     """
-    from .emulator import Emulator
     depth_cols = [c for c in df.columns if c not in ('year', 'month')]
     zgrid = np.asarray(depth_cols, dtype=float)
     T = df[depth_cols].to_numpy(dtype=float)
@@ -267,14 +267,13 @@ def match_model_to_obs(df, g):
     cal_year = hyd_year - (month >= bal)
     row_of = {int(y) * 100 + int(m): r for r, (y, m) in enumerate(zip(cal_year, month))}
 
-    def weighted(rows_w, k):
+    def weighted(rows_w, series):
         rows = [row_of[ym] for ym, w in rows_w if ym in row_of]
         w = np.array([w for ym, w in rows_w if ym in row_of], dtype=float)
         if not rows:
             return np.nan
-        v = T[rows, k]
-        ok = np.isfinite(v)
-        return float(np.sum(v[ok] * w[ok]) / np.sum(w[ok])) if ok.all() else np.nan
+        v = series[rows]
+        return float(np.sum(v * w) / np.sum(w)) if np.isfinite(v).all() else np.nan
 
     vals = []
     all_w = {}
@@ -282,18 +281,31 @@ def match_model_to_obs(df, g):
         pairs = list(zip(yms.tolist(), counts.tolist()))
         for ym, c in pairs:
             all_w[ym] = all_w.get(ym, 0) + c
-        k = int(np.argmin(np.abs(zgrid - d)))
-        if abs(zgrid[k] - d) > Emulator._local_tolerance(zgrid, k):
-            vals.append(np.nan)
-        else:
-            vals.append(weighted(pairs, k))
+        vals.append(weighted(pairs, model_at_depth(zgrid, T, d)))
     resolved = np.flatnonzero(np.isfinite(T).any(axis=0))
     depths_out = list(np.asarray(g.depths, dtype=float))
     if resolved.size:
         kb = int(resolved.max())
         depths_out.append(float(zgrid[kb]))
-        vals.append(weighted(list(all_w.items()), kb))
+        vals.append(weighted(list(all_w.items()), T[:, kb]))
     return np.asarray(depths_out), np.asarray(vals, dtype=float)
+
+
+def model_at_depth(zgrid, T, d):
+    """Model series (one value per row of T) at depth d: linear between the two nodes around d
+    where both are resolved; elsewhere the nearest node within half the local spacing
+    (Emulator._local_tolerance), which covers readings just above the first node or just below
+    the deepest resolved one. NaN otherwise -- no extrapolation."""
+    from .emulator import Emulator
+    series = np.full(T.shape[0], np.nan)
+    k1 = int(np.searchsorted(zgrid, d))
+    if 0 < k1 < len(zgrid):
+        f = (d - zgrid[k1 - 1]) / (zgrid[k1] - zgrid[k1 - 1])
+        series = (1.0 - f) * T[:, k1 - 1] + f * T[:, k1]
+    k = int(np.argmin(np.abs(zgrid - d)))
+    if abs(zgrid[k] - d) <= Emulator._local_tolerance(zgrid, k):
+        series = np.where(np.isfinite(series), series, T[:, k])
+    return series
 
 
 @dataclass
@@ -744,6 +756,36 @@ class GloGEMRunner:
             out[g.glacier_name] = (np.asarray(depth_cols, dtype=float), T_avg)
         return out
 
+    def profile_archive(self, tag):
+        return PROFILE_ARCHIVE_DIR / self.run_dir.parent.name / f'{tag}.tar.gz'
+
+    def archive_profiles(self, tag):
+        """Keep this run's raw monthly profiles (temp_ID*.dat), so the matching to the
+        observations can be redone later without rerunning IDL (see reparse_archived)."""
+        import tarfile
+        files = sorted(self.firnice_output_dir.glob('temp_ID*.dat'))
+        if not files:
+            return None
+        path = self.profile_archive(tag)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(path, 'w:gz') as tar:
+                for f in files:
+                    tar.add(f, arcname=f.name)
+        except OSError as err:
+            print(f'WARNING: profiles of {tag} not archived ({err})')
+            return None
+        return path
+
+    def reparse_archived(self, glaciers, tag):
+        """parse_training_output on the archived profiles of one design point."""
+        import tarfile
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            with tarfile.open(self.profile_archive(tag)) as tar:
+                tar.extractall(tmp, filter='data')
+            return self.parse_training_output(glaciers, firnice_dir=tmp)
+
     def run_design_matrix(self, glaciers, design_points, idl_bin='idl', timeout=1800):
         """Sequentially evaluate a full LHS design matrix (one theta per row), skipping
         already-completed points. For real parallel throughput, prefer generating one
@@ -768,6 +810,7 @@ class GloGEMRunner:
                 output = self.parse_training_output(glaciers)
                 with open(out_path, 'wb') as f:
                     dill.dump(output, f)
+                self.archive_profiles(tag)
             elif ok and was_done:
                 # Skipped because a .done sentinel already existed. The profile files on disk do
                 # NOT belong to this theta -- GloGEM writes every run to the SAME filenames
