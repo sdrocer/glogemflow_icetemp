@@ -100,8 +100,9 @@ class GlacierCalibrationData:
     sigma: np.ndarray          # [n_obs] observation error [degC] (borehole-level, broadcast)
     n_readings: np.ndarray     # [n_obs] raw readings pooled into each depth bin (logger diagnostic)
     equilibrium: str           # 'true', 'estimated', or 'unassessed' (blank in glenglat)
-    # [n_obs] per point: (months as year*100+month, number of readings in each), so the model
-    # can be averaged over the same months with the same weights as the observation
+    # [n_obs] per point: (months as year*100+month, reading weight in each, mean fraction of the
+    # month elapsed at the readings), so the model can be read at the same dates with the same
+    # weights as the observation
     obs_months: Optional[list] = None
     # [n_obs] 'firn' | 'ice' | 'unknown'; is_firn counts unknown as firn
     firn_label: Optional[np.ndarray] = None
@@ -149,6 +150,47 @@ def _depth_weight(depth):
     return DEPTH_WEIGHT_IN_BAND if (lo <= depth <= hi) else 1.0
 
 
+def glacier_systems(glaciers):
+    """entity glacier_name -> glacier-system label, for leave-one-system-out folds. Entities
+    sharing a GloGEM glacier (RGI outline) or a glenglat glacier name belong to one system, so a
+    site split across outlines (the Colle Gnifetti saddle on 01225 and 01230) or one outline
+    holding several named glaciers (Gorner and Grenz on 01225) is held out as a whole."""
+    parent = {}
+
+    def find(x):
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for g in glaciers:
+        a = find(('name', g.base_glacier_name))
+        if g.glacier_id:
+            parent[a] = find(('id', g.glacier_id))
+    labels = {}
+    for g in glaciers:
+        root = find(('name', g.base_glacier_name))
+        members = sorted({h.base_glacier_name for h in glaciers
+                          if find(('name', h.base_glacier_name)) == root})
+        labels[g.glacier_name] = ' + '.join(members)
+    return labels
+
+
+def _month_index(ym):
+    return (np.asarray(ym) // 100) * 12 + np.asarray(ym) % 100 - 1
+
+
+def _reading_months(ym0, ym1, frac, ym_lo, ym_hi):
+    """(months, weights, fractions) of one reading: its own month at fraction `frac`, or, for a
+    profile dated only to a range of months, every month of the range inside the run window with
+    equal weight at mid-month."""
+    if ym0 == ym1:
+        return [ym0], [1.0], [frac]
+    lo, hi = max(_month_index(ym0), _month_index(ym_lo)), min(_month_index(ym1), _month_index(ym_hi))
+    yms = [(i // 12) * 100 + i % 12 + 1 for i in range(lo, hi + 1)]
+    return yms, [1.0 / len(yms)] * len(yms), [0.5] * len(yms)
+
+
 def _pool_by_depth_bin(depths, T_obs, labels, bin_width=DEPTH_BIN_WIDTH, months=None):
     """Collapse repeated temporal readings at (near-)identical depths onto one point per
     depth bin (mean temperature, majority is_firn, most common firn label of that side),
@@ -167,7 +209,7 @@ def _pool_by_depth_bin(depths, T_obs, labels, bin_width=DEPTH_BIN_WIDTH, months=
     T_obs = np.asarray(T_obs, dtype=float)
     labels = np.asarray(labels, dtype=object)
     bin_id = np.round(depths / bin_width).astype(int)
-    months = None if months is None else np.asarray(months, dtype=int)
+    # months: per reading, (months, weights, fractions) from _reading_months
 
     uniq_bins, inverse = np.unique(bin_id, return_inverse=True)
     n_bins = len(uniq_bins)
@@ -188,7 +230,15 @@ def _pool_by_depth_bin(depths, T_obs, labels, bin_width=DEPTH_BIN_WIDTH, months=
         label_out[k] = vals[np.argmax(counts)]
         n_out[k] = int(sel.sum())
         if months is not None:
-            months_out[k] = np.unique(months[sel], return_counts=True)
+            acc = {}
+            for r in np.flatnonzero(sel):
+                for ym, w, f in zip(*months[r]):
+                    a = acc.setdefault(ym, [0.0, 0.0])
+                    a[0] += w
+                    a[1] += w * f
+            yms = np.array(sorted(acc), dtype=int)
+            w = np.array([acc[y][0] for y in yms])
+            months_out[k] = (yms, w, np.array([acc[y][1] for y in yms]) / w)
 
     order = np.argsort(depth_out)
     out = depth_out[order], T_out[order], firn_out[order], n_out[order], label_out[order]
@@ -396,20 +446,30 @@ class DataHandler:
         prof_year = pd.to_datetime(profile['date_min'], errors='coerce').dt.year
         eq_profiles = profile[
             profile['equilibrium'].isin(eq_states) & (prof_year >= self.min_year)
-        ][['borehole_id', 'id', 'equilibrium', 'date_min']].rename(
-            columns={'id': 'profile_id', 'date_min': 'date_meas'})
+        ][['borehole_id', 'id', 'equilibrium', 'date_min', 'date_max']].rename(
+            columns={'id': 'profile_id', 'date_min': 'date_meas', 'date_max': 'date_end'})
 
         meas = measurement.merge(eq_profiles, on=['borehole_id', 'profile_id'], how='inner')
-        # each reading's month; keep only months inside the model run window (hydrological years
-        # run_year_min..run_year_max, i.e. from bal_month of run_year_min-1)
-        t_meas = pd.to_datetime(meas['date_meas'], errors='coerce')
-        meas['_ym'] = (t_meas.dt.year * 100 + t_meas.dt.month).astype('Int64')
-        ym_lo = (self.run_year_min - 1) * 100 + self.bal_month
-        ym_hi = self.run_year_max * 100 + (self.bal_month - 1)
-        in_window = meas['_ym'].notna() & meas['_ym'].between(ym_lo, ym_hi)
+        # each reading's date: profiles up to a month long at their midpoint (month and fraction
+        # of it elapsed), longer ones as their range of months. Keep readings whose months reach
+        # into the model run window (hydrological years run_year_min..run_year_max).
+        t0 = pd.to_datetime(meas['date_meas'], errors='coerce')
+        t1 = pd.to_datetime(meas['date_end'], errors='coerce').fillna(t0)
+        long_range = (t1 - t0).dt.days > 31
+        tm = t0 + (t1 - t0) / 2
+        ym_of = lambda t: (t.dt.year * 100 + t.dt.month).astype('Int64')
+        meas['_ym0'] = ym_of(t0.where(long_range, tm))
+        meas['_ym1'] = ym_of(t1.where(long_range, tm))
+        meas['_frac'] = tm.dt.day / tm.dt.days_in_month
+        self.ym_lo = ym_lo = (self.run_year_min - 1) * 100 + self.bal_month
+        self.ym_hi = ym_hi = self.run_year_max * 100 + (self.bal_month - 1)
+        in_window = (meas['_ym0'].notna() & meas['_ym1'].notna()
+                     & (meas['_ym1'] >= ym_lo) & (meas['_ym0'] <= ym_hi))
         self.n_outside_window = int((~in_window).sum())
         meas = meas[in_window].copy()
-        meas['_ym'] = meas['_ym'].astype(int)
+        meas['_ym0'] = meas['_ym0'].astype(int)
+        meas['_ym1'] = meas['_ym1'].astype(int)
+        meas['_ym'] = meas['_ym0'].clip(lower=ym_lo)
         meas = meas.merge(borehole, left_on='borehole_id', right_on='id', how='left',
                            suffixes=('', '_bh'))
 
@@ -506,7 +566,9 @@ class DataHandler:
             raw_label = gdf['mass_balance_area'].apply(_classify_firn).to_numpy(dtype=object)
             raw_label = self._resolve_unknown_firn(base_glacier_name, raw_label, gdf)
             depths, T_obs, is_firn, n_readings, firn_label, obs_months = _pool_by_depth_bin(
-                raw_depths, raw_T_obs, raw_label, months=gdf['_ym'].to_numpy(dtype=int)
+                raw_depths, raw_T_obs, raw_label,
+                months=[_reading_months(a, b, f, self.ym_lo, self.ym_hi)
+                        for a, b, f in zip(gdf['_ym0'], gdf['_ym1'], gdf['_frac'])],
             )
             weights = np.array([_depth_weight(d) for d in depths])
             sigma = np.full(len(depths), sigma_bh)

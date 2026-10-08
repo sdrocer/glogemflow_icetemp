@@ -37,6 +37,7 @@ from . import baselines
 from . import adoption
 from . import thermal_structure as ts
 from .baselines import TransferModel, SURROGATE_MAX_DEPTH, haversine_km
+from .data import glacier_systems
 from .discrepancy import Discrepancy, latlon_to_xyz
 from .emulator import BASAL
 from .physics import cp_model_single, rmse, IDL_DEFAULTS, Z0_FIRN_DEFAULT
@@ -115,7 +116,9 @@ class Validator:
         # siblings carried a median 34% of the GP's posterior weight on the held-out point
         # (Grenzgletscher 59%, Hintereisferner 79%) -- so every pre-2026-08-31 number in
         # loo_results.csv is a leave-one-BAND-out score, not leave-one-glacier-out.
-        self._base = {g.glacier_name: g.base_glacier_name for g in self.glaciers}
+        # glacier system per entity (data.glacier_systems): Monte Rosa's Gorner, Grenz and the
+        # Colle Gnifetti saddle span two RGI outlines and are held out together
+        self._base = glacier_systems(self.glaciers)
         self._borehole_df = None
         self._ko_fold_cache = {}   # keyed by BASE glacier: 24 fits instead of 111
         self._fold_view_cache = {}
@@ -165,7 +168,7 @@ class Validator:
     def _tier2_baseline_fold(self, held_out_name):
         # exclude every entity of the same GLACIER (see __post_init__._base)
         train_df = self.calib_df[
-            self.calib_df['base_glacier_name'] != self._base[held_out_name]
+            self.calib_df['glacier_name'].map(self._base) != self._base[held_out_name]
         ]
         return TransferModel().fit(train_df), train_df
 
@@ -198,7 +201,7 @@ class Validator:
         if cached is not None:
             calib, theta_hat, gp = cached
             return self._ko_fold_finish(held_out_glacier, held_out_name, calib, theta_hat, gp)
-        other_glaciers = [g for g in self.glaciers if g.base_glacier_name != base]
+        other_glaciers = [g for g in self.glaciers if self._base[g.glacier_name] != base]
 
         # theta is fit from Track-1 (depth) rows only -- see calibrator.BayesianCalibrator's
         # `track` docstring: pooling Track-2 (basal) rows into theta-fitting let a handful of

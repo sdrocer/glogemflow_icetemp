@@ -255,10 +255,13 @@ def match_model_to_obs(df, g):
 
     df: a GloGEM profile file (icetemp.io.read_profile_file): one row per model month, labelled
     with the HYDROLOGICAL year (GloGEM writes ye+tran[0]; the first row is bal_month of the
-    calendar year before), plus one column per node depth.
-    For each observation point: the model at its depth, averaged over the calendar months of the
-    readings pooled into that point with the same weights (g.obs_months). NaN where the depth is
-    not resolved or none of the months lies in the run.
+    calendar year before), plus one column per node depth. Each row is the profile at the END of
+    its month.
+    For each observation point: the model at its depth on the readings' dates -- linear between
+    the end of the previous month and the end of the reading's month, at the fraction of the month
+    elapsed -- averaged with the readings' weights (g.obs_months). Readings in the run's first
+    month take its end-of-month value. NaN where the depth is not resolved or none of the months
+    lies in the run.
     Appended last: the deepest resolved node, averaged over all the point months, for the
     emulator's basal row.
     Returns (depths, temperatures), the observation depths first.
@@ -272,27 +275,38 @@ def match_model_to_obs(df, g):
     cal_year = hyd_year - (month >= bal)
     row_of = {int(y) * 100 + int(m): r for r, (y, m) in enumerate(zip(cal_year, month))}
 
-    def weighted(rows_w, series):
-        rows = [row_of[ym] for ym, w in rows_w if ym in row_of]
-        w = np.array([w for ym, w in rows_w if ym in row_of], dtype=float)
-        if not rows:
+    def prev_month(ym):
+        return ym - 1 if ym % 100 > 1 else ym - 89
+
+    def weighted(entries, series):
+        vals, ws = [], []
+        for ym, w, f in entries:
+            if ym not in row_of:
+                continue
+            v = series[row_of[ym]]
+            if prev_month(ym) in row_of:
+                v = (1.0 - f) * series[row_of[prev_month(ym)]] + f * v
+            vals.append(v)
+            ws.append(w)
+        if not vals:
             return np.nan
-        v = series[rows]
-        return float(np.sum(v * w) / np.sum(w)) if np.isfinite(v).all() else np.nan
+        vals, ws = np.asarray(vals), np.asarray(ws, dtype=float)
+        return float(np.sum(vals * ws) / np.sum(ws)) if np.isfinite(vals).all() else np.nan
 
     vals = []
     all_w = {}
-    for d, (yms, counts) in zip(g.depths, g.obs_months):
-        pairs = list(zip(yms.tolist(), counts.tolist()))
-        for ym, c in pairs:
-            all_w[ym] = all_w.get(ym, 0) + c
-        vals.append(weighted(pairs, model_at_depth(zgrid, T, d)))
+    for d, om in zip(g.depths, g.obs_months):
+        fr = om[2] if len(om) > 2 else np.ones(len(om[0]))
+        entries = list(zip(om[0].tolist(), np.asarray(om[1], float).tolist(), np.asarray(fr, float).tolist()))
+        for ym, w, _ in entries:
+            all_w[ym] = all_w.get(ym, 0) + w
+        vals.append(weighted(entries, model_at_depth(zgrid, T, d)))
     resolved = np.flatnonzero(np.isfinite(T).any(axis=0))
     depths_out = list(np.asarray(g.depths, dtype=float))
     if resolved.size:
         kb = int(resolved.max())
         depths_out.append(float(zgrid[kb]))
-        vals.append(weighted(list(all_w.items()), T[:, kb]))
+        vals.append(weighted([(ym, w, 1.0) for ym, w in all_w.items()], T[:, kb]))
     return np.asarray(depths_out), np.asarray(vals, dtype=float)
 
 
@@ -789,12 +803,13 @@ class GloGEMRunner:
         return PROFILE_ARCHIVE_DIR / self.run_dir.parent.name / f'{tag}.tar.gz'
 
     def archive_profiles(self, tag):
-        """Keep this run's raw monthly profiles (temp_ID*.dat), so the matching to the
+        """Keep this run's raw monthly profiles (temp_ID*.dat) and snow logbook, so the matching to the
         observations can be redone later without rerunning IDL (see reparse_archived)."""
         import tarfile
         files = sorted(self.firnice_output_dir.glob('temp_ID*.dat'))
         if not files:
             return None
+        files += sorted(self.firnice_output_dir.glob('firnice_snow*.dat'))
         path = self.profile_archive(tag)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
