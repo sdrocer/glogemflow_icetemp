@@ -778,12 +778,15 @@ class GloGEMRunner:
             if not candidates:
                 out[g.glacier_name] = None
                 continue
-            best_path, best_diff = None, np.inf
+            # nearest band; on a band edge (two bands equally near) the entity's own band
+            own_band = getattr(g, 'elevation_band', g.elevation)
+            best_path, best_diff = None, (np.inf, np.inf)
             best_parsed = None
             for cand in candidates:
                 parsed = read_profile_file(cand)
                 elev_m = parsed[0]
-                diff = abs(elev_m - g.elevation) if elev_m == elev_m else np.inf  # NaN-safe
+                diff = ((abs(elev_m - g.elevation), abs(elev_m - own_band)) if elev_m == elev_m
+                        else (np.inf, np.inf))  # NaN-safe
                 if diff < best_diff:
                     best_diff, best_path, best_parsed = diff, cand, parsed
             _, depths, df = best_parsed
