@@ -13,6 +13,11 @@
 > the WGMS series. Under the correct mass balance the best fit improves slightly (RMSE 2.34 °C)
 > with the refreezing parameter inside its range; the ablation-zone ice and the deep ice of cold
 > firn remain too cold and too warm respectively, beyond what the parameters can reach.*
+>
+> *Note (2026-10-09): at the best design point the Hintereisferner tongue was −4.4 to −5.0 °C too
+> cold (41 points), not −3.5 °C as first written, which had averaged in two firn boreholes. Part of
+> it was a solver bug: the winter snow on the ice barely insulated (chapter 7). Firn memory and the
+> snowline calibration were left out (decided 2026-10-08, below).*
 
 ## What we believed
 
@@ -132,6 +137,12 @@ Same thermal parameters (f_ref 0.87, f_ins 1.01, f_adv 0.94), 783 matched readin
 | Mont Blanc / Bossons | −0.42 °C | +2.95 °C |
 | all readings (bias / RMSE) | −0.60 / 2.58 °C | +1.23 / 2.88 °C |
 
+*Note (2026-10-09): the row "Colle Gnifetti > 4200 m" mixed two sites: the Colle Gnifetti saddle,
+whose boreholes start at 4400 m, and the firn of the upper Grenz basin, Lysjoch and Seserjoch at
+4200–4400 m. In the ensembles of chapter 7 the saddle is too warm and the firn below it too cold,
+and in a joint group the two largely cancel; for the two runs above they were not split. The
+numbers stay as measured; chapter 7 splits the group at 4400 m.*
+
 The firn line is now in the right place, and the Hintereisferner firn boreholes are fixed. But the
 high, cold firn became 2–3 °C too warm at every depth: more melt and a warmer surface there, which
 the thermal parameters — chosen while the mass balance was wrong — no longer compensate. **Every
@@ -158,29 +169,84 @@ cold Hintereisferner tongue cannot be calibrated away.
 
 Two misfits remain at the best design point:
 
-- **Hintereisferner ice** (−3.5 °C): the tongue's equilibrium is cold because its surface
-  averages about −5.5 °C. The spin-up does reach equilibrium; a surface held at 0 °C in melt months
-  (`firnice_melt_surface`) moves it by only ~0.5 °C and warms the cold firn by ~1 °C, so it stays
-  off; the mass-balance model refreezes almost nothing on the tongue.
+- **Hintereisferner tongue ice** (−4.4 to −5.0 °C at its four sites, 41 points; a first version of
+  this chapter said −3.5 °C, which had averaged in the two firn boreholes at 3060 and 3150 m): the
+  tongue's equilibrium is cold because its surface averages about −5.5 °C, and because the winter
+  snow, which should shield the ice from that cold, barely insulated: a solver bug let heat cross it
+  3–5 times too easily in midwinter. Fixing it warmed the tongue by about 2 °C (chapter 7). The
+  spin-up does reach equilibrium; a surface held at 0 °C in melt months (`firnice_melt_surface`)
+  moves it by only ~0.5 °C and warms the cold firn by ~1 °C, so it stays off; the mass-balance
+  model refreezes almost nothing on the tongue.
 - **Colle Gnifetti below 40 m** (1.3–1.7 °C too warm): the measured ice gets colder with depth,
   down to −12.4 °C, a memory of the colder 19th century. The spin-up starts from an equilibrium with
   the 1942–1971 climate and cannot hold it.
+
+  *Note (2026-10-09): this range came from the old group from 4200 m up, which also held four deep
+  points of the upper Grenz basin (Grenzgletscher@4205) that are too cold. Split at 4400 m
+  (chapter 7), Colle Gnifetti below 40 m is 48 points, on average +1.77 °C too warm in the same
+  best run (design 13).*
+
+## Firn memory and the snowline calibration: left out (decided 2026-10-08)
+
+Both were planned on 28 September, against a firn line that seemed to react three times too
+strongly to climate, and against a Grenz tongue that cooled while its boreholes warmed. Both
+premises came from the wrong mass balance. Step 3 of the plan of 30 September checked them again
+(runs `firnrgi7_w0` and `firnlog_w0`; the effects of a firn store from an approximate simulation):
+
+- **The Grenz tongue.** With the RGI7 parameters the firn area never comes below 2795 m, so the
+  tongue is never firn, and at 20–110 m it warms by +0.36 to +0.55 °C from 1979–80 to 2008–10. The
+  cooling in the table at the top of this chapter came from the RGI6-numbered parameters, which put
+  firn down to 2315 m. The boreholes differ by more, +1.2 °C at 20–110 m, but also by +1.9 °C at
+  110–300 m, deeper than 29 years of heat conduction reach (about 35 m). The 1979 borehole (2600 m,
+  position estimated) and those of 2008 (2553–2572 m) stand in different places, so their
+  difference mostly reflects two places, not one place measured twice.
+- **A firn store, as checked.** The idea of 28 September was firn that has to melt away before a
+  band turns to ice. The check kept one firn line, set by the mass balance as today, and let a firn
+  store per band set only how deep the meltwater reaches. Such a store acts where a band becomes
+  firn for the first time: it would keep the meltwater in a few metres of young firn, where today
+  the band gets a full firn column at once (at 14 m it warms by 3.1 °C within two years, median).
+  In the whole run that happens at three updates only, 1977, 1978 and 1981, on 106 bands, as the
+  firn area moves down from its spin-up extent to the lower ELAs of the late 1970s. No borehole was
+  measured on those bands after they turned to firn: the Hintereisferner boreholes at 2805 and
+  2955 m lie on two of them, but were measured in 1972 and 1976, before. The 234 later entries are
+  bands that had been firn before; their old firn is still there, so a store would leave them as
+  they are.
+- **Bands that leave the firn area.** Keeping a band firn until its firn has melted, as first
+  proposed, would change bands that drop out of the firn area for a short time: in 95 cases a band
+  that had been firn for at least ten years dropped out for one or two years. The only boreholes on
+  bands that move in and out of the firn area are on Tête Rousse and Hohsaas: 127 of the 769 points
+  of `alps_r7` (chapter 7), but 0.8 % of the information on f_ref and 0.2 % on f_ins. Even the best
+  case for any store would cut Tête Rousse's misfit at 3155 m only from +1.95 to +1.2 °C; its warm
+  bias comes from its modelled firn history (firn almost everywhere from the spin-up until about
+  2000) and meltwater depth.
+- **The firn line.** The Hintereisferner ELA follows the WGMS series with the right sensitivity, and
+  every test glacier reproduces its own calibrated ELA (above), so a snowline calibration would
+  correct an error that is no longer there.
+
+A firn store would change almost nothing the boreholes or the calibration see. Decision: both are
+left out.
 
 ## What is still open
 
 - **The ablation-zone ice** (Hintereisferner): which missing process keeps real tongue ice near
   0 °C — winter snow insulation, refreezing of snowmelt on the cold ice surface in spring, or water
-  in crevasses (the backup).
+  in crevasses (the backup). *(2026-10-09: the snow barely insulated because of a solver bug, now
+  fixed; the tongue is still about 3 °C too cold. Chapter 7.)*
 - **The climate before 1942** for cold, high firn (Colle Gnifetti).
-- **Firn memory** (a band turns to ice only once its firn has melted) and **snowline calibration**:
-  both were planned against the "too sensitive" firn line, which turned out to be an artefact.
-  To be re-decided after the ensemble.
+- **Firn memory and snowline calibration** are no longer open: both were left out (section above).
+  A firn store would be looked at again only together with the meltwater depth (Herron–Langway),
+  which sets how large it would be.
 - **Old measurements:** keep the 1971 start and use the old-versus-new borehole pairs (Colle
-  Gnifetti, Grenz tongue, Col du Dôme) as a held-out test of trends.
+  Gnifetti, Grenz tongue, Col du Dôme) as a held-out test of trends. *(2026-10-09: the plan of
+  30 September recommends dropping the Grenz tongue pair, which compares two places, see the
+  section above; to be decided with the training campaign.)*
 
 ## Sources
 
-- Plan: [plans/2026-09-28_firn_extent_plan.md](plans/2026-09-28_firn_extent_plan.md)
+- Plan: [plans/2026-09-28_firn_extent_plan.md](plans/2026-09-28_firn_extent_plan.md); the firn
+  memory findings: Step 3 of the plan of 2026-09-30, decided 2026-10-08
+  (`~/.claude/plans/i-am-building-a-compiled-wolf.full.md`, to be archived as
+  `plans/2026-09-30_snow_comparison_target_plan.md`)
 - Runs: `data/bayescal/firnlog_w0` (RGI6-numbered file), `firnrgi7_w0` (RGI7 file),
   `strainheat_w0` (strain heating on), ensemble `alps_r7_w0` … `w5`
 - Calibration files: RGI7 `/scratch_net/iceberg_second/mhuss/r7spec_global_results/monthly/CentralEurope/calibration`;

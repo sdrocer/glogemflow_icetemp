@@ -213,6 +213,13 @@ its own. Bias is model minus borehole, final-year profiles.
 
 Over all 482 observations, RMSE fell from 3.75 to 2.51 °C and bias from +2.64 to +0.99 °C.
 
+*Note (2026-10-09): in the table and the figure above, "Colle Gnifetti" is every Grenzgletscher
+borehole from 4200 m up, and "Monte Rosa" those at 3000–4200 m. The first group mixed two sites:
+the Colle Gnifetti saddle, whose boreholes start at 4400 m, and the firn of the upper Grenz basin,
+Lysjoch and Seserjoch at 4200–4400 m. The two can err in opposite directions and then cancel in a
+joint bias; in the ensembles of chapter 7 they do. The numbers above stay as measured; chapter 7
+splits Monte Rosa at 4400 m.*
+
 **What we learned on the way.**
 
 1. *Meltwater makes the problem non-linear.* Where meltwater refreezes in firn, the spin-up's

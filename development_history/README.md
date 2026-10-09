@@ -14,6 +14,7 @@ be defended later, in a paper, a thesis or a talk.
 | 4 | [The depth window](04_depth_window.md) | Sep 2026 | bed node, implicit solver, conduction stencil, column to the borehole |
 | 5 | [The thermal spin-up](05_thermal_spinup.md) | 24–28 Sep 2026 | a one-year climate, a slow spin-up, and the drift correction |
 | 6 | [Firn extent and the mass-balance calibration](06_firn_extent_and_calibration.md) | 28 Sep 2026 – | not water in ice but the firn line; the runs used other glaciers' mass-balance parameters |
+| 7 | [The snow, the comparison and the calibration target](07_snow_comparison_target.md) | 30 Sep 2026 – | each reading at its date; the winter snow on ice barely insulated (a solver bug); the fix lowers the RMSE in all 32 runs; calibration target next |
 
 ## How chapters are written
 
