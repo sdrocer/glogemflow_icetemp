@@ -223,6 +223,10 @@ enable_advection        = 'y'   ; large glaciers' T(z) is materially shaped by i
                          ; above, without needing use_flow_model='y'.
 enable_strain_heating   = 'n'   ; open question -- same SIA driving-stress basis as advection,
                          ; not yet decided whether to include for training runs
+firnice_forcing_toff    = '{forcing_toff}'   ; 'n' = thermal energy inputs without the MB t_offset
+firnice_hl1980          = '{hl1980}'   ; 'y' = Herron & Langway (1980) close-off depth as published
+firnice_lh_water        = '{lh_water}'   ; 'y' = latent heat per m of percolating water
+firnice_perm_limit      = '{perm_limit}'   ; 'profile' = water stops at the model's own 830 kg/m3 depth
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -360,6 +364,11 @@ class GloGEMRunner:
     use_flow_model: str = 'n'   # 'y' takes u from the coupled flow model, as production does
     glacier_retreat: str = 'n'  # must be 'y' for the flow model to evolve geometry
     write_velocity: str = 'n'   # 'y' dumps the applied velocity field (fit_u_sum)
+    # thermal forcing switches (settings.pro; defaults = the behaviour before 2026-10-12)
+    forcing_toff: str = 'y'     # 'n' = thermal energy inputs without the mass-balance t_offset
+    hl1980: str = 'n'           # 'y' = Herron & Langway (1980) close-off depth as published
+    lh_water: str = 'n'         # 'y' = latent heat per m of percolating water
+    perm_limit: str = 'hl'      # 'profile' = water stops at the thermal model's own 830 kg/m3 depth
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -583,6 +592,10 @@ class GloGEMRunner:
             use_flow_model=self.use_flow_model,
             glacier_retreat=self.glacier_retreat,
             write_velocity=self.write_velocity,
+            forcing_toff=self.forcing_toff,
+            hl1980=self.hl1980,
+            lh_water=self.lh_water,
+            perm_limit=self.perm_limit,
         )
         out_path.write_text(text)
         return out_path

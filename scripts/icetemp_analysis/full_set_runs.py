@@ -1,19 +1,25 @@
-"""GloGEM on all CentralEurope calibration glaciers (24, 111 entities) at two parameter sets, for
-the question of 2026-10-12: how well does the model predict the ice below the seasonal layer on
-glaciers that no fit has seen?
+"""GloGEM on all CentralEurope calibration glaciers (24, 111 entities) at one parameter set and one
+variant of the thermal forcing switches.
 
-Usage:  full_set_runs.py <worker> [host] [run_tag]
+Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--ids 00786,00774] [--catchment NAME]
   worker 0: the prior mean, f_ref 0.55, f_ins 1.017, f_adv 1.0 (no calibration)
   worker 1: the T2 calibration on the 7 test glaciers (Step 5b: grid mean on the emulator mean),
             f_ref 0.3476, f_ins 0.7850, f_adv 1.0
-Each worker has its own run_dir, data/bayescal/<run_tag>_w<worker> (GloGEM writes every run to the
-same profile file names), the configuration of the alps_s2 ensemble (spin-up on) and archives its
-raw profiles. Both workers write the same full-set catchment file, so they may run together, but
-not alongside runs on another glacier set.
+  --variant (switches in GloGEM's settings.pro, plan of 2026-10-12):
+            today/R  defaults                        F  forcing without t_offset
+            H        Herron-Langway 1980 + latent heat per m water
+            FH       F and H                         P  H + water stops at the model's own 830 kg/m3
+  --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
+            RGI11_CentralEurope_bayescal.dat is left alone.
+Each run has its own run_dir, data/bayescal/<run_tag>_w<worker> (GloGEM writes every run to the same
+profile file names; a reused run_dir would skip the run through its .done file), the configuration of
+the alps_s2 ensemble (spin-up on), archives its raw profiles and records the GloGEM commit it ran on.
+Runs that share a catchment file must use the same glacier set.
 
-Run from the repo root: PYTHONPATH=src python scripts/icetemp_analysis/full_set_runs.py 0
+Run from the repo root: PYTHONPATH=src python scripts/icetemp_analysis/full_set_runs.py 0 --variant F
 """
-import sys
+import argparse
+import subprocess
 import time
 
 import dill
@@ -22,40 +28,67 @@ import pandas as pd
 
 from icetemp.calibration import CalibrationConfig, CalibrationPipeline
 from icetemp.calibration.priors import PARAM_NAMES
+from icetemp.calibration.runner import GLOGEM_DIR
 
 THETAS = np.array([[0.55, 1.0169620463742455, 1.0],
                    [0.34761387083770506, 0.7850032476975339, 1.0]])
 LABELS = ['prior mean', 'T2 calibration on the 7 test glaciers']
+VARIANTS = {'today': {}, 'R': {},
+            'F': dict(forcing_toff='n'),
+            'H': dict(hl1980='y', lh_water='y'),
+            'FH': dict(forcing_toff='n', hl1980='y', lh_water='y'),
+            'P': dict(hl1980='y', lh_water='y', perm_limit='profile')}
 
-WORKER = int(sys.argv[1])
-HOST = sys.argv[2] if len(sys.argv) > 2 else 'vierzack03'
-RUN_TAG = sys.argv[3] if len(sys.argv) > 3 else 'ce25_pred'
+
+class SubsetPipeline(CalibrationPipeline):
+    ids = None
+
+    def _calibration_glaciers(self):
+        gs = super()._calibration_glaciers()
+        return gs if self.ids is None else [g for g in gs if g.glacier_id in self.ids]
 
 
 def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    ap.add_argument('worker', type=int)
+    ap.add_argument('host', nargs='?', default='vierzack03')
+    ap.add_argument('run_tag', nargs='?', default='ce25_pred')
+    ap.add_argument('--variant', default='today', choices=sorted(VARIANTS))
+    ap.add_argument('--ids', default=None, help='comma-separated RGI7 ids (default: all)')
+    ap.add_argument('--catchment', default='CentralEurope_bayescal')
+    args = ap.parse_args()
+
     base = CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
     cfg = CalibrationConfig(
         region=base.region, include_estimated=base.include_estimated,
-        include_unassessed=base.include_unassessed, run_tag=f'{RUN_TAG}_w{WORKER}',
+        include_unassessed=base.include_unassessed, run_tag=f'{args.run_tag}_w{args.worker}',
         calibration_source_dir=base.calibration_source_dir,
         calibration_source_files=base.calibration_source_files,
-        thermal_spinup='y', n_design_points=len(THETAS), remote_host=HOST,
+        thermal_spinup='y', n_design_points=len(THETAS), remote_host=args.host,
+        catchment=args.catchment, **VARIANTS[args.variant],
     )
-    pl = CalibrationPipeline(cfg)
+    pl = SubsetPipeline(cfg)
+    pl.ids = None if args.ids is None else set(args.ids.split(','))
     pl.load_data()
     gs = pl._calibration_glaciers()
     ids = sorted({g.glacier_id for g in gs})
-    print(f'\nworker {WORKER}: {LABELS[WORKER]}, theta {THETAS[WORKER].tolist()}', flush=True)
+    print(f'\nworker {args.worker}: {LABELS[args.worker]}, theta {THETAS[args.worker].tolist()}, '
+          f'variant {args.variant} {VARIANTS[args.variant]}', flush=True)
     print(f'{len({g.base_glacier_name for g in gs})} glaciers, {len(gs)} entities, '
-          f'{sum(g.n_obs for g in gs)} points, {len(ids)} glacier_ids', flush=True)
+          f'{sum(g.n_obs for g in gs)} points, {len(ids)} glacier_ids, catchment {args.catchment}', flush=True)
 
     pd.DataFrame(THETAS, columns=PARAM_NAMES).to_csv(cfg.design_path, index=False)
+    cfg.to_yaml(cfg.output_path / 'config.yaml')
+    head = subprocess.run(['git', '-C', str(GLOGEM_DIR), 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout
+    dirty = subprocess.run(['git', '-C', str(GLOGEM_DIR), 'status', '--porcelain', '--untracked-files=no'],
+                           capture_output=True, text=True).stdout
+    (cfg.output_path / 'provenance.txt').write_text(f'GloGEM {head}local changes:\n{dirty or "none"}\n')
     pl.design = THETAS
     pl.write_training_inputs()
 
-    tag = f'design_{WORKER:04d}'
+    tag = f'design_{args.worker:04d}'
     t0 = time.time()
-    ok = pl.runner.run_design_point([g.glacier_id for g in gs], THETAS[WORKER], tag, idl_bin='idl',
+    ok = pl.runner.run_design_point([g.glacier_id for g in gs], THETAS[args.worker], tag, idl_bin='idl',
                                     timeout=7200)
     minutes = (time.time() - t0) / 60
     if not ok:
