@@ -194,8 +194,16 @@ class BayesianCalibrator:
         # by that variance -- rewards this as "forgivably uncertain" fit rather than correctly
         # distrusting an unsampled, extrapolated region; MCMC/MAP exploit it by walking straight
         # for the edge regardless of whether the underlying physics is actually ambiguous there.
-        self._design_lo = self.emulator.theta_train_.min(axis=0)
-        self._design_hi = self.emulator.theta_train_.max(axis=0)
+        # Indexed by PARAM_NAMES position; theta_train_ holds only the emulator's active columns,
+        # and a parameter the emulator does not see is unbounded here.
+        active = list(getattr(self.emulator, 'active_params', range(len(self._FULL_NAMES))))
+        not_seen = [n for n in self._free_param_names() if self._FULL_NAMES.index(n) not in active]
+        if not_seen:
+            raise ValueError(f'{not_seen} are calibrated but not inputs of the emulator')
+        self._design_lo = np.full(len(self._FULL_NAMES), -np.inf)
+        self._design_hi = np.full(len(self._FULL_NAMES), np.inf)
+        self._design_lo[active] = self.emulator.theta_train_.min(axis=0)
+        self._design_hi[active] = self.emulator.theta_train_.max(axis=0)
         # Keyed by glacier_name (always unique -- DataHandler groups measurements by name),
         # NOT glacier_id: multiple GlacierCalibrationData objects can share one GloGEM
         # glacier_id (two glenglat boreholes on the same RGI polygon). glacier_id is only

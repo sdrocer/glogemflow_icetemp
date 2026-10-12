@@ -22,15 +22,18 @@ from .priors import Priors, PARAM_NAMES
 class DesignSampler:
     priors: Priors = field(default_factory=Priors)
     seed: int = 42
+    fixed_params: dict = None   # name -> value, held constant; the LHS spans the other parameters
 
     def sample(self, n, scramble=True):
         """Return an (n, len(PARAM_NAMES)) array of theta design points."""
         dists = self.priors.as_dict()
-        d = len(PARAM_NAMES)
-        sampler = qmc.LatinHypercube(d=d, scramble=scramble, seed=self.seed)
+        fixed = self.fixed_params or {}
+        free = [name for name in PARAM_NAMES if name not in fixed]
+        sampler = qmc.LatinHypercube(d=len(free), scramble=scramble, seed=self.seed)
         u = sampler.random(n=n)
-        return np.column_stack([dists[name].ppf(u[:, k])
-                                for k, name in enumerate(PARAM_NAMES)])
+        cols = {name: dists[name].ppf(u[:, k]) for k, name in enumerate(free)}
+        return np.column_stack([cols[name] if name in cols else np.full(n, float(fixed[name]))
+                                for name in PARAM_NAMES])
 
     def sample_df(self, n, scramble=True):
         """Same as sample(), returned as a DataFrame with PARAM_NAMES columns (convenience for
