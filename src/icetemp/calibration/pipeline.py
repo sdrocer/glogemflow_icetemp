@@ -164,10 +164,53 @@ class CalibrationPipeline:
         kwargs = dict(emulator=self.emulator, glaciers=glaciers, priors=self.priors, track='depth',
                       target=self.config.target, fixed_params=self.config.fixed_params,
                       fit_exclude=fit_exclusions(glaciers, self.config.fit_exclusions),
+                      emulator_error=self.config.emulator_error,
                       s_model_variance=self.config.s_model_variance,
                       s_model_length_m=self.config.s_model_length_m)
         kwargs.update(overrides)
         return BayesianCalibrator(**kwargs)
+
+    def emulator_agreement(self):
+        """Grid posteriors of the configured fit and of the same fit with the emulator's
+        uncertainty varying, compared by adoption.check_emulator_agreement."""
+        main = self.calibrator.grid_moments()
+        if self.calibrator.emulator_error == 'varying':
+            varying = main
+        else:
+            cal = self.make_calibrator(emulator_error='varying')
+            if cal.offset_in_fit:
+                cal.fit_discrepancy()
+            varying = cal.grid_moments()
+        prior = self.priors.as_dict()
+        return adoption.check_emulator_agreement(main, varying,
+                                                 {n: prior[n].std() for n in main['names']})
+
+    def add_stage2_design(self):
+        """Append config.stage2_points runs in the box stage-1 grid mean +- stage2_half_width_sd
+        posterior sd (free parameters, clipped to the prior bounds) to design.csv. Step 2 then runs
+        only the new rows (the others have .done sentinels); steps 3-5 refit on all of them."""
+        diag = self._read_diagnostics()
+        if diag.get('grid_mean') is None:
+            raise SystemExit(f'no stage-1 result in {self.config.diagnostics_path}: run step 4 first')
+        if self.priors is None:
+            self.priors = Priors(bounds_override=self.config.bounds_override)
+        self.load_design()
+        fixed = self.config.fixed_params or {}
+        center = np.array([float(fixed.get(n, np.nan)) for n in PARAM_NAMES])
+        half = np.zeros(len(PARAM_NAMES))
+        for name, m, sd in zip(diag['grid_names'], diag['grid_mean'], diag['grid_sd']):
+            center[PARAM_NAMES.index(name)] = m
+            half[PARAM_NAMES.index(name)] = self.config.stage2_half_width_sd * sd
+        new = DesignSampler(priors=self.priors, seed=self.config.design_seed + 1,
+                            fixed_params=self.config.fixed_params).sample_around(
+            self.config.stage2_points, center, half)
+        self.design = np.vstack([self.design, new])
+        # appended, so the rows already run stay byte for byte as they were
+        pd.DataFrame(new, columns=PARAM_NAMES).to_csv(self.config.design_path, mode='a', header=False,
+                                                      index=False)
+        print(f'added {len(new)} stage-2 points around {np.round(center, 3).tolist()} '
+              f'(+- {np.round(half, 3).tolist()}) -> {len(self.design)} rows in {self.config.design_path}')
+        return new
 
     def calibrate(self):
         """Fits theta from Track-1 (depth) rows only -- see calibrator.BayesianCalibrator's
@@ -212,8 +255,11 @@ class CalibrationPipeline:
         mahalanobis = float(self.calibrator.mahalanobis_per_dof(flat.mean(axis=0)))
         print(f'mode gap vs grid: {mode_gap:.2f} log-units | Mahalanobis/n at posterior mean: '
               f'{mahalanobis:.3f}')
+        moments = self.calibrator.grid_moments()
+        print(f"grid posterior {list(moments['names'])}: mean {np.round(moments['mean'], 4).tolist()} "
+              f"sd {np.round(moments['sd'], 4).tolist()} corr {np.round(moments['corr'], 3).tolist()}")
         self._write_diagnostics(summary, tau, grid_theta=grid_theta, grid_lp=grid_lp,
-                                 mode_gap=mode_gap, mahalanobis=mahalanobis)
+                                 mode_gap=mode_gap, mahalanobis=mahalanobis, moments=moments)
         free = self.calibrator._free_param_names()
         fixed_desc = ', '.join(f'{k}={v}' for k, v in (self.config.fixed_params or {}).items()) or 'none'
         print(f'fixed (not calibrated): {fixed_desc}')
@@ -247,7 +293,7 @@ class CalibrationPipeline:
             return None
 
     def _write_diagnostics(self, summary, tau, grid_theta=None, grid_lp=None,
-                            mode_gap=None, mahalanobis=None):
+                            mode_gap=None, mahalanobis=None, moments=None):
         """Persist MCMC convergence diagnostics for step 5's adoption gate to read -- see
         CalibrationConfig.diagnostics_path for why this cannot simply be recomputed there."""
         import json
@@ -267,6 +313,11 @@ class CalibrationPipeline:
             'grid_log_posterior': None if grid_lp is None else float(grid_lp),
             'mode_gap': None if mode_gap is None else float(mode_gap),
             'mahalanobis_per_dof': None if mahalanobis is None else float(mahalanobis),
+            # grid posterior of the free parameters: the stage-1 result step 01b builds around
+            'grid_names': None if moments is None else list(moments['names']),
+            'grid_mean': None if moments is None else [float(v) for v in moments['mean']],
+            'grid_sd': None if moments is None else [float(v) for v in moments['sd']],
+            'grid_corr': None if moments is None else np.asarray(moments['corr']).tolist(),
         }
         self.config.diagnostics_path.write_text(json.dumps(payload, indent=2))
         print(f'mcmc diagnostics -> {self.config.diagnostics_path}')
@@ -311,12 +362,15 @@ class CalibrationPipeline:
         gate = adoption.check_gate(self.emulator, theta_hat, r_hat_max=diag.get('r_hat_max'),
                                    mahalanobis=diag.get('mahalanobis_per_dof'),
                                    mode_gap=diag.get('mode_gap'))
-        adopt = gate.passed and rmse_ok
+        agreement = self.emulator_agreement()
+        adopt = gate.passed and rmse_ok and agreement.passed
         print(gate.describe())
+        print(agreement.describe())
         print(f"=> {'ADOPT' if adopt else 'DO NOT ADOPT'} theta = "
               f"{np.round(theta_hat, 4).tolist()} (posterior mean)"
               + ('' if adopt else '; because: ' + '; '.join(
-                  gate.reasons + ([] if rmse_ok else ['held-out RMSE rule failed']))))
+                  gate.reasons + ([] if rmse_ok else ['held-out RMSE rule failed'])
+                  + agreement.reasons)))
 
         # As before, for context: the baselines with the per-entity offset, and the separate
         # verdict for the polythermal-classification deliverable (see adoption.py).

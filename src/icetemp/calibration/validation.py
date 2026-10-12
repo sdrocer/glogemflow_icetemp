@@ -204,6 +204,7 @@ class Validator:
         c = self.calibrator
         kwargs = dict(emulator=c.emulator, glaciers=glaciers, priors=c.priors, track='depth',
                       target=c.target, offset_in_fit=c.offset_in_fit, fit_exclude=c.fit_exclude,
+                      emulator_error=c.emulator_error,
                       fixed_params=c.fixed_params, s_model_variance=c.s_model_variance,
                       s_model_length_m=c.s_model_length_m, use_elevation=c.use_elevation,
                       use_emulator_factor=c.use_emulator_factor)

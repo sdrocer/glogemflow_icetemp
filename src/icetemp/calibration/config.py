@@ -92,6 +92,12 @@ class CalibrationConfig:
     fit_exclusions: list = field(default_factory=lambda: ['colle_gnifetti_below_40m'])
     # adoption: held-out RMSE may exceed the entity-target calibration's (T1) by this much [degC]
     rmse_margin: float = 0.10
+    # 'mean': fit on the emulator mean; the fit with its uncertainty varying is the adoption check
+    # (decision 2026-10-12). 'varying': the uncertainty inside the fit.
+    emulator_error: str = 'mean'
+    # second design stage (scripts/01b): this many runs in the stage-1 result +- this many sd
+    stage2_points: int = 20
+    stage2_half_width_sd: float = 2.5
 
     # -- MCMC --------------------------------------------------------------------------
     n_walkers: int = 32

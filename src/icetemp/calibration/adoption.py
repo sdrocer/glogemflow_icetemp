@@ -70,6 +70,57 @@ MAHALANOBIS_BOUNDS = (0.5, 2.0)
 GATE_MAX_MODE_GAP = 5.0
 
 
+# The fit on the emulator MEAN is the result (decision 2026-10-12); the same fit with the
+# emulator's uncertainty E(theta) included must agree with it: move by at most
+# AGREEMENT_MAX_SHIFT_SD of its own posterior sd, and still tell the parameters apart by Step 5a's
+# rule (correlation <= TOLD_APART_MAX_CORR, insul_scale sd <= TOLD_APART_MAX_SPREAD prior sd).
+# Where runs are sparse, E forgives misfit and pulls the fit to the edge of the trusted region
+# (Step 5b trial on alps_s2); agreement shows the emulator is accurate where the result is.
+AGREEMENT_MAX_SHIFT_SD = 1.0
+TOLD_APART_MAX_CORR = 0.8
+TOLD_APART_MAX_SPREAD = 0.5
+
+
+@dataclass
+class AgreementResult:
+    passed: bool
+    shift_sd: dict    # free parameter -> |mean with E - mean without| / sd with E
+    corr: float       # largest |correlation| between free parameters, with E
+    spread: dict      # free parameter -> sd with E / prior sd
+    reasons: list = field(default_factory=list)
+
+    def describe(self):
+        shift = ', '.join(f'{n} {v:.2f}' for n, v in self.shift_sd.items())
+        spread = ', '.join(f'{n} {v:.2f}' for n, v in self.spread.items())
+        return (f"  emulator check: {'PASS' if self.passed else 'FAIL'}\n"
+                f"    with its uncertainty the fit moves by (posterior sd): {shift} "
+                f"(<= {AGREEMENT_MAX_SHIFT_SD})\n"
+                f"    and keeps correlation {self.corr:.2f} (<= {TOLD_APART_MAX_CORR}), "
+                f"spread {spread} (insul_scale <= {TOLD_APART_MAX_SPREAD})")
+
+
+def check_emulator_agreement(fit_mean, fit_varying, prior_sd, max_shift_sd=AGREEMENT_MAX_SHIFT_SD,
+                             max_corr=TOLD_APART_MAX_CORR, max_spread=TOLD_APART_MAX_SPREAD):
+    """fit_mean, fit_varying: BayesianCalibrator.grid_moments of the fit on the emulator mean and
+    of the same fit with the emulator's uncertainty; prior_sd: free parameter -> prior sd."""
+    names = list(fit_mean['names'])
+    shift = {n: float(abs(fit_varying['mean'][i] - fit_mean['mean'][i]) / fit_varying['sd'][i])
+             for i, n in enumerate(names)}
+    spread = {n: float(fit_varying['sd'][i] / prior_sd[n]) for i, n in enumerate(names)}
+    c = np.asarray(fit_varying['corr'], dtype=float)
+    corr = float(np.max(np.abs(c[~np.eye(len(c), dtype=bool)]))) if len(c) > 1 else 0.0
+    reasons = [f'with the emulator uncertainty {n} moves by {v:.2f} posterior sd (> {max_shift_sd})'
+               for n, v in shift.items() if v > max_shift_sd]
+    if corr > max_corr:
+        reasons.append(f'with the emulator uncertainty the parameters correlate at {corr:.2f} '
+                       f'(> {max_corr}): not told apart')
+    if spread.get('insul_scale', 0.0) > max_spread:
+        reasons.append(f"with the emulator uncertainty insul_scale keeps {spread['insul_scale']:.2f} "
+                       f'of its prior spread (> {max_spread}): not told apart')
+    return AgreementResult(passed=not reasons, shift_sd=shift, corr=corr, spread=spread,
+                           reasons=reasons)
+
+
 def local_design_density(emulator, theta, radius=GATE_DENSITY_RADIUS):
     """Number of real emulator training points within `radius` standardized units of `theta`.
 

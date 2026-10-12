@@ -149,6 +149,7 @@ class BayesianCalibrator:
     offset_in_fit: bool = None   # K_delta inside Sigma; None = True for 'entity', False for 'depth'
     fit_exclude: frozenset = None   # (glacier_name, depth) points left out of the fit, see
     # data.fit_exclusions
+    emulator_error: str = 'varying'   # 'varying': E(theta) in Sigma; 'mean': emulator mean only (E = 0)
     fixed_params: dict = None   # e.g. {'advection_scale': 1.0}; None/{} = calibrate all three.
     # Parameters named here are HELD FIXED and excluded from the search space; the rest are
     # calibrated.
@@ -192,6 +193,8 @@ class BayesianCalibrator:
             raise ValueError(f"track must be 'all', 'depth', or 'basal', got {self.track!r}")
         if self.target not in ('entity', 'depth'):
             raise ValueError(f"target must be 'entity' or 'depth', got {self.target!r}")
+        if self.emulator_error not in ('varying', 'mean'):
+            raise ValueError(f"emulator_error must be 'varying' or 'mean', got {self.emulator_error!r}")
         if self.offset_in_fit is None:
             self.offset_in_fit = self.target == 'entity'
         if self.target == 'depth' and (self.offset_in_fit or self.track != 'depth'
@@ -470,23 +473,33 @@ class BayesianCalibrator:
         equivalent Woodbury form, _depth_terms).
         """
         if self.target == 'depth':
-            mean, L = self.emulator.predict_factor(theta)
+            mean, L = self._predict_factor(theta)
             L_rows = L[self._row_emu_idx]
             return self._row_obs - mean[self._row_emu_idx], self._Sigma_base + L_rows @ L_rows.T
         if self._K_delta is None and self.offset_in_fit:
             raise RuntimeError('call fit_discrepancy() before log_likelihood()/run_mcmc()')
         if getattr(self, '_rows_ok', False) and self.use_emulator_factor \
                 and self._Sigma_base is not None:
-            mean, L = self.emulator.predict_factor(theta)
+            mean, L = self._predict_factor(theta)
             residual = self._A @ (self._row_obs - mean[self._row_emu_idx])
             M = self._A @ L[self._row_emu_idx]          # (n_entities, p) -- the ONLY theta-
             Sigma = self._Sigma_base + M @ M.T           # dependent part, a rank-p update
             return residual, Sigma
         # legacy path: diagonal emulator variance, no model-error term (pre-2026-08-20).
         residual, sigma_obs2, sigma_emu2 = self.compute_glacier_residuals(theta)
+        if self.emulator_error == 'mean':
+            sigma_emu2 = np.zeros_like(sigma_emu2)
         if not self.offset_in_fit:
             return residual, np.diag(sigma_obs2 + sigma_emu2)
         return residual, self._K_delta + np.diag(sigma_obs2 + sigma_emu2)
+
+    def _predict_factor(self, theta):
+        """Emulator mean and covariance factor at theta; the factor is zero with
+        emulator_error='mean', so Sigma then carries no emulator term."""
+        mean, L = self.emulator.predict_factor(theta)
+        if self.emulator_error == 'mean':
+            return mean, np.zeros_like(L)
+        return mean, L
 
     def _depth_terms(self, theta):
         """(r^T Sigma^-1 r, log det Sigma, n) for target='depth' by Woodbury: Sigma = B + L L^T,
@@ -499,6 +512,8 @@ class BayesianCalibrator:
         if not (np.isfinite(r).all() and np.isfinite(L_rows).all()):
             return np.nan, np.nan, len(r)
         w = self._B_inv_chol @ r
+        if self.emulator_error == 'mean':
+            return float(w @ w), self._B_logdet, len(r)
         W = self._B_inv_chol @ L_rows
         b = W.T @ w
         c = cho_factor(np.eye(W.shape[1]) + W.T @ W, lower=True)
@@ -678,6 +693,27 @@ class BayesianCalibrator:
             if lp > best_lp:
                 best_theta, best_lp = theta, lp
         return best_theta, best_lp
+
+    def grid_moments(self, n_per_dim=None):
+        """Posterior mean, sd and correlation of the FREE parameters on a regular grid over the
+        effective bounds (points the gate refuses get weight 0). Exact up to the grid spacing,
+        unlike a short MCMC along a long ridge (Step 5b trial: two 3000-step runs gave f_ins spreads
+        0.37 and 0.92). n_per_dim: 61 for up to two free parameters, else 21."""
+        eff = self._effective_bounds()
+        free = self._free_param_names()
+        n = n_per_dim or (61 if len(free) <= 2 else 21)
+        axes = [np.linspace(*eff[name], n) for name in free]
+        pts = np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1).reshape(-1, len(free))
+        lp = np.array([self.log_posterior(self._expand_theta(p)) for p in pts])
+        ok = np.isfinite(lp)
+        w = np.exp(lp[ok] - lp[ok].max())
+        w /= w.sum()
+        X = pts[ok]
+        mean = w @ X
+        cov = (X - mean).T @ ((X - mean) * w[:, None])
+        sd = np.sqrt(np.diag(cov))
+        return dict(names=free, mean=mean, sd=sd, corr=cov / np.outer(sd, sd),
+                    mode=X[np.argmax(w)], n_points=int(ok.sum()))
 
     # ── MCMC ────────────────────────────────────────────────────────────────────────
     def run_mcmc(self, n_walkers=32, n_steps=2000, burn_in=500, thin=5, seed=42,

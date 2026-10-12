@@ -35,6 +35,25 @@ class DesignSampler:
         return np.column_stack([cols[name] if name in cols else np.full(n, float(fixed[name]))
                                 for name in PARAM_NAMES])
 
+    def sample_around(self, n, center, half_width, scramble=True):
+        """n Latin-hypercube points spread uniformly over center +- half_width (arrays over
+        PARAM_NAMES; free parameters, clipped to the prior bounds), fixed parameters constant:
+        the second design stage, around a first result."""
+        bounds = self.priors.bounds()
+        fixed = self.fixed_params or {}
+        free = [name for name in PARAM_NAMES if name not in fixed]
+        u = qmc.LatinHypercube(d=len(free), scramble=scramble, seed=self.seed).random(n=n)
+        cols = {}
+        for k, name in enumerate(free):
+            i = PARAM_NAMES.index(name)
+            lo = max(bounds[name][0], center[i] - half_width[i])
+            hi = min(bounds[name][1], center[i] + half_width[i])
+            if not lo < hi:
+                raise ValueError(f'{name}: empty box {lo}..{hi} around {center[i]}')
+            cols[name] = lo + u[:, k] * (hi - lo)
+        return np.column_stack([cols[name] if name in cols else np.full(n, float(fixed[name]))
+                                for name in PARAM_NAMES])
+
     def sample_df(self, n, scramble=True):
         """Same as sample(), returned as a DataFrame with PARAM_NAMES columns (convenience for
         persisting/reloading a design, e.g. before a multi-hour training run)."""

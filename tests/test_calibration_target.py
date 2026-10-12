@@ -78,3 +78,36 @@ def test_fit_exclusions(setup):
     assert fit_exclusions(gl, []) == frozenset()
     with pytest.raises(ValueError):
         fit_exclusions(gl, ['no_such_rule'])
+
+
+@pytest.mark.parametrize('target', ['entity', 'depth'])
+def test_emulator_mean_leaves_out_E(setup, target):
+    gl, _, _, emu = setup
+    mean_only = BayesianCalibrator(emulator=emu, glaciers=gl, priors=Priors(), track='depth', target=target,
+                                   offset_in_fit=False, emulator_error='mean')
+    varying = BayesianCalibrator(emulator=emu, glaciers=gl, priors=Priors(), track='depth', target=target,
+                                 offset_in_fit=False)
+    for th in THETAS:
+        r0, S0 = mean_only.residual_and_covariance(th)
+        r1, S1 = varying.residual_and_covariance(th)
+        np.testing.assert_array_equal(r0, r1)
+        base = mean_only._Sigma_base
+        np.testing.assert_allclose(S0, base, atol=1e-12)
+        assert np.all(np.diag(S1) >= np.diag(S0) - 1e-12) and not np.allclose(S1, S0)
+        full = _gaussian_logpdf(r0, S0)
+        assert abs(mean_only.log_likelihood(th) - full) <= 1e-9 * abs(full)
+
+
+def test_grid_moments_of_a_known_posterior(setup):
+    gl, _, _, emu = setup
+    cal = BayesianCalibrator(emulator=emu, glaciers=gl, priors=Priors(), track='depth', target='depth',
+                             fixed_params={'advection_scale': 1.0})
+    m, s, rho = np.array([0.5, 1.0]), np.array([0.06, 0.12]), 0.6
+    C = np.array([[s[0] ** 2, rho * s[0] * s[1]], [rho * s[0] * s[1], s[1] ** 2]])
+    Ci = np.linalg.inv(C)
+    cal.log_posterior = lambda th: -0.5 * (np.asarray(th[:2]) - m) @ Ci @ (np.asarray(th[:2]) - m)
+    g = cal.grid_moments(n_per_dim=81)
+    assert g['names'] == ('refreeze_frac', 'insul_scale')
+    np.testing.assert_allclose(g['mean'], m, atol=0.01)
+    np.testing.assert_allclose(g['sd'], s, rtol=0.05)
+    assert g['corr'][0, 1] == pytest.approx(rho, abs=0.03)
