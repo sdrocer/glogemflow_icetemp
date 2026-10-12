@@ -18,6 +18,7 @@ thick = [29d] & slope = [5d]
 firn_th = [0d] & firn = [0d]
 sno = [double(getenv('HARNESS_SNO'))] & mel = [0d] & plg = [0d]
 tgs = [-30d] & dtdz = dblarr(12) - 0.0065d & dtdz_icetemp = dtdz & m = 1 & ye = 0
+tgs_th = tgs & mel_th = mel & plg_th = plg   ; the thermal model's energy inputs
 enable_advection = 'n' & advection_write = 'n' & use_flow_model_gl = 'n'
 enable_strain_heating = 'n' & firnice_melt_surface = 'n' & firnice_batch = 'n'
 firnice_write = ['n', 'n', 'n'] & fit_lacc_on = 0b
