@@ -176,6 +176,29 @@ def glacier_systems(glaciers):
     return labels
 
 
+# Points left out of the parameter fit and reported apart. Colle Gnifetti below 40 m holds ice from
+# before the model's climate record starts (1942).
+FIT_EXCLUSIONS = {
+    'colle_gnifetti_below_40m': dict(region='CentralEurope', glacier_ids=('01225', '01230'),
+                                     min_band=4400, min_depth=40.0),
+}
+
+
+def fit_exclusions(glaciers, names, rules=FIT_EXCLUSIONS):
+    """frozenset of (glacier_name, depth) points matched by the named rules."""
+    unknown = set(names or ()) - set(rules)
+    if unknown:
+        raise ValueError(f'unknown fit exclusion(s) {sorted(unknown)}; known: {sorted(rules)}')
+    out = set()
+    for name in names or ():
+        r = rules[name]
+        for g in glaciers:
+            if (g.glogem_region == r['region'] and g.glacier_id in r['glacier_ids']
+                    and g.elevation_band >= r['min_band']):
+                out |= {(g.glacier_name, float(d)) for d in g.depths if d > r['min_depth']}
+    return frozenset(out)
+
+
 def _month_index(ym):
     return (np.asarray(ym) // 100) * 12 + np.asarray(ym) % 100 - 1
 

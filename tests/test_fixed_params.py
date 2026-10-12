@@ -10,14 +10,17 @@ from icetemp.calibration.emulator import Emulator
 from icetemp.calibration.priors import PARAM_NAMES, Priors
 
 
-def test_fixed_advection_never_moves(setup):
+@pytest.mark.parametrize('target', ['entity', 'depth'])
+def test_fixed_advection_never_moves(setup, target):
     gl, _, _, emu = setup
     fixed = {'advection_scale': 1.0}
     design = DesignSampler(Priors(bounds_override={'refreeze_frac': (0.1, 1.0)}), seed=1,
                            fixed_params=fixed).sample(16)
     assert np.all(design[:, 2] == 1.0) and design[:, 0].min() >= 0.1
-    cal = BayesianCalibrator(emulator=emu, glaciers=gl, priors=Priors(), track='depth', fixed_params=fixed)
-    cal.fit_discrepancy()
+    cal = BayesianCalibrator(emulator=emu, glaciers=gl, priors=Priors(), track='depth', target=target,
+                             fixed_params=fixed)
+    if target == 'entity':
+        cal.fit_discrepancy()
     assert cal._free_param_names() == ('refreeze_frac', 'insul_scale')
     assert cal.find_map(n_starts=4)[2] == 1.0
     assert cal.grid_search(n_per_dim=9)[0][2] == 1.0

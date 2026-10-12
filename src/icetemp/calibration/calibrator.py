@@ -22,6 +22,11 @@ the FIXED spatial covariance matrix (pure Matern*Constant signal, no nugget -- t
 role is superseded here by the explicit, theta-dependent sigma_emu^2 + sigma_obs^2 term, so it
 is deliberately excluded from K_delta to avoid double-counting noise).
 
+target='depth' (T2, chosen in Step 5a) compares every depth bin instead of one mean per entity:
+    r(theta) ~ N(0, D + S_model + L_emu(theta) L_emu(theta).T)
+at row level, without K_delta (the per-entity offset is estimated after the fit, not inside it).
+D + S_model is fixed and block-diagonal by entity, so each evaluation is a Woodbury update.
+
 Sampling: emcee (gradient-free affine-invariant ensemble MCMC) -- the emulator backend
 (PCGPwM or the sklearn fallback) is not differentiable, so a gradient-based sampler (NUTS)
 would require re-implementing the emulator in an autodiff framework; emcee has no such
@@ -140,6 +145,10 @@ class BayesianCalibrator:
     use_elevation: bool = True         # pass elevation as a 3rd discrepancy coordinate
     use_emulator_factor: bool = True   # carry the emulator's rank-p covariance FACTOR instead of
     # its diagonal (see Emulator.predict_factor). False restores pre-2026-08-20 behaviour.
+    target: str = 'entity'   # 'entity': one weighted-mean misfit per entity; 'depth': one per depth bin
+    offset_in_fit: bool = None   # K_delta inside Sigma; None = True for 'entity', False for 'depth'
+    fit_exclude: frozenset = None   # (glacier_name, depth) points left out of the fit, see
+    # data.fit_exclusions
     fixed_params: dict = None   # e.g. {'advection_scale': 1.0}; None/{} = calibrate all three.
     # Parameters named here are HELD FIXED and excluded from the search space; the rest are
     # calibrated.
@@ -181,6 +190,14 @@ class BayesianCalibrator:
     def __post_init__(self):
         if self.track not in ('all', 'depth', 'basal'):
             raise ValueError(f"track must be 'all', 'depth', or 'basal', got {self.track!r}")
+        if self.target not in ('entity', 'depth'):
+            raise ValueError(f"target must be 'entity' or 'depth', got {self.target!r}")
+        if self.offset_in_fit is None:
+            self.offset_in_fit = self.target == 'entity'
+        if self.target == 'depth' and (self.offset_in_fit or self.track != 'depth'
+                                       or not self.use_emulator_factor):
+            raise ValueError("target='depth' needs track='depth', use_emulator_factor=True and "
+                             "offset_in_fit=False")
         unknown = set(self.fixed_params or {}) - set(self._FULL_NAMES)
         if unknown:
             raise ValueError(f'fixed_params {sorted(unknown)} are not in {self._FULL_NAMES}')
@@ -223,6 +240,8 @@ class BayesianCalibrator:
             if self.track == 'depth' and is_basal_row:
                 continue
             if self.track == 'basal' and not is_basal_row:
+                continue
+            if self.fit_exclude and (gname, depth) in self.fit_exclude:
                 continue
             self._rows_by_glacier.setdefault(gname, []).append(row)
 
@@ -274,6 +293,10 @@ class BayesianCalibrator:
         self.discrepancy = None
         self._K_delta = None  # cached pure-signal covariance at the calibration locations
         self._Sigma_base = None  # cached theta-INDEPENDENT part of Sigma (see fit_discrepancy)
+        if self.target == 'depth' and not getattr(self, '_rows_ok', False):
+            raise ValueError("target='depth' found no depth rows to compare")
+        if not self.offset_in_fit:
+            self._build_sigma_base()   # nothing in Sigma waits for fit_discrepancy
 
     # ── row-level structures (flat across entities) ────────────────────────────────────
     def _build_row_structures(self):
@@ -389,7 +412,8 @@ class BayesianCalibrator:
         X = latlon_to_xyz(self._lat, self._lon,
                            self._elev if self.use_elevation else None)
         self._K_delta = signal_kernel(X)
-        self._build_sigma_base()
+        if self.offset_in_fit:
+            self._build_sigma_base()
         return self.discrepancy
 
     def _build_sigma_base(self):
@@ -400,6 +424,9 @@ class BayesianCalibrator:
         Only the last term moves with theta, and it is a rank-p (p=6) update, so caching the rest
         turns each likelihood evaluation into one 107x6 matmul plus a Cholesky. Measured on the
         n=695 row-level version this is 20.2 -> 6.55 ms/eval, i.e. 5.4 h -> 1.75 h of MCMC.
+
+        Without the offset (offset_in_fit=False) K_delta is left out. target='depth' keeps the
+        row-level B = D + sigma_trunc^2 + S_model instead, with its inverse Cholesky factor.
         """
         if not getattr(self, '_rows_ok', False):
             self._Sigma_base = None
@@ -407,7 +434,30 @@ class BayesianCalibrator:
         trunc = getattr(self.emulator, 'truncation_variance', lambda: 0.0)()
         D = np.diag(self._row_sigma_obs2 + trunc)
         M = D + self._row_model_covariance()
-        self._Sigma_base = self._K_delta + self._A @ M @ self._A.T
+        if self.target == 'depth':
+            self._build_depth_base(M)
+        elif self.offset_in_fit:
+            self._Sigma_base = self._K_delta + self._A @ M @ self._A.T
+        else:
+            self._Sigma_base = self._A @ M @ self._A.T
+
+    def _build_depth_base(self, B):
+        """Cache B (rows), its log-determinant and the sparse block-diagonal inverse of its
+        Cholesky factor, one block per entity (rows are contiguous by entity)."""
+        from scipy.linalg import solve_triangular
+        from scipy.sparse import block_diag
+
+        if np.any(np.diff(self._row_entity) < 0):
+            raise RuntimeError('depth rows are not grouped by entity')
+        blocks, logdet = [], 0.0
+        for k in range(len(self._calib_glacier_names)):
+            i = np.flatnonzero(self._row_entity == k)
+            C = np.linalg.cholesky(B[np.ix_(i, i)])
+            blocks.append(solve_triangular(C, np.eye(len(i)), lower=True))
+            logdet += 2.0 * float(np.sum(np.log(np.diag(C))))
+        self._Sigma_base = B
+        self._B_inv_chol = block_diag(blocks, format='csr')
+        self._B_logdet = logdet
 
     # ── KO log-posterior ─────────────────────────────────────────────────────────────
     def residual_and_covariance(self, theta):
@@ -415,8 +465,15 @@ class BayesianCalibrator:
 
         Exposed so the calibration diagnostic (mahalanobis_per_dof) scores the SAME quantities the
         sampler does, rather than a reconstruction that could drift out of step with it.
+
+        target='depth': one row per depth bin, Sigma built in full (log_likelihood uses the
+        equivalent Woodbury form, _depth_terms).
         """
-        if self._K_delta is None:
+        if self.target == 'depth':
+            mean, L = self.emulator.predict_factor(theta)
+            L_rows = L[self._row_emu_idx]
+            return self._row_obs - mean[self._row_emu_idx], self._Sigma_base + L_rows @ L_rows.T
+        if self._K_delta is None and self.offset_in_fit:
             raise RuntimeError('call fit_discrepancy() before log_likelihood()/run_mcmc()')
         if getattr(self, '_rows_ok', False) and self.use_emulator_factor \
                 and self._Sigma_base is not None:
@@ -427,9 +484,34 @@ class BayesianCalibrator:
             return residual, Sigma
         # legacy path: diagonal emulator variance, no model-error term (pre-2026-08-20).
         residual, sigma_obs2, sigma_emu2 = self.compute_glacier_residuals(theta)
+        if not self.offset_in_fit:
+            return residual, np.diag(sigma_obs2 + sigma_emu2)
         return residual, self._K_delta + np.diag(sigma_obs2 + sigma_emu2)
 
+    def _depth_terms(self, theta):
+        """(r^T Sigma^-1 r, log det Sigma, n) for target='depth' by Woodbury: Sigma = B + L L^T,
+        B fixed (inverse Cholesky factor cached), L the emulator's rank-p factor at theta."""
+        from scipy.linalg import cho_factor, cho_solve
+
+        mean, L = self.emulator.predict_factor(theta)
+        r = self._row_obs - mean[self._row_emu_idx]
+        L_rows = L[self._row_emu_idx]
+        if not (np.isfinite(r).all() and np.isfinite(L_rows).all()):
+            return np.nan, np.nan, len(r)
+        w = self._B_inv_chol @ r
+        W = self._B_inv_chol @ L_rows
+        b = W.T @ w
+        c = cho_factor(np.eye(W.shape[1]) + W.T @ W, lower=True)
+        quad = float(w @ w - b @ cho_solve(c, b))
+        logdet = self._B_logdet + 2.0 * float(np.sum(np.log(np.diag(c[0]))))
+        return quad, logdet, len(r)
+
     def log_likelihood(self, theta):
+        if self.target == 'depth':
+            quad, logdet, n = self._depth_terms(theta)
+            if not np.isfinite(quad):
+                return -np.inf
+            return -0.5 * (quad + logdet + n * np.log(2 * np.pi))
         residual, Sigma = self.residual_and_covariance(theta)
         return _gaussian_logpdf(residual, Sigma)
 
@@ -445,6 +527,9 @@ class BayesianCalibrator:
         adoption gates on this -- see adoption.MAHALANOBIS_BOUNDS.
         """
         from scipy.linalg import cho_factor, cho_solve
+        if self.target == 'depth':
+            quad, _, n = self._depth_terms(theta)
+            return float(quad / n)
         residual, Sigma = self.residual_and_covariance(theta)
         if not np.isfinite(Sigma).all():
             return float('nan')
@@ -611,7 +696,7 @@ class BayesianCalibrator:
         """
         import emcee
 
-        if self._K_delta is None:
+        if self.offset_in_fit and self._K_delta is None:
             self.fit_discrepancy()
 
         rng = np.random.default_rng(seed)
