@@ -18,6 +18,8 @@ in `rescored/alps_s2_step5/` (`rematch_ensemble.py`).
 | `surface_diag.py`, `surface_grids.py` | log-posterior on a grid: T1, T2 on the emulator mean, T2 with E varying; `surface_grids.npz` feeds the figure `ch07_posteriors` | |
 | `heldout_noE.py` | the held-out test with the fits on the emulator mean only | |
 | `pipeline_e2e.py` | `CalibrationPipeline.calibrate` and `validate_and_writeback` end to end (short MCMC) | |
+| `pipeline_e2e_stage2.py` | the two-stage flow with the defaults of 2026-10-12 (fit on the emulator mean, agreement check, stage-2 design) | |
+| `deep_layer.py` | RMSE below the seasonal layer (> 15 m): real runs, held-out fits on all depths and on the deep points only | |
 
 Run from the repository root with the project's Python environment, e.g.
 `PYTHONPATH=src python scripts/icetemp_analysis/step5b/check_depth.py`.

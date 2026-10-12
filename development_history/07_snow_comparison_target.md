@@ -655,6 +655,34 @@ The run at the prior mean (f_ref 0.55, f_ins 1.0) scores 2.12 °C held out.
 
 How the campaign deals with both is open (below).
 
+### Below the seasonal layer
+
+Would it be enough for the model to predict the ice temperature below the seasonal layer, about
+15 m deep? The same data answer it (2026-10-12; `scripts/icetemp_analysis/step5b/deep_layer.py`):
+419 of the 723 fitted points lie deeper than 15 m.
+
+| RMSE on the points deeper than 15 m | in-sample | held out, one glacier system at a time |
+|---|---|---|
+| best real run (design 13) | 1.70 °C | — |
+| run at the prior mean | 1.72 °C | 1.72 °C |
+| T2, fitted on all depths | 1.78 °C | 1.84 °C |
+| T2, fitted on the deep points only | 1.72 °C | 1.83 °C |
+| T1, fitted on the deep points only | 1.72 °C | 1.81 °C |
+
+For comparison, the best run scores 2.59 °C in the top 15 m and 2.12 °C on all points.
+
+- **Below 15 m the model is better than above** (1.70 against 2.59 °C in the best run; 1.52–1.55 °C
+  below 20 m), but **no parameter set gets below about 1.7 °C** there: fitted to the deep points
+  alone, both targets stop at 1.72 °C.
+- **Most of the deep error is the Monte Rosa firn area** (113 points between 3000 and 4400 m, 63 %
+  of the squared error, RMSE 2.6 °C with almost no mean bias: some sites too warm, others too cold).
+  Across the 29 runs Monte Rosa's deep RMSE never falls below 2.0 °C. Elsewhere it is 1.2–1.3 °C
+  (Tête Rousse, Bossons, the Monte Rosa tongues), 0.5 °C at Hohsaas.
+- **The deep points cannot tell f_ref and f_ins apart** (T2: correlation 0.78, f_ins spread 0.55):
+  below the seasonal layer both only shift the long-term mean temperature.
+- **Hintereisferner has no reading below 15 m, Corvatsch only three**, so a deep-only target would
+  not see the two glaciers the model fits worst near the surface.
+
 ## What is still open
 
 - **How the emulator's uncertainty enters the T2 likelihood** (a decision before the campaign). As
