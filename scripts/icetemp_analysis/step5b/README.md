@@ -23,3 +23,6 @@ in `rescored/alps_s2_step5/` (`rematch_ensemble.py`).
 
 Run from the repository root with the project's Python environment, e.g.
 `PYTHONPATH=src python scripts/icetemp_analysis/step5b/check_depth.py`.
+
+The full-set check of the same question (2026-10-12) is in `scripts/icetemp_analysis/full_set_runs.py`
+(two GloGEM runs on all 24 calibration glaciers, run_tag `ce25_pred`) and `full_set_score.py`.

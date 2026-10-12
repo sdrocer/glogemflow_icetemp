@@ -683,6 +683,31 @@ For comparison, the best run scores 2.59 °C in the top 15 m and 2.12 °C on all
 - **Hintereisferner has no reading below 15 m, Corvatsch only three**, so a deep-only target would
   not see the two glaciers the model fits worst near the surface.
 
+**On all calibration glaciers.** Two real GloGEM runs on the whole calibration set (24 glaciers, 111
+entities; `full_set_runs.py`, 26 min each), one at the prior mean and one at the T2 calibration of
+the 7 test glaciers (f_ref 0.35, f_ins 0.79), test the prediction on glaciers no fit has seen
+(`full_set_score.py`). RMSE below 15 m:
+
+| points deeper than 15 m | points | prior mean | T2 calibration |
+|---|---|---|---|
+| the 7 test glaciers (T2 was fitted there) | 427 | 1.71 °C | 1.81 °C |
+| the 13 other glaciers with deep readings | 167 | 3.91 °C | 3.63 °C |
+| … without Mont Blanc | 165 | 3.54 °C | 3.21 °C |
+| … without Mont Blanc and Taconnaz | 98 | 2.01 °C | 1.81 °C |
+| median of the 13 glaciers' own RMSE | | 1.95 °C | 1.66 °C |
+
+- **Two sites carry the large errors, both cold firn the model makes far too warm.** On Taconnaz
+  (67 points) the model holds the firn at 3400–3800 m at the melting point down to 110 m, where the
+  boreholes find −3 to −9 °C; at 4000–4100 m it is 2–3 °C too warm, and only above 4200 m does it
+  fit. The pattern is Tête Rousse's warm bias, larger; the suspect is the meltwater depth of the
+  Herron–Langway stage 1 (multiplied by the accumulation rate, deferred in the plan of 30 September).
+  At the Mont Blanc summit (2 points, −14 to −17 °C measured) the model is at 0 °C: the boreholes
+  sit above the model glacier's top band (4735 m), and the glacier's mass-balance calibration carries
+  a temperature offset of +8.4 °C, which also warms the thermal surface.
+- **Elsewhere the prediction is about as good as on the test glaciers** (1.8–2.0 °C), and the T2
+  calibration of the 7 test glaciers predicts the new glaciers better than the prior mean (median
+  1.66 against 1.95 °C), unlike on the test glaciers themselves.
+
 ## What is still open
 
 - **How the emulator's uncertainty enters the T2 likelihood** (a decision before the campaign). As
