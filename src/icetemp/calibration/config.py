@@ -43,7 +43,9 @@ class CalibrationConfig:
     # parameters, meaning the likelihood wants to go below the parameterisation. Widening
     # locates the unconstrained optimum. Safe to sample because the training override path does
     # not re-clip (apply_firnicetemp_calibration.pro assigns directly). See priors.Priors.
-    bounds_override: dict = None
+    # Default: refreeze_frac from 0.1 (below it Tete Rousse sits at the melting point and the
+    # emulator's error estimate breaks, Step 5a). A yaml value replaces the whole dict.
+    bounds_override: dict = field(default_factory=lambda: {'refreeze_frac': [0.1, 1.0]})
 
     # -- design / training ----------------------------------------------------------------
     # 'y' runs GloGEM's thermal spin-up in the training runs: the deep ice the boreholes sample
@@ -65,7 +67,7 @@ class CalibrationConfig:
     write_velocity: str = 'n'   # dump the applied velocity field for train/apply checks
     n_design_points: int = 100
     design_seed: int = 42
-    explained_variance: float = 0.99
+    explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)
     # Launch IDL training runs over ssh on this host instead of locally -- pick an idle
     # machine (e.g. 'vierzack03', 'vierzack06') to avoid contending with other GloGEM work.
     # Confirmed empirically: identical config went from never finishing (days, CPU
@@ -79,6 +81,17 @@ class CalibrationConfig:
     # [3.3, 4.2], theta-independent within-entity floor 2.25-3.81).
     s_model_variance: float = 3.5
     s_model_length_m: float = 15.0
+
+    # -- calibration target (Step 5, chosen 2026-10-12) ------------------------------------
+    # 'depth': one misfit per 1 m depth bin, the per-entity offset estimated after the fit (T2);
+    # 'entity': one weighted mean per entity with the offset inside the fit (campaigns before).
+    target: str = 'depth'
+    # held at these values (name -> value) in the design, the emulator and the fit
+    fixed_params: dict = field(default_factory=lambda: {'advection_scale': 1.0})
+    # rules in data.FIT_EXCLUSIONS: these points are scored apart, not fitted
+    fit_exclusions: list = field(default_factory=lambda: ['colle_gnifetti_below_40m'])
+    # adoption: held-out RMSE may exceed the entity-target calibration's (T1) by this much [degC]
+    rmse_margin: float = 0.10
 
     # -- MCMC --------------------------------------------------------------------------
     n_walkers: int = 32
@@ -138,6 +151,14 @@ class CalibrationConfig:
     @property
     def loo_results_path(self):
         return self.output_path / 'loo_results.csv'
+
+    @property
+    def heldout_points_path(self):
+        return self.output_path / 'heldout_points.csv'
+
+    @property
+    def heldout_folds_path(self):
+        return self.output_path / 'heldout_folds.csv'
 
     @property
     def residual_file_path(self):

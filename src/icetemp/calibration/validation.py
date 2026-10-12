@@ -26,6 +26,10 @@ the analytical C&P surrogate (physics.cp_model_single, depth-capped exactly like
 grid search -- see SURROGATE_MAX_DEPTH) and via the emulator, the parameter a model lacks held at
 its IDL default (as_surrogate_theta / as_emulator_theta), and scored by RMSE against the glacier's
 own held-out observations.
+
+Adoption (Step 5b) is judged by run_parameters instead: the calibrated parameters alone (no
+offset), through the emulator, one glacier system per fold, against the prior mean and the
+entity-target calibration (T1). The comparison above is still reported, with the classification.
 """
 
 from dataclasses import dataclass, field
@@ -41,6 +45,10 @@ from .data import glacier_systems
 from .discrepancy import Discrepancy, latlon_to_xyz
 from .emulator import BASAL
 from .physics import cp_model_single, rmse, IDL_DEFAULTS, Z0_FIRN_DEFAULT
+from .priors import PARAM_NAMES
+
+# RGI7 ids of the seven test glaciers of Steps 0-5a (CentralEurope)
+STEP5A_GLACIER_IDS = ('00773', '00777', '01112', '01225', '01230', '02103', '03116')
 
 
 def as_surrogate_theta(method, theta):
@@ -190,6 +198,28 @@ class Validator:
         theta = (pf0 + row['delta_pf'], ds0 + row['delta_ds'], z0 + row['delta_z0'])
         return theta
 
+    def _fold_calibrator(self, glaciers, **overrides):
+        """A calibrator with self.calibrator's settings (target, offset, error model, fixed
+        parameters, points left out of the fit), on `glaciers` only."""
+        c = self.calibrator
+        kwargs = dict(emulator=c.emulator, glaciers=glaciers, priors=c.priors, track='depth',
+                      target=c.target, offset_in_fit=c.offset_in_fit, fit_exclude=c.fit_exclude,
+                      fixed_params=c.fixed_params, s_model_variance=c.s_model_variance,
+                      s_model_length_m=c.s_model_length_m, use_elevation=c.use_elevation,
+                      use_emulator_factor=c.use_emulator_factor)
+        kwargs.update(overrides)
+        return c.__class__(**kwargs)
+
+    @staticmethod
+    def _fit_theta(calib, mode='map'):
+        """theta of one fold: posterior mode (multi-start), or the mean of a short MCMC."""
+        if calib.offset_in_fit:
+            calib.fit_discrepancy()
+        if mode == 'mcmc':
+            _, flat = calib.run_mcmc(n_walkers=16, n_steps=500, burn_in=150, thin=2)
+            return flat.mean(axis=0)
+        return calib.find_map()
+
     def _ko_fold(self, held_out_name, mode='map'):
         held_out_glacier = self._by_name[held_out_name]
         base = self._base[held_out_name]
@@ -208,26 +238,12 @@ class Validator:
         # rows comparing the model's own thickness-capped node against a much deeper real
         # borehole reading drag theta to a prior bound, confirmed to score ~23,000
         # log-posterior units worse than the true Track-1-only optimum under Track-1-only data.
-        # INHERIT the parent's covariance settings. These are dataclass fields with defaults, so
-        # omitting them silently gave every LOO fold the DEFAULT model-error amplitude regardless
-        # of what the campaign was configured with -- which would make an s_model_variance
-        # sensitivity arm compare a 2.3 main fit against 3.5 folds and report the difference as a
-        # finding. Caught before the first sensitivity run, 2026-08-20.
-        calib = self.calibrator.__class__(
-            emulator=self.calibrator.emulator, glaciers=other_glaciers, priors=self.calibrator.priors,
-            track='depth', fixed_params=self.calibrator.fixed_params,
-            s_model_variance=self.calibrator.s_model_variance,
-            s_model_length_m=self.calibrator.s_model_length_m,
-            use_elevation=self.calibrator.use_elevation,
-            use_emulator_factor=self.calibrator.use_emulator_factor,
-        )
-        calib.fit_discrepancy()
-
-        if mode == 'mcmc':
-            _, flat = calib.run_mcmc(n_walkers=16, n_steps=500, burn_in=150, thin=2)
-            theta_hat = flat.mean(axis=0)
-        else:
-            theta_hat = calib.find_map()
+        # INHERIT the parent's covariance settings (see _fold_calibrator): omitting them once gave
+        # every LOO fold the DEFAULT model-error amplitude regardless of the campaign's.
+        calib = self._fold_calibrator(other_glaciers)
+        theta_hat = self._fit_theta(calib, mode)
+        if not calib.offset_in_fit:
+            calib.fit_discrepancy(theta_hat)   # the offset, estimated after the fit
 
         # delta(x) at the held-out location, from the discrepancy GP already fit on the
         # OTHER glaciers' temperature residuals
@@ -399,6 +415,93 @@ class Validator:
             rows.append(row)
 
         return pd.DataFrame(rows)
+
+    def run_parameters(self, mode='map'):
+        """Held-out test of the PARAMETERS ALONE through the emulator, one glacier system per fold
+        (Step 5b): theta fit with this calibrator's target on the other systems ('ko'), with the
+        entity target without the offset ('t1', Step 5a's T1), and the prior mean ('prior').
+
+        Returns (points, folds): one row per held-out depth point with the three predictions
+        (`excluded` marks points left out of the fit, scored apart), and one row per fold with
+        each method's theta and its distance to the training design."""
+        cal = self.calibrator
+        emu = cal.emulator
+        x_used = emu.x_index_used()
+        prior = cal.priors.as_dict()
+        theta_prior = cal._expand_theta([prior[n].mean() for n in cal._free_param_names()])
+        excluded = cal.fit_exclude or frozenset()
+        max_dist = getattr(emu, 'max_trusted_distance_', None)
+        points, folds = [], []
+        for system in sorted(set(self._base.values())):
+            held = {g.glacier_name: g for g in self.glaciers if self._base[g.glacier_name] == system}
+            train = [g for g in self.glaciers if self._base[g.glacier_name] != system]
+            thetas = {'ko': self._fit_theta(self._fold_calibrator(train), mode),
+                      't1': self._fit_theta(self._fold_calibrator(train, target='entity',
+                                                                  offset_in_fit=False), mode),
+                      'prior': theta_prior}
+            fold = dict(system=system, n_entities=len(held))
+            preds = {}
+            for m, th in thetas.items():
+                preds[m] = emu.predict(np.atleast_2d(th))[0][0]
+                nn = float(emu._nn_distance(np.atleast_2d(th))[0])
+                fold.update({f'{m}_{n}': float(v) for n, v in zip(PARAM_NAMES, th)})
+                fold[f'{m}_nn_dist'] = nn
+                fold[f'{m}_in_design'] = None if max_dist is None else bool(nn <= max_dist)
+            n_points = 0
+            for row, (gname, depth) in enumerate(x_used):
+                g = held.get(gname)
+                if g is None or depth == BASAL:
+                    continue
+                k = int(np.argmin(np.abs(g.depths - depth)))
+                rec = dict(system=system, entity=gname, glacier_id=g.glacier_id, depth=float(depth),
+                           obs=float(g.T_obs[k]), excluded=(gname, depth) in excluded)
+                rec.update({f'pred_{m}': float(p[row]) for m, p in preds.items()})
+                points.append(rec)
+                n_points += 1
+            fold['n_points'] = n_points
+            folds.append(fold)
+        return pd.DataFrame(points), pd.DataFrame(folds)
+
+    def parameters_summary(self, points, folds, margin=0.10):
+        """Pooled held-out RMSE of each method over the fitted points (points left out of the fit
+        and the glaciers outside Step 5a reported apart), per system, and the RMSE rule: the
+        calibration must beat the prior mean and stay within `margin` of the T1 calibration.
+        Returns (text, pooled RMSE per method, rule passed)."""
+        methods = ('ko', 't1', 'prior')
+
+        def rmse_of(df):
+            return {m: float(np.sqrt(np.mean((df[f'pred_{m}'] - df['obs']) ** 2))) if len(df)
+                    else float('nan') for m in methods}
+
+        fit = points[~points['excluded']]
+        pooled = rmse_of(fit)
+        ok = bool(pooled['ko'] < pooled['prior'] and pooled['ko'] <= pooled['t1'] + margin)
+        target = self.calibrator.target
+        lines = [f"Held-out RMSE of the parameters alone, through the emulator, one glacier system "
+                 f"per fold ({len(folds)} folds, {len(fit)} points):",
+                 f"  calibration ({target} target): {pooled['ko']:.3f} degC",
+                 f"  T1 (entity target, no offset): {pooled['t1']:.3f} degC",
+                 f"  prior mean:                    {pooled['prior']:.3f} degC",
+                 f"  rule (beat the prior mean; within {margin:.2f} degC of T1): "
+                 f"{'PASS' if ok else 'FAIL'}"]
+        subsets = [('glaciers outside Step 5a', fit[~fit['glacier_id'].isin(STEP5A_GLACIER_IDS)]),
+                   ('points left out of the fit', points[points['excluded']])]
+        for name, df in subsets:
+            if len(df):
+                r = rmse_of(df)
+                lines.append(f"  {name} ({len(df)} points): calibration {r['ko']:.3f}, "
+                             f"T1 {r['t1']:.3f}, prior {r['prior']:.3f} degC")
+        lines.append('  per system (points; calibration / T1 / prior, degC):')
+        for system, df in fit.groupby('system'):
+            r = rmse_of(df)
+            lines.append(f"    {system[:48]:48s} {len(df):5d}  {r['ko']:.2f} / {r['t1']:.2f} / "
+                         f"{r['prior']:.2f}")
+        for m in ('ko', 't1'):
+            n_out = int((folds[f'{m}_in_design'] == False).sum())  # noqa: E712 (None-safe)
+            if n_out:
+                lines.append(f"  caveat: {m} theta outside the emulator's trusted design region "
+                             f"in {n_out}/{len(folds)} folds")
+        return '\n'.join(lines) + '\n', pooled, ok
 
     def summary(self, results):
         means = {m: results[f'rmse_{m}'].mean() for m in ('tier2', 'knn', 'ko')}

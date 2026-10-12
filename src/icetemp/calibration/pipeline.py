@@ -15,8 +15,9 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from . import adoption
 from .config import CalibrationConfig
-from .data import DataHandler
+from .data import DataHandler, fit_exclusions
 from .priors import Priors, PARAM_NAMES
 from .design import DesignSampler
 from .runner import GloGEMRunner
@@ -59,7 +60,8 @@ class CalibrationPipeline:
 
     def build_design(self):
         self.priors = Priors(bounds_override=self.config.bounds_override)
-        sampler = DesignSampler(priors=self.priors, seed=self.config.design_seed)
+        sampler = DesignSampler(priors=self.priors, seed=self.config.design_seed,
+                                fixed_params=self.config.fixed_params)
         design_df = sampler.sample_df(self.config.n_design_points)
         design_df.to_csv(self.config.design_path, index=False)
         self.design = design_df.to_numpy()
@@ -133,7 +135,7 @@ class CalibrationPipeline:
         # Exclude any held-fixed parameter's (constant) column from the GP -- see
         # Emulator.active_params for why a constant column is fatal and why jitter is not an
         # acceptable workaround.
-        fixed = self.FIXED_PARAMS or {}
+        fixed = self.config.fixed_params or {}
         active = tuple(i for i, n in enumerate(PARAM_NAMES) if n not in fixed)
         self.emulator = Emulator(
             glaciers=self._calibration_glaciers(), explained_variance=self.config.explained_variance,
@@ -153,9 +155,19 @@ class CalibrationPipeline:
         return self.emulator
 
     # -- 04_calibrate --------------------------------------------------------------------
-    # Parameters held fixed (name -> value, names from PARAM_NAMES); empty = calibrate all three
-    # (refreeze_frac, insul_scale, advection_scale), matching the training design.
-    FIXED_PARAMS = {}
+    def make_calibrator(self, **overrides):
+        """BayesianCalibrator as configured: depth rows, target, fixed parameters, model error and
+        the points left out of the fit. Steps 4 and 5 both build theirs here, so they agree."""
+        if self.priors is None:
+            self.priors = Priors(bounds_override=self.config.bounds_override)
+        glaciers = self._calibration_glaciers()
+        kwargs = dict(emulator=self.emulator, glaciers=glaciers, priors=self.priors, track='depth',
+                      target=self.config.target, fixed_params=self.config.fixed_params,
+                      fit_exclude=fit_exclusions(glaciers, self.config.fit_exclusions),
+                      s_model_variance=self.config.s_model_variance,
+                      s_model_length_m=self.config.s_model_length_m)
+        kwargs.update(overrides)
+        return BayesianCalibrator(**kwargs)
 
     def calibrate(self):
         """Fits theta from Track-1 (depth) rows only -- see calibrator.BayesianCalibrator's
@@ -169,15 +181,12 @@ class CalibrationPipeline:
         rejects. Track-2 is still evaluated afterwards (calibrate_basal_diagnostic), just never
         allowed to influence theta.
         """
-        if self.priors is None:
-            self.priors = Priors(bounds_override=self.config.bounds_override)
-        self.calibrator = BayesianCalibrator(
-            emulator=self.emulator, glaciers=self._calibration_glaciers(), priors=self.priors,
-            track='depth', fixed_params=self.FIXED_PARAMS,
-            s_model_variance=self.config.s_model_variance,
-            s_model_length_m=self.config.s_model_length_m,
-        )
-        self.calibrator.fit_discrepancy()
+        self.calibrator = self.make_calibrator()
+        n_out = len(self.calibrator.fit_exclude or ())
+        print(f'target={self.calibrator.target}: {len(self.calibrator._calib_glacier_names)} entities'
+              + (f', {n_out} points left out of the fit ({self.config.fit_exclusions})' if n_out else ''))
+        if self.calibrator.offset_in_fit:
+            self.calibrator.fit_discrepancy()
 
         # INDEPENDENT coarse grid BEFORE sampling. Campaign 7 reported r_hat 1.00 / ESS 15533
         # while its mode sat 223 log-units below a gate-accepted grid point -- R-hat says the
@@ -206,8 +215,8 @@ class CalibrationPipeline:
         self._write_diagnostics(summary, tau, grid_theta=grid_theta, grid_lp=grid_lp,
                                  mode_gap=mode_gap, mahalanobis=mahalanobis)
         free = self.calibrator._free_param_names()
-        fixed_desc = ', '.join(f'{k}={v}' for k, v in (self.FIXED_PARAMS or {}).items()) or 'none'
-        print(f'fixed (not calibrated): {fixed_desc} -- see FIXED_PARAMS docstring')
+        fixed_desc = ', '.join(f'{k}={v}' for k, v in (self.config.fixed_params or {}).items()) or 'none'
+        print(f'fixed (not calibrated): {fixed_desc}')
         cols = [PARAM_NAMES.index(n) for n in free]
         prior_std = self.priors.rvs(size=5000, random_state=0).std(axis=0)
         print(f'posterior std {free}:  {flat[:, cols].std(axis=0)}')
@@ -286,20 +295,35 @@ class CalibrationPipeline:
     # -- 05_validate_and_writeback --------------------------------------------------------
     def validate_and_writeback(self):
         glaciers = self._calibration_glaciers()
+        theta_hat = self.flat_samples.mean(axis=0)
         self.calib_df = grid_search_all(glaciers)
         self.validator = Validator(glaciers=glaciers, calib_df=self.calib_df, calibrator=self.calibrator)
+
+        # ADOPTION (Step 5b): the parameters alone through the emulator, one glacier system per
+        # fold, and the gate on the sampling (R-hat, grid agreement, misfit ratio, nearby runs).
+        points, folds = self.validator.run_parameters(mode=self.config.loo_mode)
+        points.to_csv(self.config.heldout_points_path, index=False)
+        folds.to_csv(self.config.heldout_folds_path, index=False)
+        text, pooled, rmse_ok = self.validator.parameters_summary(points, folds,
+                                                                  margin=self.config.rmse_margin)
+        print(text)
+        diag = self._read_diagnostics()
+        gate = adoption.check_gate(self.emulator, theta_hat, r_hat_max=diag.get('r_hat_max'),
+                                   mahalanobis=diag.get('mahalanobis_per_dof'),
+                                   mode_gap=diag.get('mode_gap'))
+        adopt = gate.passed and rmse_ok
+        print(gate.describe())
+        print(f"=> {'ADOPT' if adopt else 'DO NOT ADOPT'} theta = "
+              f"{np.round(theta_hat, 4).tolist()} (posterior mean)"
+              + ('' if adopt else '; because: ' + '; '.join(
+                  gate.reasons + ([] if rmse_ok else ['held-out RMSE rule failed']))))
+
+        # As before, for context: the baselines with the per-entity offset, and the separate
+        # verdict for the polythermal-classification deliverable (see adoption.py).
         results = self.validator.run(mode=self.config.loo_mode)
         results.to_csv(self.config.loo_results_path, index=False)
-        text, means, adopt = self.validator.summary(results)
+        text, means, _ = self.validator.summary(results)
         print(text)
-
-        theta_hat = self.flat_samples.mean(axis=0)
-
-        # Second, independent verdict for the polythermal-classification deliverable (see
-        # adoption.py). Deliberately not merged into `adopt` above: the two answer different
-        # questions, and a fit can legitimately fail one while passing the other -- confirmed
-        # empirically on the 245-point campaign (worst on RMSE, best on classification).
-        diag = self._read_diagnostics()
         class_text, _ = self.validator.classification_summary(
             results, theta_hat, r_hat_max=diag.get('r_hat_max'),
             mahalanobis=diag.get('mahalanobis_per_dof'), mode_gap=diag.get('mode_gap'),
@@ -308,10 +332,10 @@ class CalibrationPipeline:
         self.writer = ResidualWriter(calibrator=self.calibrator, theta_hat=theta_hat)
         n = self.writer.write(self.data_handler.prediction_glaciers, self.config.residual_file_path)
         print(f'wrote {n} glaciers -> {self.config.residual_file_path}')
-        if not adopt:
-            print(
-                'DECISION RULE: KO did not beat both baselines on LOO RMSE -- residual file '
-                'written for inspection, but do NOT point firnice_temp_calib_bayes_file at it '
-                'without review (see config_centraleurope_glenglat_bayes.pro).'
-            )
-        return results, means, adopt
+        if adopt:
+            print('Before pointing firnice_temp_calib_bayes_file at it: confirm the pooled RMSE '
+                  'with one real GloGEM run at theta.')
+        else:
+            print('DECISION RULE: not adopted -- residual file written for inspection, but do NOT '
+                  'point firnice_temp_calib_bayes_file at it (see config_centraleurope_glenglat_bayes.pro).')
+        return points, pooled, adopt

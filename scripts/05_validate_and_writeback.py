@@ -6,10 +6,11 @@ Usage:
     python scripts/05_validate_and_writeback.py [config.yaml]
 
 Requires scripts/04_calibrate.py to have completed (reads posterior_samples.csv via
-pipeline.flat_samples, and emulator.pkl). Writes {output_dir}/loo_results.csv and the
+pipeline.flat_samples, and emulator.pkl). Writes {output_dir}/heldout_points.csv,
+heldout_folds.csv (the adoption test), loo_results.csv and the
 firnicetemp_calibration_*_bayes_residual.dat file GloGEM's read_firnicetemp_calibration_
 bayes.pro consumes -- ONLY point firnice_temp_calib_bayes_file at it if the decision rule
-printed below says ADOPT.
+printed below says ADOPT and one real GloGEM run at the adopted theta confirms it.
 """
 
 import sys
@@ -32,32 +33,17 @@ def main():
     if not config.posterior_path.exists():
         raise SystemExit(f'{config.posterior_path} not found -- run scripts/04_calibrate.py first.')
 
-    from icetemp.calibration.calibrator import BayesianCalibrator
-    from icetemp.calibration.priors import Priors
-    # must honour the same bounds the posterior was sampled under -- step 5 reconstructs the
-    # calibrator, and a Priors() with default bounds would reject sub-floor posterior samples
-    # as -inf when a bounds_override was used in step 4.
-    pipeline.priors = Priors(bounds_override=config.bounds_override)
-    pipeline.calibrator = BayesianCalibrator(
-        emulator=pipeline.emulator, glaciers=pipeline._calibration_glaciers(), priors=pipeline.priors,
-        track='depth',  # must match pipeline.calibrate()'s fitting track -- theta in
-                        # posterior_samples.csv was fit from Track-1 rows only (see
-                        # calibrator.BayesianCalibrator's `track` docstring), so LOO/writeback
-                        # must evaluate discrepancy/residuals through the same track or theta
-                        # and delta(x) would be silently inconsistent with each other.
-        fixed_params=CalibrationPipeline.FIXED_PARAMS,  # must also match step 4
-        # Must ALSO match step 4's covariance, for the same reason. Until 2026-08-31 these were
-        # omitted, so step 5 silently rebuilt the calibrator at the DEFAULTS regardless of config:
-        # the s_model_variance sensitivity arms {2.3, 3.5, 5.0} therefore produced BYTE-IDENTICAL
-        # loo_results.csv (md5 ef05b5d71ad5c03b40ccbd2dcf3a1984), which was misread as evidence
-        # that the result is insensitive to the choice. It was evidence of this bug.
-        s_model_variance=config.s_model_variance,
-        s_model_length_m=config.s_model_length_m,
-    )
-    pipeline.calibrator.fit_discrepancy()
+    # Built exactly as step 4 builds it (pipeline.make_calibrator: target, fixed parameters,
+    # prior bounds, model error, points left out of the fit). Until 2026-08-31 step 5 rebuilt it
+    # with defaults instead of the configured covariance, so the s_model_variance sensitivity arms
+    # {2.3, 3.5, 5.0} produced BYTE-IDENTICAL loo_results.csv (md5 ef05b5d71ad5c03b40ccbd2dcf3a1984),
+    # which was misread as evidence that the result is insensitive to the choice.
+    pipeline.calibrator = pipeline.make_calibrator()
+    if pipeline.calibrator.offset_in_fit:
+        pipeline.calibrator.fit_discrepancy()
     pipeline.flat_samples = pd.read_csv(config.posterior_path)[list(PARAM_NAMES)].to_numpy()
 
-    results, means, adopt = pipeline.validate_and_writeback()
+    points, pooled, adopt = pipeline.validate_and_writeback()
 
 
 if __name__ == '__main__':
