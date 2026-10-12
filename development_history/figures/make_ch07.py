@@ -9,6 +9,9 @@ ch07_runs_rmse: pooled RMSE of each of the 32 design points in alps_r7 (re-match
 2f603aa) and alps_s2 (snow fix), on the 769 common points; numbers from the Step 4 table of
 scripts/icetemp_analysis/score_paired_ensembles.py (icetemp c9af84f), section "Every paired design point".
 ch07_timing, ch07_snow_gap: schematics.
+ch07_posteriors: log-posterior grids of (f_ref, f_ins) on alps_s2 with the entity target (T1, no
+offset) and the depth target (T2), on the emulator mean and with its uncertainty varying; written by
+the Step-5b check surface_grids.py (scratch file SURFACE_GRIDS, see chapter 7's sources).
 """
 import sys
 from pathlib import Path
@@ -46,6 +49,9 @@ RUNS_RMSE = [(0, 2.386, 2.220), (1, 2.491, 2.306), (2, 2.521, 2.349), (3, 2.347,
              (20, 3.715, 3.583), (21, 2.944, 2.773), (22, 2.882, 2.721), (23, 2.583, 2.402),
              (24, 2.884, 2.752), (25, 2.525, 2.353), (26, 2.452, 2.318), (27, 2.684, 2.524),
              (28, 2.635, 2.482), (29, 3.067, 2.914), (30, 3.481, 3.322), (31, 2.615, 2.432)]
+
+
+SURFACE_GRIDS = Path('/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/step5b/surface_grids.npz')
 
 
 def save(fig, name):
@@ -297,10 +303,58 @@ def fig_snow_gap():
     save(fig, 'ch07_snow_gap')
 
 
+def hpd_levels(lp, mask, probs=(0.5, 0.9)):
+    """Posterior density thresholds enclosing `probs` of the mass on the grid (inside `mask`)."""
+    w = np.where(mask, np.exp(lp - lp[mask].max()), 0.0)
+    w = w / w.sum()
+    order = np.sort(w.ravel())[::-1]
+    cum = np.cumsum(order)
+    return w, sorted(order[np.searchsorted(cum, p)] for p in probs)
+
+
+def fig_posteriors():
+    """Grid posteriors of (f_ref, f_ins) on alps_s2: T1, T2 on the emulator mean, T2 with the
+    emulator's uncertainty varying; design runs and the region the calibrator accepts."""
+    d = np.load(SURFACE_GRIDS)
+    fr, fi = d['fr'], d['fi']
+    F, I = np.meshgrid(fr, fi, indexing='ij')
+    allowed = ((d['nn'] <= d['trusted']) & (F >= d['lo'][0]) & (F <= d['hi'][0])
+               & (I >= d['lo'][1]) & (I <= d['hi'][1]))
+    fig, ax = plt.subplots(figsize=(8.5, 5.8), facecolor=SURFACE)
+    style(ax)
+    ax.contour(F, I, allowed.astype(float), levels=[0.5], colors=[INK2], linewidths=0.8,
+               linestyles=':')
+    keep = d['design'][:, 0] >= 0.1
+    ax.scatter(d['design'][keep, 0], d['design'][keep, 1], s=22, color=NEUTRAL, zorder=2)
+    for name, color, ls in (('T1', BEFORE, '-'), ('T2_mean', AFTER, '-'), ('T2_E', INK2, '--')):
+        w, levels = hpd_levels(d[name], allowed)
+        ax.contour(F, I, w, levels=levels, colors=[color], linewidths=[1.0, 2.0], linestyles=ls,
+                   zorder=3)
+    for x, y, text, color in (
+            (0.71, 1.32, 'T1: one mean per entity\ncorrelation 0.87, f_ins spread 0.70', BEFORE),
+            (0.40, 0.56, 'T2 on the emulator mean\ncorrelation 0.65, f_ins spread 0.36', AFTER),
+            (0.10, 0.41, 'T2 with the emulator\'s uncertainty varying\n(dashed): correlation 0.96, '
+                         'f_ins\nspread 0.88, peak on the edge', INK2),
+            (0.80, 0.42, 'edge of the region the\ncalibrator accepts (dotted)', INK2)):
+        ax.text(x, y, text, color=color, fontsize=8.5, va='top')
+    ax.set_xlim(0.08, 1.02)
+    ax.set_ylim(0.25, 1.9)
+    ax.set_xlabel('f_ref (refreezing)', color=INK)
+    ax.set_ylabel('f_ins (insulation)', color=INK)
+    ax.set_title('Where each target puts the two parameters (alps_s2, f_adv fixed at 1.0)',
+                 fontsize=10, color=INK, loc='left')
+    fig.text(0.01, 0.01, 'Posterior on a 91 x 86 grid; the contours hold 50 % (thick) and 90 % (thin) '
+             'of it.\nGrey dots: the 29 runs with f_ref >= 0.1 (their f_adv varies, 0.3-1.7). '
+             'icetemp 04400ac.', color=INK2, fontsize=8)
+    fig.subplots_adjust(left=0.09, right=0.98, top=0.94, bottom=0.16)
+    save(fig, 'ch07_posteriors')
+
+
 if __name__ == '__main__':
     fig_snow_resistance()
     fig_hef_tongue()
     fig_runs_rmse()
     fig_timing()
     fig_snow_gap()
+    fig_posteriors()
     print('written:', sorted(p.name for p in OUT.glob('ch07_*.svg')))

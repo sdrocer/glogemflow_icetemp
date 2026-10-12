@@ -13,14 +13,19 @@
 > groups unchanged; the Grenz tongue and Tête Rousse, already slightly too warm, warmed further, so
 > something there had been compensating. Apart from the Hintereisferner tongue, still about 3 °C too
 > cold, the largest misfits are where the fix does not act: in the firn of Monte Rosa and at
-> Corvatsch. **Main lesson: a process written into the code is not necessarily what the solver
-> does — test it against an exact answer.**
+> Corvatsch. Of three ways to compare model and boreholes, comparing every 1 m depth bin (T2) tells
+> the two calibration parameters apart at a small cost in RMSE; coded and tried on the Alpine
+> ensemble, it works, but the emulator's own uncertainty can still blur the two. **Main lesson: a
+> process written into the code is not necessarily what the solver does — test it against an exact
+> answer.**
 >
-> *Status (2026-10-09): Steps 0–2 and 4 done (icetemp `2f603aa`, `161f993`, `c9af84f`; GloGEM
-> `3b33e4b`, `c400a50`), and the spin-up check passed. The fix stays. The Step-4 table was reviewed
-> on 2026-10-09; next is the calibration target (Step 5), which starts by fixing a tie-break in the
-> band matching. Firn memory and the snowline calibration were left out (chapter 6); borehole l9b
-> stays as listed.*
+> *Status (2026-10-12): Steps 0–2 and 4 done (icetemp `2f603aa`, `161f993`, `c9af84f`; GloGEM
+> `3b33e4b`, `c400a50`), and the spin-up check passed. The fix stays. Step 5a chose the target T2
+> (one misfit per 1 m depth bin; decisions of 2026-10-12), and Step 5b coded it (icetemp `19559dc`,
+> `638ad43`, `04400ac`). A trial calibration on the Alpine ensemble works, but shows that the
+> emulator's own uncertainty pulls T2 to the edge of the trusted region: how to handle that is the
+> open decision before the training campaign. Firn memory and the snowline calibration were left out
+> (chapter 6); borehole l9b stays as listed.*
 
 ## What we believed
 
@@ -39,9 +44,10 @@ f_adv 1.05) left two misfits: the Hintereisferner tongue ice, −4.4 to −5.0 �
 - **the held-out test was independent**: "leave one glacier out" left out one RGI outline at a
   time.
 
-**No calibration had been run, and none has been run since.** Every glacier number in this chapter
-comes from forward runs with one fixed parameter set each; the test column of Step 2 is a single
-synthetic band, and Step 5's numbers are estimates from a smooth fit over the 32 runs of `alps_r7`.
+**No calibration had been run, and none was until the trial in Step 5b.** Every other glacier
+number in this chapter comes from forward runs with one fixed parameter set each; the test column of
+Step 2 is a single synthetic band, and Step 5a's numbers are estimates from smooth fits over the
+runs of the Alpine ensemble.
 A calibration can only move what its parameters reach, and on the ice sites all three moved the
 temperature by just 0.12–0.24 °C per prior standard deviation (chapter 6). So the plan of
 30 September, approved on 8 October, allowed only two kinds of change before any calibration:
@@ -58,7 +64,9 @@ flowchart LR
     S1[Step 1<br/>snow logbook] --> S2
     S2 --> S4[Step 4<br/>32-run ensemble]
     S4 --> STOP{{"stop: review<br/>of the table"}}
-    STOP --> S5[Step 5<br/>calibration target]
+    STOP --> S5a[Step 5a<br/>which target]
+    S5a --> S5b[Step 5b<br/>code and a trial run]
+    S5b --> C{{"next: training<br/>campaign"}}
 ```
 
 ## What we measured
@@ -500,42 +508,165 @@ would not change it.
 
 As the plan requires, Step 5 started only after this table had been reviewed (2026-10-09).
 
-## Step 5: the calibration target (next)
+## Step 5: the calibration target
 
 A calibration needs a target: the way model and boreholes are compared. Think of the firn as a room
 heated in summer and cooled in winter: **f_ref is the heater** (meltwater heat refreezing in the
 firn), **f_ins is the wall** (how easily heat moves through the firn and, since Step 2, through the
 snow on the ice). A warmer room can come from either, so the mean temperature cannot tell them
-apart, but their fingerprints with depth and season differ. Three targets are on the table
-(estimated from `alps_r7` with f_adv fixed at 1.0, through a smooth fit around the best run; no
-calibration was run):
+apart, but their fingerprints with depth and season differ. Three targets were on the table:
 
-| target | one number per | sees | f_ref ↔ f_ins correlation after a fit | f_ins spread left (1 = nothing learned) |
+| target | one number per | sees |
+|---|---|---|
+| T1 (until now) | borehole entity (one glacier's boreholes in one 10 m band) | the level |
+| T2 | point (an entity's 1 m depth bin) | + the shape with depth |
+| T3 | point and month | + the season |
+
+First, the tie-break in the band matching that Step 4 had found was fixed: an entity exactly on the
+edge between two 10 m bands is now compared with its own band (icetemp `436f3ed`). The common points
+became 771 (from 769); the best run is still design 13, at 2.319 °C before the snow fix and
+2.129 °C after it, and the snow fix still lowers the RMSE in all 32 runs.
+
+### Step 5a: which target tells the two parameters apart
+
+Step 5a (notebook `06_calibration_target.ipynb`, icetemp `de98c42`) used the 29 runs of `alps_s2`
+with f_ref of at least 0.1 (771 points, 66 entities on the 7 test glaciers) and held f_adv at 1.0.
+It ran no calibration. Two smooth stand-ins fitted to the 29 runs (a polynomial response surface and
+an emulator) predicted where each target would put the parameters, and how well those parameters
+would do on a glacier system left out of the fit. The rule had been fixed before looking:
+
+| check | passes if | T1 | T2 | T3 |
 |---|---|---|---|---|
-| T1 (today) | borehole entity | the level | 0.87 | 0.72 |
-| T2 | point (an entity's 1 m depth bin) | + the shape with depth | 0.57 | 0.28 |
-| T3 | point and month | + the season | 0.34 | 0.22 |
+| told apart | f_ins spread left ≤ 0.5 and correlation ≤ 0.8 | no (0.66; 0.88) | yes (0.19; 0.58) | yes (0.12; 0.34) |
+| consistent | fits to the level alone and to the shape alone within 3 sd | — | no (5.4 sd) | no (6.9 sd) |
+| RMSE | held-out RMSE at most T1's + 0.10 °C | 2.19 °C | + 0.07 °C | + 0.08 °C or + 0.23 °C¹ |
+| honest | misfit ratio between 0.5 and 2 | 1.99 | 0.61 | 0.59 |
 
-With T1, f_ins cannot be calibrated: its 0.72 is mostly the prior speaking. The catch is that the
-level of the profiles and their shape ask for slightly different parameters, which on glaciers left
-out of the fit costs 0.05–0.15 °C of RMSE. Step 5a repeats this analysis on the Step-4 ensemble
-(`alps_s2`) in a notebook, without package code, and applies a rule fixed in advance:
+¹ +0.08 °C through the stand-ins, +0.23 °C with the best real runs: not resolved.
 
-| check | passes if |
+T2 therefore ends in the plan's **outcome 2**: only "consistent" fails. The level of the profiles and
+their shape ask for different parameters, the shape for less refreezing. Fitted to every depth bin
+(T2), the parameters move to f_ref about 0.31–0.34 and f_ins about 0.66–0.78, where T1 had about
+0.54 and 1.0. The disagreement sits on Monte Rosa's high firn (3000–4400 m), 1.4 °C too cold in the
+median run of Step 4; the parameters partly make up for that. The price, 0.07 °C of held-out RMSE,
+is within the margin.
+
+The other checks:
+
+- **The firn sets f_ins; the ice barely does.** Fitted to the firn points alone, T2 gives nearly the
+  pooled answer (f_ins 0.75–0.79). The ice points alone pin f_ins down only loosely (spread 0.74–0.77)
+  and pull both ways: the Hintereisferner tongue wants more insulation, the other tongues less
+  (f_ins about 1.2 without the Hintereisferner tongue).
+- **The Hintereisferner tongue stays about 2.4 °C too cold** at the T2 optimum; leaving it out moves
+  f_ins by less than a quarter of its prior standard deviation. No parameter reaches it.
+- **Readings at the melting point** (76 of the 771 points lie within 0.1 °C of it): treating them as
+  one-sided ("at least this warm") changes nothing measurable, so they stay ordinary readings.
+- **Measuring the shallow depths from the snow surface** instead of the ice surface barely moves the
+  fit and does not fit better; the depths stay as measured.
+- **Colle Gnifetti below 40 m** (48 points; ice older than the model's climate record) is kept out
+  of the fit and reported apart.
+- **Old against new readings:** an extra error for readings before 1979 changes nothing; it is not
+  added.
+- **The per-entity offset inside the fit** makes the held-out RMSE worse (2.75–3.12 °C against
+  2.34–2.45 °C on `alps_r7`); it is estimated after the fit instead.
+- **f_adv stays at 1.0:** with three parameters it fails its own rule with every target.
+- **The caveat is the emulator's own error.** Evaluated where the emulator is uncertain, its error
+  term hides the difference between the parameters: with it, T2 mostly does not tell them apart on
+  these 29 runs (correlation up to 0.89). Where the emulator is accurate, at design 13, T2 does
+  (correlation 0.72, f_ins spread 0.34). The training campaign has to put runs where the result is.
+
+**Decisions (2026-10-12):** the error model of August (model error 3.5 °C², correlated over 15 m of
+depth within an entity), the target T2, and the RMSE margin of 0.10 °C.
+
+### Step 5b: the code
+
+T2 compares every 1 m depth bin of every entity (icetemp `638ad43`):
+
+  log L(θ) = −½ [ rᵀ Σ⁻¹ r + log det Σ ],   r = y − G(θ),   Σ = D + S + E(θ)
+
+| symbol | meaning |
 |---|---|
-| told apart | at most half of the f_ins spread is left, and the correlation is at most 0.8 (by two methods) |
-| consistent | fits to the level alone and to the shape alone agree within 3 standard deviations |
-| RMSE | the held-out RMSE exceeds T1's by at most 0.10 °C |
-| honest error model | the misfit is about as large as the error model expects (ratio 0.5–2) |
+| θ | the two parameters (f_ref, f_ins); f_adv = 1.0 |
+| y, G(θ) | the borehole temperature of a depth bin, and the emulated model there |
+| D | measurement error: glenglat's, times 3 for profiles marked "estimated" |
+| S | model error: 3.5 °C², correlated with depth within an entity (falls to 1/e over 15 m) |
+| E(θ) | the emulator's own uncertainty at θ |
+| Σ⁻¹, log det Σ | weigh each misfit by the error expected there; count correlated rows about once |
 
-It also checks whether firn and ice points ask for the same f_ins. Step 5b then codes only the
-chosen target, behind a switch whose default reproduces today's numbers, before a two-stage
-training campaign and the calibration itself. Before all of this, Step 5 fixes the tie-break in the
-band matching that Step 4 found (see What is still open), so that a borehole on the edge between
-two bands is compared with its own.
+Until now each entity's misfits were averaged first (T1), and the per-entity offset sat inside Σ.
+Now each depth bin counts, and the offset is estimated afterwards. D + S does not depend on θ and
+has one block per entity, so the calibrator prepares it once and adds E(θ) by a cheap update
+(the Woodbury identity): 0.95 ms per evaluation on 771 rows instead of 42 ms, with the same value
+to 16 digits.
+
+The other changes:
+
+1. **Fixed parameters** (icetemp `19559dc`). The check of the design range read the wrong column
+   whenever the fixed parameter was not the last one; it worked for f_adv only by luck. A parameter
+   the emulator does not see can no longer be calibrated by accident.
+2. **The design varies only the free parameters** (`19559dc`): f_adv = 1.0 in every run, f_ref from
+   0.1 (below it Tête Rousse sits at the melting point and the emulator's error estimate breaks).
+3. **Colle Gnifetti below 40 m** is left out of the fit by a named rule (`638ad43`).
+4. **Adoption is judged through the emulator, one glacier system at a time** (icetemp `04400ac`).
+   The calibrated parameters alone, without offsets, are scored on each system left out of the fit.
+   They must beat the run at the prior mean and stay within 0.10 °C of the T1 calibration, and the
+   sampling must pass the existing gate: the chains agree (R-hat at most 1.05) and match a grid
+   search, the misfit ratio lies between 0.5 and 2, and at least 5 training runs lie close to the
+   result. Until now adoption was judged on the analytical surrogate against two simple baselines;
+   that comparison is still reported, with the warm/cold classification.
+5. **The configuration** holds the decisions as defaults (`04400ac`): target T2, f_adv fixed, f_ref
+   from 0.1, the emulator keeping 99.9 % of the variance (at 99 % about half the f_ins information
+   is lost), the Colle Gnifetti rule and the margin.
+
+Checks: the old target T1 gives exactly the numbers it gave before, at 5 parameter sets; the fast
+and the full likelihood agree; at run 13 the misfit ratio is 0.635, the value in 5a's log;
+21 tests cover the rest.
+
+### A trial calibration on `alps_s2`
+
+The new code then ran a whole calibration on `alps_s2`: the 29 runs, an emulator keeping 99.9 % of
+the variance (7 components), Colle Gnifetti below 40 m left out (723 points). It tests the code; it
+is not a calibration to adopt (7 glaciers, and a design in which f_adv still varies).
+
+![T1 and T2 posteriors on alps_s2](figures/ch07_posteriors.svg)
+
+| | T1 | T2 on the emulator mean | T2 as coded (E varying) |
+|---|---|---|---|
+| peak (f_ref, f_ins) | 0.54, 1.02 | 0.34, 0.74 | 0.29, 0.50, on the edge |
+| correlation | 0.87 | 0.65 | 0.96 |
+| f_ins spread left | 0.70 | 0.36 | 0.88 |
+| held-out RMSE, one glacier system at a time | 2.19 °C | 2.26 °C | 2.32 °C |
+
+The run at the prior mean (f_ref 0.55, f_ins 1.0) scores 2.12 °C held out.
+
+- **The code works end to end** and refuses adoption here for the right reasons: no training run lies
+  close to the result, and the RMSE rule fails.
+- **On the emulator mean, T2 does what 5a predicted:** it tells f_ref and f_ins apart and costs
+  0.074 °C of held-out RMSE against T1, the number 5a had found.
+- **With the emulator's uncertainty varying, T2 runs to the edge.** Where there are few runs the
+  emulator is uncertain, and an uncertain prediction forgives a misfit. T2's misfits include large
+  systematic ones (Monte Rosa's high firn), so the forgiveness pays more than its penalty, and the
+  best point moves to the edge of the region the calibrator accepts. There the two parameters are
+  no longer told apart. Two MCMC runs of 3000 steps disagreed (f_ins spread 0.37 and 0.92); the grid
+  shows that the second is right. This is 5a's caveat, now in the real likelihood.
+- **No calibration beats the prior mean on these 7 glaciers.** The prior mean happens to sit on the
+  best run, design 13 (the emulator's lowest RMSE is at f_ref 0.54, f_ins 1.10). T2 trades a little
+  RMSE for telling the parameters apart, so against this prior mean it cannot win on RMSE alone.
+
+How the campaign deals with both is open (below).
 
 ## What is still open
 
+- **How the emulator's uncertainty enters the T2 likelihood** (a decision before the campaign). As
+  coded, the uncertainty varies with the parameters, and on 29 runs it pulls T2 to the edge of the
+  region the calibrator accepts (trial calibration above). The campaign's second stage, 20 runs
+  around the first stage's result, only helps if that result is not itself pulled to the edge. One
+  way out is to fit the first stage on the emulator mean, place the second stage's runs there, and
+  adopt only if the fit with the uncertainty varying then agrees with it.
+- **Beating the run at the prior mean.** On the 7 test glaciers neither target does, because the
+  prior mean sits on the best run. Whether that also holds on all 25 glaciers, and whether "beat
+  the prior mean" should stay an adoption condition for a target chosen to tell the parameters
+  apart rather than to lower the RMSE, is open.
 - **The Hintereisferner tongue is still about 3 °C too cold** (−2.57 to −3.04 °C by site in the best
   run, −2.79 °C at the median of the 32 runs). The most likely cause is heat the tongue gets in the
   melt season and the model lacks (for example a wet snowpack held at 0 °C in spring). Chapter 6's
@@ -546,9 +677,9 @@ two bands is compared with its own.
   calibration works, with an explicit go-ahead.
 - **The Grenz tongue and Tête Rousse got warmer** (bias +0.26 → +1.07 °C and +0.78 → +0.92 °C, at
   the median of the 32 runs): before the fix, something compensated there. The plan's first check,
-  whether the modelled snow there is too thick, is still to be done. Step 5 checks whether firn and
-  ice points ask for the same f_ins; together with the cold Hintereisferner tongue and the firn
-  sites, this decides whether one f_ins can serve both (Step 5a).
+  whether the modelled snow there is too thick, is still to be done. Step 5a found that the firn
+  sets f_ins and the ice points pull both ways (the Hintereisferner tongue toward more insulation,
+  the other tongues toward less), so one f_ins serves the firn, not every tongue.
 - **Apart from the Hintereisferner tongue, still the most biased group, the largest misfits are
   where the fix does not act.** The Monte Rosa firn holds 322 of the 769 points: below 4400 m
   (176 points) its RMSE is 3.26 °C and its bias −1.37 °C at the median of the 32 runs (2.73 /
@@ -560,7 +691,8 @@ two bands is compared with its own.
 - **Three snow simplifications now matter.** They are recorded, not changed: the thermal model keeps
   the snow of the start of the month for the whole month; last summer's leftover snow is removed
   only in January; the model measures depth from the snow surface, the boreholes from the ice
-  surface (Step 5a chooses the depth reference, using the `snowbh` file).
+  surface (Step 5a: measuring the shallow readings from the snow surface does not fit better, so the
+  depths stay as measured).
 - **f_ins and f_adv on ice.** Chapter 3 found f_ins nearly inert on ice and asked whether that was
   physics or an implementation limit. On the Hintereisferner tongue the short-circuit was part of
   the answer: f_ins now moves the tongue ice by 0.326 °C per prior sd instead of 0.141 (Step 4, the
@@ -568,33 +700,31 @@ two bands is compared with its own.
   effect at 10 m depth in its Python copy of the 2615 m column, at equilibrium and without ice
   flow, so the two do not compare one to one. But after the fix f_adv barely acts on deep tongue
   ice any more (ice deeper than 15 m: 0.168 → 0.006 °C per prior sd; Grenz tongue 0.186 → 0.008,
-  Gorner tongue 0.234 → 0.012). Why, is not yet understood. It matters for Step 5: a parameter that
-  acts almost nowhere cannot be calibrated (Step 5a's analysis already holds f_adv at 1.0).
-- **A tie-break in the band matching** (found by the Step-4 scorer). The matcher
-  (`runner.parse_training_output`) compares each borehole entity with the model band nearest its
-  elevation. Ten entities (108 points) sit exactly on the edge between two 10 m bands, which are
-  then equally near; the order of the file names decides, and all ten are compared with the band
-  below their own. Gornergletscher@2555 also loses two deep readings (337.9 and 347.7 m) that the
-  lower band's column does not reach, so the fix will change the set of common points. Matching each
-  entity with its own band changes the pooled RMSE of design 13 by less than 0.01 °C (0.005 °C
-  before the snow fix, 0.009 °C after; `band_fix_effect.py`, see Sources), but one entity's bias by
-  up to 0.46 °C (Grenzgletscher@4005). To be fixed at the start of Step 5.
+  Gorner tongue 0.234 → 0.012). Why, is not yet understood. A parameter that acts almost nowhere
+  cannot be calibrated: f_adv stays fixed at 1.0 (Step 5a).
 - **Borehole l9b** (Grenzgletscher@2015, 10 points) has no model band of its own and is read from
   the nearest one, at 2175 m, 160 m higher. It stays as listed (decision of 2026-10-08, Step 0).
 - **Carried over** from chapter 6: Colle Gnifetti below 40 m (the climate before 1942; 48 points,
-  on average +1.77 °C too warm in design 13, accepted) and the old-versus-new borehole pairs. From
+  on average +1.77 °C too warm in design 13; accepted, and since Step 5b left out of the fit) and the
+  old-versus-new borehole pairs. From
   the plan of 30 September: the meltwater depth (Herron–Langway stage 1 multiplied by the
   accumulation rate, deferred) and Tête Rousse's deep warm bias, for the next physics review.
 
 ## Sources
 
 - Plan: "Snow insulation, a fair comparison, and a calibration target that tells two parameters
-  apart" (2026-09-30, decisions 2026-10-08), `~/.claude/plans/i-am-building-a-compiled-wolf.md`
-  (condensed) and `.full.md` (full); to be archived as
-  `plans/2026-09-30_snow_comparison_target_plan.md`
-- Commits: icetemp `2f603aa` (Step 0), `161f993` (test column), `c9af84f` (paired scorer, Step 4);
+  apart" (2026-09-30, decisions 2026-10-08 and 2026-10-12), archived as
+  `plans/2026-09-30_snow_comparison_target_plan.md` (condensed) and
+  `plans/2026-09-30_snow_comparison_target_plan_full.md` (full)
+- Commits: icetemp `2f603aa` (Step 0), `161f993` (test column), `c9af84f` (paired scorer, Step 4),
+  `436f3ed` (tie-break), `de98c42` (Step 5a), `19559dc`, `638ad43`, `04400ac` (Step 5b);
   GloGEM `3b33e4b` (snow logbook), `c400a50` (snow fix). Earlier: GloGEM `1aef7f6` (snow
   conductivity), `d072e0f` (snow layers by depth), `97dfbf2` (no meltwater heat in ice)
+- Step 5a: `notebooks/06_calibration_target.ipynb`, `scripts/icetemp_analysis/target_analysis.py`
+  and the stage scripts in `scripts/icetemp_analysis/step5a/` (outputs in the scratch folder
+  `/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/step5a/`)
+- Step 5b checks and the trial calibration: `scripts/icetemp_analysis/step5b/` (its README lists each
+  script; outputs in `/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/step5b/`)
 - Runs: `data/bayescal/snowlog_w0` (Step 1, `alps_r7` design 13), `snowfix_w0` (Step 2),
   `snowfix_ref3000_w0` (test c, 3000 plain cycles); `alps_r7_w0` … `w5` re-matched with the Step-0
   comparison in `/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/rescored/alps_r7_step0/`
@@ -609,12 +739,14 @@ two bands is compared with its own.
   `snowfix_w0`, matched with each entity's own band; its output is in
   `/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/step4_book/band_fix_effect.log`)
 - Tests: `scripts/icetemp_analysis/snow_conduction_harness.pro` and `snow_conduction_check.py` (test
-  column); `tests/test_obs_matching.py`, `tests/test_glacier_systems.py`
+  column); `tests/test_obs_matching.py`, `tests/test_glacier_systems.py`, `tests/test_band_choice.py`,
+  `tests/test_fixed_params.py`, `tests/test_calibration_target.py`, `tests/test_heldout_parameters.py`
 - Observations: glenglat; WGMS Fluctuations of Glaciers, 2017-06 release (winter balance by
   elevation band, Hintereisferner 2010, 2011 and 2013–2015)
 - Literature: Calonne et al. (2011), snow conductivity; Yen (1981), ice conductivity; Patankar
   (1980), conduction through layered material
-- Figures: `development_history/figures/make_ch07.py`
-- Code: icetemp `src/icetemp/calibration/{data,runner,validation}.py`; GloGEM
+- Figures: `development_history/figures/make_ch07.py` (`ch07_posteriors` reads the grids written by
+  `scripts/icetemp_analysis/step5b/surface_grids.py`)
+- Code: icetemp `src/icetemp/calibration/{data,runner,validation,calibrator,design,pipeline,config}.py`; GloGEM
   `procedures/processing/firnice_temperature_model.pro`,
   `procedures/write/prepare_output_firnicetemp.pro`, `procedures/write/write_firnicetemp_validation.pro`
