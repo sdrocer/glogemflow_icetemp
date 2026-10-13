@@ -41,3 +41,11 @@ Set the `BASE_DIR` variable at the top of each notebook to point to the root of 
 ```python
 BASE_DIR = Path('data/glogemflow')
 ```
+
+## Small files the calibration code reads
+
+- `rgi7_centraleurope_glims_lookup.csv`: GLIMS id -> RGI7 id, area and centroid (CentralEurope).
+- `glenglat_borehole_rgi7.csv`: each glenglat borehole -> the RGI7 outline that contains it, from
+  GloGEM's glacier masks. Rebuild with `python scripts/icetemp_analysis/borehole_outlines.py`
+  (icetemp environment, needs pyproj). `icetemp.calibration.data.DataHandler` stops without it
+  unless `outline_by_position=False`.

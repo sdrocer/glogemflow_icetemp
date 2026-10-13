@@ -53,6 +53,9 @@ class CalibrationPipeline:
             region=self.config.region, include_estimated=self.config.include_estimated,
             include_unassessed=self.config.include_unassessed,
             run_year_min=self.config.year_min, run_year_max=self.config.year_max,
+            outline_by_position=self.config.outline_by_position,
+            entry_any_below=self.config.entry_any_below,
+            fill_missing_covariates=self.config.fill_missing_covariates,
         )
         self.data_handler.load()
         self.data_handler.summary()

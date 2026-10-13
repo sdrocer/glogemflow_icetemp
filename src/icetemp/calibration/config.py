@@ -26,6 +26,10 @@ class CalibrationConfig:
     # judgement of non-equilibrium, e.g. residual drilling heat -- confirmed to carry a real
     # depth-decaying warm bias) -- 'false' profiles are never included regardless of this flag.
     run_tag: str = 'centraleurope_bayescal'  # names the run_dir / output files
+    # borehole data rules (data.DataHandler); False/None = the rules before 2026-10-13
+    outline_by_position: bool = True       # each hole on the RGI7 outline containing it
+    entry_any_below: float = 15.0          # entities need a reading at 10-30 m or below this depth
+    fill_missing_covariates: bool = True   # ERA5 covariates per hole instead of dropping its readings
 
     # -- MB-calibration source (see runner.GloGEMRunner.copy_calibration_data) -------------
     # None = GloGEMRunner's own defaults (the narrow CentralEurope_glenglat_calib source,

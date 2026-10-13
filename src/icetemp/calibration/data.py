@@ -52,10 +52,13 @@ GLENGLAT_DIR = REPO_ROOT / 'glogemflow_icetemp' / 'glenglat' / 'data'
 DATA_DIR = REPO_ROOT / 'glogemflow_icetemp' / 'data'
 DERIVED_CSV = DATA_DIR / 'glenglat_profiles_derived.csv'
 GLIMS_LOOKUP_CSV = DATA_DIR / 'rgi7_centraleurope_glims_lookup.csv'  # CentralEurope only
+# borehole -> RGI7 outline containing it (scripts/icetemp_analysis/borehole_outlines.py)
+BOREHOLE_OUTLINE_CSV = DATA_DIR / 'glenglat_borehole_rgi7.csv'
 
 # ── Calibration-set gate (locked decisions) ────────────────────────────────────────────────
 MIN_YEAR = 1950
-TARGET_DEPTH_BAND = (10.0, 30.0)   # gate: needs >=1 measurement in this band
+TARGET_DEPTH_BAND = (10.0, 30.0)   # gate: needs >=1 measurement in this band ...
+ENTRY_ANY_BELOW = 15.0             # ... or below this depth [m] (None: the band alone)
 DEPTH_WEIGHT_IN_BAND = 3.0          # up-weight factor for points inside TARGET_DEPTH_BAND
 ESTIMATED_SIGMA_INFLATION = 3.0     # sigma multiplier for equilibrium=='estimated' profiles
 DEFAULT_SIGMA = 0.1                 # degC, median of borehole.temperature_uncertainty (n=551)
@@ -296,10 +299,22 @@ class DataHandler:
         target_depth_band=TARGET_DEPTH_BAND,
         estimated_sigma_inflation=ESTIMATED_SIGMA_INFLATION,
         default_sigma=DEFAULT_SIGMA,
+        borehole_outline_csv=BOREHOLE_OUTLINE_CSV,
+        outline_by_position=True,
+        entry_any_below=ENTRY_ANY_BELOW,
+        fill_missing_covariates=True,
     ):
         self.glenglat_dir = Path(glenglat_dir)
         self.derived_csv = Path(derived_csv)
         self.glims_lookup_csv = Path(glims_lookup_csv)
+        self.borehole_outline_csv = Path(borehole_outline_csv)
+        # each hole on the RGI7 outline that contains it, entities split by outline; False: the
+        # outline of the GLIMS id of each entity's first hole (before 2026-10-13)
+        self.outline_by_position = outline_by_position
+        self.entry_any_below = entry_any_below
+        # ERA5 covariates for holes lacking derived ones in a group that has them; False: those
+        # holes' readings are dropped (before 2026-10-13)
+        self.fill_missing_covariates = fill_missing_covariates
         self.region = region
         self.include_estimated = include_estimated
         self.include_unassessed = include_unassessed
@@ -416,6 +431,17 @@ class DataHandler:
         match = lookup[lookup['glims_id'] == glims_id]
         return match['glacier_id'].iloc[0] if not match.empty else None
 
+    def _load_outline_by_position(self):
+        """borehole_id -> RGI7 glacier_id of the outline containing the hole, or None."""
+        if not self.outline_by_position:
+            return None
+        if not self.borehole_outline_csv.exists():
+            raise FileNotFoundError(
+                f'{self.borehole_outline_csv} missing: run scripts/icetemp_analysis/borehole_outlines.py, '
+                'or set outline_by_position=False for the rules before 2026-10-13')
+        xw = pd.read_csv(self.borehole_outline_csv, dtype={'borehole_id': str, 'rgi7': str})
+        return dict(zip(xw['borehole_id'], xw['rgi7'].where(xw['rgi7'].notna(), None)))
+
     # ── main entry point ─────────────────────────────────────────────────────────────────
     def _resolve_unknown_firn(self, glacier_name, labels, gdf):
         """Unlabelled readings on a glacier with an observed ELA series: firn if the site lies
@@ -473,6 +499,7 @@ class DataHandler:
             columns={'id': 'profile_id', 'date_min': 'date_meas', 'date_max': 'date_end'})
 
         meas = measurement.merge(eq_profiles, on=['borehole_id', 'profile_id'], how='inner')
+        eq_ok = set(meas['borehole_id'])
         # each reading's date: profiles up to a month long at their midpoint (month and fraction
         # of it elapsed), longer ones as their range of months. Keep readings whose months reach
         # into the model run window (hydrological years run_year_min..run_year_max).
@@ -529,13 +556,33 @@ class DataHandler:
         )
         meas = meas[meas['_elev_band'].notna()]
 
-        for (base_glacier_name, _band), gdf in meas.groupby(['glacier_name', '_elev_band']):
-            # gate: at least one measurement in the target depth band, on ANY profile
+        # outline per hole: the RGI7 outline containing it, else its GLIMS id's outline; entities
+        # are then (glacier name, band, outline), so no entity mixes outlines
+        by_position = self._load_outline_by_position()
+        keys = ['glacier_name', '_elev_band']
+        if by_position is not None:
+            gid_of = {b: by_position.get(b) or self._glacier_id_for(g, glacier_id_lookup)
+                      for b, g in meas[['borehole_id', 'glims_id']].drop_duplicates().itertuples(index=False)}
+            meas['_gid'] = meas['borehole_id'].map(gid_of).fillna('')
+            n_outlines = meas.groupby(keys)['_gid'].nunique()
+            keys = keys + ['_gid']
+        self._stage = dict(window=set(meas['borehole_id']), gate=set(), entity=set())
+        self._entity_holes = {}
+
+        for key, gdf in meas.groupby(keys):
+            base_glacier_name, _band = key[0], key[1]
+            # gate: at least one measurement in the target depth band, or below entry_any_below,
+            # on ANY profile
             in_band = gdf['depth'].between(*self.target_depth_band)
+            if self.entry_any_below is not None:
+                in_band |= gdf['depth'] > self.entry_any_below
             if not in_band.any():
                 continue
+            self._stage['gate'] |= set(gdf['borehole_id'])
 
             glacier_name = f'{base_glacier_name}@{int(_band)}'
+            if by_position is not None and n_outlines[(base_glacier_name, _band)] > 1:
+                glacier_name += f'~{key[2] or "none"}'
             bh_row = gdf.iloc[0]
             glims_id = bh_row.get('glims_id')
 
@@ -569,6 +616,23 @@ class DataHandler:
                 dT_fb = cart_dT_firn(t_amp, bh_row['elevation'])
                 gdf = gdf.assign(T_maat=t_maat, T_amplitude=t_amp, dT_firn=dT_fb,
                                   regime=regime, glogem_region=glogem_region)
+            elif self.fill_missing_covariates and gdf['T_maat'].isna().any():
+                # holes without derived covariates (estimated or unassessed profiles) next to holes
+                # with them: the same ERA5 supplement per hole, instead of losing their readings
+                gdf = gdf.copy()
+                for bid in gdf.loc[gdf['T_maat'].isna(), 'borehole_id'].unique():
+                    rows = gdf['T_maat'].isna() & (gdf['borehole_id'] == bid)
+                    hole = gdf[rows].iloc[0]
+                    try:
+                        year = int(str(hole.get('date_min_bh', hole.get('date_meas')))[:4])
+                    except (ValueError, TypeError):
+                        year = None
+                    supplement = self._era5_supplement(hole, year)
+                    if supplement is None:
+                        continue
+                    t_maat, t_amp, regime, glogem_region = supplement
+                    gdf.loc[rows, ['T_maat', 'T_amplitude', 'dT_firn', 'regime', 'glogem_region']] = [
+                        t_maat, t_amp, cart_dT_firn(t_amp, hole['elevation']), regime, glogem_region]
 
             if self.region is not None:
                 region_val = gdf['glogem_region'].dropna()
@@ -596,9 +660,14 @@ class DataHandler:
             weights = np.array([_depth_weight(d) for d in depths])
             sigma = np.full(len(depths), sigma_bh)
 
-            glacier_id = self._glacier_id_for(glims_id, glacier_id_lookup)
+            if by_position is not None:
+                glacier_id = key[2] or None
+            else:
+                glacier_id = self._glacier_id_for(glims_id, glacier_id_lookup)
             if glacier_id is not None:
                 glacier_ids_seen.add(glacier_id)
+            self._stage['entity'] |= set(gdf['borehole_id'])
+            self._entity_holes[glacier_name] = set(gdf['borehole_id'])
 
             self.calibration_glaciers.append(GlacierCalibrationData(
                 glacier_name=glacier_name,
@@ -623,6 +692,8 @@ class DataHandler:
                 firn_label=firn_label,
             ))
 
+        self.left_out = self._left_out_table(set(measurement['borehole_id']), eq_ok)
+
         self.prediction_glaciers = (
             borehole[['id', 'glacier_name', 'glims_id', 'latitude', 'longitude', 'elevation']]
             .dropna(subset=['latitude', 'longitude'])
@@ -639,6 +710,30 @@ class DataHandler:
         ]
         self.prediction_glaciers = self.prediction_glaciers.rename(columns={'id': 'borehole_id'})
         return self
+
+    def _left_out_table(self, has_meas, eq_ok):
+        """Every hole of the outline crosswalk (the CentralEurope holes) that no run will see, and
+        the first filter that dropped it; None without the crosswalk."""
+        if not self.borehole_outline_csv.exists():
+            return None
+        xw = pd.read_csv(self.borehole_outline_csv, dtype={'borehole_id': str, 'rgi7': str})
+        st, (lo, hi) = self._stage, self.target_depth_band
+        gate = f'no reading at {lo:g}-{hi:g} m' + (
+            f' or below {self.entry_any_below:g} m' if self.entry_any_below is not None else '')
+        not_run = {b for g in self.calibration_glaciers if not g.glacier_id
+                   for b in self._entity_holes.get(g.glacier_name, ())}
+        rows = []
+        for b, name in zip(xw['borehole_id'], xw['glacier_name']):
+            if b in st['entity'] and b not in not_run:
+                continue
+            reason = ('no readings' if b not in has_meas else
+                      'equilibrium false or before min_year' if b not in eq_ok else
+                      'outside the run window' if b not in st['window'] else
+                      gate if b not in st['gate'] else
+                      'in the data but on no RGI7 outline: not run' if b in not_run else
+                      'other region or no covariates')
+            rows.append(dict(borehole_id=b, glacier_name=name, reason=reason))
+        return pd.DataFrame(rows, columns=['borehole_id', 'glacier_name', 'reason'])
 
     # ── diagnostics ──────────────────────────────────────────────────────────────────────
     def summary(self):
@@ -669,6 +764,10 @@ class DataHandler:
             f'Prediction (all glenglat) glaciers:  '
             f'{len(self.prediction_glaciers) if self.prediction_glaciers is not None else 0}',
         ]
+        lo = getattr(self, 'left_out', None)
+        if lo is not None and len(lo):
+            lines.append(f'Holes no run will see ({len(lo)}, see .left_out):')
+            lines += [f'  {n:3d}  {r}' for r, n in lo['reason'].value_counts().items()]
         text = '\n'.join(lines)
         print(text)
         return text
