@@ -124,6 +124,11 @@ The mass-balance temperature offset T_off reaches the ice-temperature model's su
 We decided to **keep** it there: it corrects the downscaled air temperature, and the ice should
 feel that correction too.
 
+*Correction (2026-10-13): this was wrong. T_off is the mass-balance calibration's third,
+unbounded factor; it closes each glacier's budget after the precipitation and degree-day factors
+reach their bounds and is not a property of the local air (chapter 8: the same site on two
+outlines, dry firn as a thermometer, and its growth with height).*
+
 ## What the correct mass balance does to the ice temperatures
 
 Same thermal parameters (f_ref 0.87, f_ins 1.01, f_adv 0.94), 783 matched readings:
