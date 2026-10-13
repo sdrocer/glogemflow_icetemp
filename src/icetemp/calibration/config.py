@@ -76,7 +76,8 @@ class CalibrationConfig:
     hl1980: str = 'n'           # 'y' = Herron & Langway (1980) close-off depth as published
     lh_water: str = 'n'         # 'y' = latent heat per m of percolating water
     perm_limit: str = 'hl'      # 'profile' = the model's own 830 kg/m3 depth; 'cold' = at most 4 m into cold firn
-    thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate for the thermal surface
+    thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate; 'stations' = station rates
+    deepen_to_obs: str = 'y'      # 'n' = borehole bands run to the band's ice thickness
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)

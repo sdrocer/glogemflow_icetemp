@@ -101,7 +101,8 @@ class CalibrationPipeline:
                              catchment=self.config.catchment,
                              forcing_toff=self.config.forcing_toff, hl1980=self.config.hl1980,
                              lh_water=self.config.lh_water, perm_limit=self.config.perm_limit,
-                             thermal_lapse=self.config.thermal_lapse)
+                             thermal_lapse=self.config.thermal_lapse,
+                             deepen_to_obs=self.config.deepen_to_obs)
         if self.config.calibration_source_dir is not None:
             runner_kwargs['calibration_source_dir'] = self.config.calibration_source_dir
         if self.config.calibration_source_files is not None:

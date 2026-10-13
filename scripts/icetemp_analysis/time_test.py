@@ -20,6 +20,8 @@ REPO = Path(__file__).resolve().parents[2]
 GLENGLAT = REPO / 'glenglat/data'
 EXTRA_SOURCES = ['carturan2023-ortles']     # glenglat subfolder outside the specified data
 GLIMS_LOOKUP = REPO / 'data/rgi7_centraleurope_glims_lookup.csv'
+CROSSWALK = REPO / 'data/glenglat_borehole_rgi7.csv'
+SEALED = {'01161'}                # Chessjengletscher: scored once, at the freeze
 RUNS = ['ce25_pred_w0', 'ce25_F_w0', 'ce25_H_w0', 'ce25_FH_w0']
 FIRNICE = 'training_runs/monthly/CentralEurope/PAST/firnice_temperature'
 OUT = Path(sys.argv[2] if len(sys.argv) > 2
@@ -93,6 +95,9 @@ def load_glenglat(extra=True):
     look = pd.read_csv(GLIMS_LOOKUP)
     look['outline'] = look.rgi7_glogem.str.split('.').str[-1]
     bh = bh.merge(look[['glims_id', 'outline']], on='glims_id', how='left')
+    # the outline that contains the hole (borehole_outlines.py), where known; else the GLIMS id's
+    xw = pd.read_csv(CROSSWALK, dtype={'rgi7': str}).set_index('borehole_id').rgi7
+    bh['outline'] = bh.id.map(xw).where(bh.id.map(xw).notna(), bh.outline)
     bh['band'] = bh.elevation.map(band_of)
     bh['site'] = bh.apply(site_of, axis=1)
     return bh.set_index('id', drop=False), prof, meas
@@ -240,7 +245,7 @@ def site_noise(bh, p, meas):
         for y, lst in by_year.items():
             for (h1, p1), (h2, p2) in itertools.combinations(sorted(lst), 2):
                 a, b = bh.loc[h1], bh.loc[h2]
-                if a.glacier_name != b.glacier_name:
+                if a.glacier_name != b.glacier_name or a.outline in SEALED or b.outline in SEALED:
                     continue
                 if dist_m(a, b) > NOISE_DIST or abs(a.elevation - b.elevation) > NOISE_DZ:
                     continue

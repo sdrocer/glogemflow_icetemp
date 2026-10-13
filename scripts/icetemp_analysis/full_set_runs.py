@@ -15,6 +15,10 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
             FH       F and H                         P  H + water stops at the model's own 830 kg/m3
             FRH      FH with ERA5's own lapse rate for the thermal surface (station test)
             HC       H + meltwater at most 4 m into cold firn     FRHC  FRH + the same
+            HR       H with ERA5's own lapse rate (separates the two parts of FRH)
+            FRSH     FRH with the monthly station lapse rates (Jungfraujoch, Corvatsch)
+  --no-deepen: borehole bands run to the band's ice thickness (the bed the product shows); in the tag
+  --exclude-ids: glaciers left out of the run (e.g. the sealed 01161)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
   --data-rules old: the borehole data rules before 2026-10-13, to compare with earlier runs.
@@ -50,14 +54,17 @@ VARIANTS = {'today': {}, 'R': {},
             'FRH': dict(forcing_toff='n', thermal_lapse='reanalysis', hl1980='y', lh_water='y'),
             'HC': dict(hl1980='y', lh_water='y', perm_limit='cold'),
             'FRHC': dict(forcing_toff='n', thermal_lapse='reanalysis', hl1980='y', lh_water='y',
-                         perm_limit='cold')}
+                         perm_limit='cold'),
+            'HR': dict(thermal_lapse='reanalysis', hl1980='y', lh_water='y'),
+            'FRSH': dict(forcing_toff='n', thermal_lapse='stations', hl1980='y', lh_water='y')}
 
 
 class SubsetPipeline(CalibrationPipeline):
     ids = None
+    exclude = set()
 
     def _calibration_glaciers(self):
-        gs = super()._calibration_glaciers()
+        gs = [g for g in super()._calibration_glaciers() if g.glacier_id not in self.exclude]
         return gs if self.ids is None else [g for g in gs if g.glacier_id in self.ids]
 
 
@@ -72,6 +79,8 @@ def main():
     ap.add_argument('--fref', type=float, default=None)
     ap.add_argument('--fins', type=float, default=None)
     ap.add_argument('--fadv', type=float, default=None)
+    ap.add_argument('--no-deepen', action='store_true')
+    ap.add_argument('--exclude-ids', default='', help='comma-separated RGI7 ids left out')
     ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
                     help="'old': the borehole data rules before 2026-10-13 (regression gates)")
     args = ap.parse_args()
@@ -81,7 +90,7 @@ def main():
         if v is not None:
             theta[k] = v
     run_tag = (f'{args.run_tag}_{args.variant}_r{theta[0]:.2f}_i{theta[1]:.3f}_a{theta[2]:.2f}'
-               if custom else args.run_tag)
+               if custom else args.run_tag) + ('_nodeep' if args.no_deepen else '')
 
     base = CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
     cfg = CalibrationConfig(
@@ -91,6 +100,7 @@ def main():
         calibration_source_files=base.calibration_source_files,
         thermal_spinup='y', n_design_points=len(THETAS), remote_host=args.host,
         catchment=args.catchment, **VARIANTS[args.variant],
+        **(dict(deepen_to_obs='n') if args.no_deepen else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )
@@ -99,6 +109,7 @@ def main():
         raise SystemExit(f'{cfg.output_path} exists with other settings; use another run tag')
     pl = SubsetPipeline(cfg)
     pl.ids = None if args.ids is None else set(args.ids.split(','))
+    pl.exclude = set(filter(None, args.exclude_ids.split(',')))
     pl.load_data()
     gs = pl._calibration_glaciers()
     ids = sorted({g.glacier_id for g in gs})
@@ -113,7 +124,10 @@ def main():
     head = subprocess.run(['git', '-C', str(GLOGEM_DIR), 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout
     dirty = subprocess.run(['git', '-C', str(GLOGEM_DIR), 'status', '--porcelain', '--untracked-files=no'],
                            capture_output=True, text=True).stdout
-    (cfg.output_path / 'provenance.txt').write_text(f'GloGEM {head}local changes:\n{dirty or "none"}\n')
+    prov, text = cfg.output_path / 'provenance.txt', f'GloGEM {head}local changes:\n{dirty or "none"}\n'
+    if prov.exists() and prov.read_text() != text:
+        raise SystemExit(f'{prov} records another GloGEM state; use another run tag')
+    prov.write_text(text)
     pl.design = design
     pl.write_training_inputs()
 

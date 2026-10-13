@@ -227,7 +227,8 @@ firnice_forcing_toff    = '{forcing_toff}'   ; 'n' = thermal energy inputs witho
 firnice_hl1980          = '{hl1980}'   ; 'y' = Herron & Langway (1980) close-off depth as published
 firnice_lh_water        = '{lh_water}'   ; 'y' = latent heat per m of percolating water
 firnice_perm_limit      = '{perm_limit}'   ; 'profile' = model's own 830 kg/m3 depth; 'cold' = 4 m into cold firn
-firnice_thermal_lapse   = '{thermal_lapse}'   ; 'reanalysis' = ERA5's lapse rate for the thermal surface
+firnice_thermal_lapse   = '{thermal_lapse}'   ; 'reanalysis' = ERA5's rate; 'stations' = the station rates
+firnice_deepen_to_obs   = '{deepen_to_obs}'   ; 'n' = borehole bands run to the band's ice thickness
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -370,7 +371,8 @@ class GloGEMRunner:
     hl1980: str = 'n'           # 'y' = Herron & Langway (1980) close-off depth as published
     lh_water: str = 'n'         # 'y' = latent heat per m of percolating water
     perm_limit: str = 'hl'      # 'profile' = water stops at the thermal model's own 830 kg/m3 depth
-    thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate for the thermal surface
+    thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate; 'stations' = station rates
+    deepen_to_obs: str = 'y'      # 'n' = borehole bands run to the band's ice thickness, as elsewhere
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -465,7 +467,10 @@ class GloGEMRunner:
         ids = sorted({g.glacier_id for g in glaciers if g.glacier_id})
         lines = ['RGI-ID'] + [f'RGI70-{self.rgi_region_code}.{gid}' for gid in ids]
         self.catchments_dir.mkdir(parents=True, exist_ok=True)
-        self.catchment_file_path.write_text('\n'.join(lines) + '\n')
+        # written atomically: runs started in parallel may read the file while another writes it
+        tmp = self.catchment_file_path.with_name(f'.{self.catchment_file_path.name}.{os.getpid()}')
+        tmp.write_text('\n'.join(lines) + '\n')
+        os.replace(tmp, self.catchment_file_path)
         return self.catchment_file_path, len(ids)
 
     @property
@@ -599,6 +604,7 @@ class GloGEMRunner:
             lh_water=self.lh_water,
             perm_limit=self.perm_limit,
             thermal_lapse=self.thermal_lapse,
+            deepen_to_obs=self.deepen_to_obs,
         )
         out_path.write_text(text)
         return out_path
