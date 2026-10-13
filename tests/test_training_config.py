@@ -12,8 +12,8 @@ def settings(path):
 def test_defaults_keep_todays_physics(tmp_path):
     r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments')
     s, text = settings(r.write_training_config())
-    assert (s['firnice_forcing_toff'], s['firnice_hl1980'], s['firnice_lh_water'], s['firnice_perm_limit']) == \
-        ('y', 'n', 'n', 'hl')
+    assert (s['firnice_forcing_toff'], s['firnice_hl1980'], s['firnice_lh_water'], s['firnice_perm_limit'],
+            s['firnice_thermal_lapse']) == ('y', 'n', 'n', 'hl', 'floor')
     assert not re.search(r'\{\w+\}', text)        # every template field filled
 
 
@@ -24,3 +24,10 @@ def test_switches_reach_the_config(tmp_path):
     assert (s['firnice_forcing_toff'], s['firnice_hl1980'], s['firnice_lh_water'], s['firnice_perm_limit']) == \
         ('n', 'y', 'y', 'profile')
     assert "catchment_selection   = 'CentralEurope_gate'" in text
+
+
+def test_lapse_and_cold_percolation_reach_the_config(tmp_path):
+    r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', perm_limit='cold',
+                     thermal_lapse='reanalysis')
+    s, _ = settings(r.write_training_config())
+    assert (s['firnice_perm_limit'], s['firnice_thermal_lapse']) == ('cold', 'reanalysis')

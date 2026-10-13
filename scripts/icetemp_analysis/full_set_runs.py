@@ -1,16 +1,23 @@
 """GloGEM on all CentralEurope calibration glaciers (24, 111 entities) at one parameter set and one
 variant of the thermal forcing switches.
 
-Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--ids 00786,00774] [--catchment NAME]
+Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fins Y --fadv Z]
+                        [--ids 00786,00774] [--catchment NAME]
   worker 0: the prior mean, f_ref 0.55, f_ins 1.017, f_adv 1.0 (no calibration)
   worker 1: the T2 calibration on the 7 test glaciers (Step 5b: grid mean on the emulator mean),
             f_ref 0.3476, f_ins 0.7850, f_adv 1.0
-  --variant (switches in GloGEM's settings.pro, plan of 2026-10-12):
+  --fref, --fins, --fadv: parameters other than the worker's (fair run set of 2026-10-13); the run
+            tag then names the variant and the parameters, design.csv holds the one set run
+            (design_0000), and a run folder that exists with other settings stops the script.
+  --variant (switches in GloGEM's settings.pro, plans of 2026-10-12):
             today/R  defaults                        F  forcing without t_offset
             H        Herron-Langway 1980 + latent heat per m water
             FH       F and H                         P  H + water stops at the model's own 830 kg/m3
+            FRH      FH with ERA5's own lapse rate for the thermal surface (station test)
+            HC       H + meltwater at most 4 m into cold firn     FRHC  FRH + the same
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
+  --data-rules old: the borehole data rules before 2026-10-13, to compare with earlier runs.
 Each run has its own run_dir, data/bayescal/<run_tag>_w<worker> (GloGEM writes every run to the same
 profile file names; a reused run_dir would skip the run through its .done file), the configuration of
 the alps_s2 ensemble (spin-up on), archives its raw profiles and records the GloGEM commit it ran on.
@@ -21,10 +28,12 @@ Run from the repo root: PYTHONPATH=src python scripts/icetemp_analysis/full_set_
 import argparse
 import subprocess
 import time
+from dataclasses import asdict
 
 import dill
 import numpy as np
 import pandas as pd
+import yaml
 
 from icetemp.calibration import CalibrationConfig, CalibrationPipeline
 from icetemp.calibration.priors import PARAM_NAMES
@@ -37,7 +46,11 @@ VARIANTS = {'today': {}, 'R': {},
             'F': dict(forcing_toff='n'),
             'H': dict(hl1980='y', lh_water='y'),
             'FH': dict(forcing_toff='n', hl1980='y', lh_water='y'),
-            'P': dict(hl1980='y', lh_water='y', perm_limit='profile')}
+            'P': dict(hl1980='y', lh_water='y', perm_limit='profile'),
+            'FRH': dict(forcing_toff='n', thermal_lapse='reanalysis', hl1980='y', lh_water='y'),
+            'HC': dict(hl1980='y', lh_water='y', perm_limit='cold'),
+            'FRHC': dict(forcing_toff='n', thermal_lapse='reanalysis', hl1980='y', lh_water='y',
+                         perm_limit='cold')}
 
 
 class SubsetPipeline(CalibrationPipeline):
@@ -56,39 +69,57 @@ def main():
     ap.add_argument('--variant', default='today', choices=sorted(VARIANTS))
     ap.add_argument('--ids', default=None, help='comma-separated RGI7 ids (default: all)')
     ap.add_argument('--catchment', default='CentralEurope_bayescal')
+    ap.add_argument('--fref', type=float, default=None)
+    ap.add_argument('--fins', type=float, default=None)
+    ap.add_argument('--fadv', type=float, default=None)
+    ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
+                    help="'old': the borehole data rules before 2026-10-13 (regression gates)")
     args = ap.parse_args()
+    theta = THETAS[args.worker].copy()
+    custom = any(v is not None for v in (args.fref, args.fins, args.fadv))
+    for k, v in enumerate((args.fref, args.fins, args.fadv)):
+        if v is not None:
+            theta[k] = v
+    run_tag = (f'{args.run_tag}_{args.variant}_r{theta[0]:.2f}_i{theta[1]:.3f}_a{theta[2]:.2f}'
+               if custom else args.run_tag)
 
     base = CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
     cfg = CalibrationConfig(
         region=base.region, include_estimated=base.include_estimated,
-        include_unassessed=base.include_unassessed, run_tag=f'{args.run_tag}_w{args.worker}',
+        include_unassessed=base.include_unassessed, run_tag=f'{run_tag}_w{args.worker}',
         calibration_source_dir=base.calibration_source_dir,
         calibration_source_files=base.calibration_source_files,
         thermal_spinup='y', n_design_points=len(THETAS), remote_host=args.host,
         catchment=args.catchment, **VARIANTS[args.variant],
+        **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
+           if args.data_rules == 'old' else {}),
     )
+    old_cfg = cfg.output_path / 'config.yaml'
+    if old_cfg.exists() and old_cfg.read_text() != yaml.safe_dump(asdict(cfg), sort_keys=False):
+        raise SystemExit(f'{cfg.output_path} exists with other settings; use another run tag')
     pl = SubsetPipeline(cfg)
     pl.ids = None if args.ids is None else set(args.ids.split(','))
     pl.load_data()
     gs = pl._calibration_glaciers()
     ids = sorted({g.glacier_id for g in gs})
-    print(f'\nworker {args.worker}: {LABELS[args.worker]}, theta {THETAS[args.worker].tolist()}, '
+    print(f'\nworker {args.worker}: {"custom parameters" if custom else LABELS[args.worker]}, theta {theta.tolist()}, '
           f'variant {args.variant} {VARIANTS[args.variant]}', flush=True)
     print(f'{len({g.base_glacier_name for g in gs})} glaciers, {len(gs)} entities, '
           f'{sum(g.n_obs for g in gs)} points, {len(ids)} glacier_ids, catchment {args.catchment}', flush=True)
 
-    pd.DataFrame(THETAS, columns=PARAM_NAMES).to_csv(cfg.design_path, index=False)
+    design = theta[None, :] if custom else THETAS
+    pd.DataFrame(design, columns=PARAM_NAMES).to_csv(cfg.design_path, index=False)
     cfg.to_yaml(cfg.output_path / 'config.yaml')
     head = subprocess.run(['git', '-C', str(GLOGEM_DIR), 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout
     dirty = subprocess.run(['git', '-C', str(GLOGEM_DIR), 'status', '--porcelain', '--untracked-files=no'],
                            capture_output=True, text=True).stdout
     (cfg.output_path / 'provenance.txt').write_text(f'GloGEM {head}local changes:\n{dirty or "none"}\n')
-    pl.design = THETAS
+    pl.design = design
     pl.write_training_inputs()
 
-    tag = f'design_{args.worker:04d}'
+    tag = 'design_0000' if custom else f'design_{args.worker:04d}'
     t0 = time.time()
-    ok = pl.runner.run_design_point([g.glacier_id for g in gs], THETAS[args.worker], tag, idl_bin='idl',
+    ok = pl.runner.run_design_point([g.glacier_id for g in gs], theta, tag, idl_bin='idl',
                                     timeout=7200)
     minutes = (time.time() - t0) / 60
     if not ok:

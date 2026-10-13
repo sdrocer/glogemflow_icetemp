@@ -75,7 +75,8 @@ class CalibrationConfig:
     forcing_toff: str = 'y'     # 'n' = thermal energy inputs without the mass-balance t_offset
     hl1980: str = 'n'           # 'y' = Herron & Langway (1980) close-off depth as published
     lh_water: str = 'n'         # 'y' = latent heat per m of percolating water
-    perm_limit: str = 'hl'      # 'profile' = water stops at the thermal model's own 830 kg/m3 depth
+    perm_limit: str = 'hl'      # 'profile' = the model's own 830 kg/m3 depth; 'cold' = at most 4 m into cold firn
+    thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate for the thermal surface
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)

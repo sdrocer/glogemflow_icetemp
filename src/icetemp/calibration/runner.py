@@ -226,7 +226,8 @@ enable_strain_heating   = 'n'   ; open question -- same SIA driving-stress basis
 firnice_forcing_toff    = '{forcing_toff}'   ; 'n' = thermal energy inputs without the MB t_offset
 firnice_hl1980          = '{hl1980}'   ; 'y' = Herron & Langway (1980) close-off depth as published
 firnice_lh_water        = '{lh_water}'   ; 'y' = latent heat per m of percolating water
-firnice_perm_limit      = '{perm_limit}'   ; 'profile' = water stops at the model's own 830 kg/m3 depth
+firnice_perm_limit      = '{perm_limit}'   ; 'profile' = model's own 830 kg/m3 depth; 'cold' = 4 m into cold firn
+firnice_thermal_lapse   = '{thermal_lapse}'   ; 'reanalysis' = ERA5's lapse rate for the thermal surface
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -369,6 +370,7 @@ class GloGEMRunner:
     hl1980: str = 'n'           # 'y' = Herron & Langway (1980) close-off depth as published
     lh_water: str = 'n'         # 'y' = latent heat per m of percolating water
     perm_limit: str = 'hl'      # 'profile' = water stops at the thermal model's own 830 kg/m3 depth
+    thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate for the thermal surface
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -596,6 +598,7 @@ class GloGEMRunner:
             hl1980=self.hl1980,
             lh_water=self.lh_water,
             perm_limit=self.perm_limit,
+            thermal_lapse=self.thermal_lapse,
         )
         out_path.write_text(text)
         return out_path
