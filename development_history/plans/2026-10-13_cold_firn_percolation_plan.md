@@ -14,33 +14,28 @@
 - **Temperate firn behaves differently:** it is permeable, and water reaches whatever depth the
   winter cold reached.
 
-## The rule
+## The rule (GloGEM branch `perc-wetting-front`, `8e7e49e`, switch `firnice_perm_limit = 'front'`)
 
-The wetting front advances at most 4 m into cold firn per melt season, and what it has wetted
-stays permeable.
+At the first wet month of each hydrological year the season's limit is set from the profile itself.
 
 ```
- surface ── water ──▶ passes the layers above the wetting front (wetted before)
-            z_wf    ◀── wetting front: the deepest node the water has brought to the melting point
-            z_wf + 4 m  ◀── this season's limit; cold firn below is reached by conduction only
+ first wet month of the season, looking down from the surface
+   a temperate layer starts within 15 m?   (15 m = depth of zero annual amplitude, below the winter cold)
+     yes -> water passes it and reaches 4 m below its bottom          (temperate firn stays temperate)
+     no  -> water reaches 4 m below the surface; the rest runs off    (cold firn: Mattea et al. 2021)
 ```
 
-- **Wetting front:** a per-band memory `z_wf`, kept from year to year.
-- **Each month:** the water passes and warms nodes down to `z_wf + firnice_perm_cold_depth`, but
-  never below the close-off depth. Water that is left over runs off and is logged.
-- **After each month:** `z_wf` = the deeper of `z_wf` and the deepest node brought to the melting
-  point.
-- **The season limit** is fixed at the first wet month of each hydrological year (anchor =
-  `z_wf` then), so the front moves at most 4 m per season, not per month.
-- **Resets:** `z_wf` = 0 when a band turns from firn to ice; it starts again from the surface when
-  the band becomes firn again.
-- **Spin-up:** `z_wf` starts at 0 and evolves through the spin-up cycles like the temperatures.
-
-What it does:
-- At cold dry sites (Colle Gnifetti, Col du Dôme) the front stays within about 5 m.
-- At temperate sites the front reaches the whole wet firn, which stays temperate, as with 'hl'.
-- At sites in between, a front can advance 4 m per year. This is the kind of warming
-  Grenzgletscher showed (+6.8 °C in 1991–2008; Hoelzle et al. 2011).
+- It holds for the whole hydrological year. Each month the water warms nodes from the top down to
+  the limit, never below the close-off depth.
+- The limit comes from the temperatures, not from a stored front, so the spin-up's drift
+  correction (which extrapolates the temperatures) carries it consistently.
+- The two depths are fixed constants from the literature, not calibrated: 4 m (Mattea et al. 2021;
+  Gilbert et al. 2014) and 15 m (the seasonal-layer depth used throughout).
+- Where it acts:
+  - At cold dry sites the limit stays 4 m below the surface.
+  - In temperate firn the water passes as with 'hl'.
+  - Where a temperate layer survives the winter below a cold skin, it can deepen by up to 4 m a
+    year, the kind of warming Grenzgletscher showed (+6.8 °C in 1991–2008; Hoelzle et al. 2011).
 
 ## Gate, before it can enter a run set
 
