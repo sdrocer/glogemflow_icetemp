@@ -34,8 +34,9 @@ the year and 5 °C in winter (Jungfraujoch, Corvatsch, 1981–2020).
 
 - **Data:** the borehole rules of icetemp `cf140d0`.
 - **Sealed:** Chessjengletscher (01161) is not run in this set; it is scored once, at the freeze.
-- **Code:** GloGEM with the switches of `4a5e962` and the station lapse rates, deepening switch
-  and bed log, committed after their gate runs. Run tooling: icetemp `d4af4d7` plus its follow-up.
+- **Code:** GloGEM `8c38120`: the switches of `4a5e962`, the station lapse rates, deepening switch
+  and bed log of `b17fcfe`, and the profile-output fix of `8c38120`, each committed after its gate
+  runs. Run tooling: icetemp `d4af4d7` plus its follow-up.
 - **No reuse:** the week-1 runs are not reused.
 
 ## The runs
@@ -191,3 +192,7 @@ years.
 - **Variants added:** HR and FRSH (reported), and the runs without deepening.
 - **01161** is not run in this set.
 - **The reason for FRH** now names the station cold bias.
+- **A technical deviation, before any campaign run:** the first smoke run stopped at 01225, whose 30
+  borehole bands exceeded IDL's 29 file units. The profile output is now buffered and written once
+  per glacier (GloGEM `8c38120`), with every file byte-identical in the gate run. The failed run is
+  kept as `failed_fair_H_r0.55_i1.017_a1.00_w0_getlun` and not scored.
