@@ -12,7 +12,8 @@
 > Janosch's first paper).
 >
 > *Status (2026-10-14): Step 1 done; snow lines, GLAMOS and the firn model compared (Step 2);
-> Alexandra's code arrives as a GloGEM branch by the end of the week.*
+> the firn ledger (Step 3b) gated and scored: not adopted (zone +1, cooling guard), kept for after
+> Step 3a. Alexandra's code arrives as a GloGEM branch by the end of the week.*
 
 ## What we believed
 
@@ -222,6 +223,57 @@ The difference concentrates where the firn is being lost on small glaciers:
 In the loss phase of small glaciers, the original removal roughly halves the firn area and makes
 the firn disappear earlier. The GloGEM ledger uses the mass-conserving rule (decision 1). Whether
 the published firn maps should be revisited is for Janosch and Matthias.
+
+### Step 3b: the firn ledger as the meltwater limit — not adopted (2026-10-14 evening)
+
+**The rule.** `firnice_perm_limit = 'firn'` (GloGEM worktree `firn-ledger`, `20ba803`; plan
+`plans/2026-10-14_firn_ledger_plan.md`):
+- each band keeps annual firn layers from GloGEM's own band balance: a positive year adds a layer,
+  a negative year removes its amount from the newest layers (mass-conserving), and layers become ice
+  after 20 years;
+- the meltwater reaches at most the ledger plus this winter's snow, never past the Herron–Langway
+  depth.
+
+**Review and gate.** An independent review found no code error. The gate passed all four checks:
+
+| check | result |
+|---|---|
+| defaults | byte-identical (373 files) |
+| mass-balance files | identical |
+| IDL ledger against the Python reference | equal to 5e-5 m w.e. (139 266 band-years) |
+| wet depth against the logged limit | never past it (72 259 firn band-years) |
+
+What the ledger does to the water path:
+
+| zone bands, 2020s | ledger | water reaches, 'hl' → 'firn' |
+|---|---|---|
+| Hohsaas 3275–3345 m | 8 m w.e. (14 m) | 36 → 19 m |
+| Jungfraufirn 3415–3535 m | 25 m w.e. (36 m) | 68 → 37 m |
+| Corvatsch 3295–3365 m | 13 m w.e. (21 m) | unchanged, 13 m: the column is shallower than the firn |
+
+**The rule** (scorer `90bcbb2`, 7 f_ref values, out of sample):
+
+| condition | result |
+|---|---|
+| 1. net robust zone gain ≥ 2 | **+1: fails** (Tête Rousse 3145 m polythermal → cold, as measured; bias +1.45 → +0.51 °C) |
+| 2. A's conditions against FRH | pass: M1 2.58 → 2.59, zone M1 1.82 → 1.80, cold +1; warming error 0.56 → 0.58, interval 0.00–0.05 |
+| 3. no cooling of 'hl'-temperate firn | **fails: 6 band-decades**, all in 1972–1991 at low firn bands near the firn line (Tortin 2855–2885 m, Morteratsch 2875 m, Ortles 3225 m), cooled 0.24–0.62 °C below the melting point |
+| 4. frozen-bed table | pass (12 of 14) |
+| zone target D against H | +1 (needs 2) |
+
+- **By the rule, 'hl' stays.** The branch `firn-ledger` is kept, to be run again on the
+  recalibrated mass balance (Step 3a), as the plan foresaw.
+- **What else changes:**
+  - Tête Rousse improves (RMSE 0.98 → 0.88 °C);
+  - Alphubel South 3805 m gets colder (bias −0.82 → −1.43 °C) and Tortin slightly worse;
+  - all other outlines are unchanged: at most borehole bands the ledger lies below the readings,
+    or the water runs out first;
+  - Taconnaz is unchanged (its maximum water depth 99 → 79 m, median still 34 m).
+- **Why so little:** the ledger follows GloGEM's own balance. Where that balance is too positive
+  (Corvatsch +0.9 to +1.2 m w.e. a year at 3300 m, Hohsaas), the ledger is thick, and the cold sites
+  stay inside the firn. The extent and the depth are the mass balance's to correct (Step 3a).
+- **The cooling guard** flags low firn bands at the firn line in the first two decades, where the
+  ledger started thin from a small reference balance.
 
 ## What was wrong
 
