@@ -43,7 +43,8 @@
 > (`4a5e962`) and the run tooling (`d4af4d7`). The fair run set is pre-registered
 > (`plans/2026-10-13_fair_test_preregistration.md`); a review panel checks it before any run.*
 > *Status (2026-10-14): the fair run set ran (58 runs, GloGEM `8c38120`): FRH central, H a full
-> sensitivity. Next: the percolation rule ('front') and rule B.*
+> sensitivity. Rule B: the percolation rule failed its gate twice, so 'hl' stays. Diagnostic runs of
+> advection: Taconnaz is a meltwater-amount problem, and the frozen tongues are local.*
 
 ## What we believed
 
@@ -268,6 +269,42 @@ A reporting error found afterwards: the frozen-bed table counted Sphinxgrat (015
 set) as a miss. Corrected: 12 of 14 frozen beds found, not 12 of 15. Only that reported number
 changes (scorer rerun into `week2/fair_test_rerun`).
 
+### Rule B: a depth limit for meltwater in cold firn fails its gate (2026-10-14)
+
+The rule ('front'): water passes a temperate layer that starts within 15 m, and otherwise reaches
+at most 4 m into cold firn (Mattea et al. 2021; Gilbert et al. 2014). An independent review found
+the flaw before the gate runs showed it, and the gate confirmed it twice (details:
+`plans/2026-10-13_cold_firn_percolation_plan.md`).
+
+- **Read after the winter, the profile never shows temperate firn.** Winter cooling reaches
+  14–19 m by 0.1–2 °C even in firn that 'hl' keeps temperate. So the rule capped the water at 4 m
+  everywhere and cooled 53 837 of 53 982 temperate band-years, by up to 7 °C.
+- **Read at the end of the melt season, the rule has two stable states.**
+  - From the cold start, the end-of-season profile never comes within 0.01 °C of the melting
+    point, so no temperate layer ever forms.
+  - Started temperate, every temperate band stays temperate.
+  - The outcome depends on the start and on an arbitrary tolerance, so 'hl' stays.
+- **A 4 m cap everywhere makes everything cold.** In the zone it finds 12 of 13 cold entities, but
+  0 of 6 polythermal and 0 of 1 temperate; overall, polythermal goes 9 → 5. That is the wrong
+  direction for the study.
+
+### What advection and meltwater heat do (diagnostic runs, FRH, f_adv 0.3 / 1.0 / 1.7)
+
+| question | answer (measured) |
+|---|---|
+| Taconnaz 3400–3800 m | only f_ref matters. At 0.85 the water wets 59–99 m and the model sits at 0 °C whatever f_adv is. At 0.10 the wetting stops within 9 m and the bias is within ±1 °C |
+| the 3000–3500 m zone | f_adv changes one entity. f_ref 0.10 gives 10 of 20 correct, against 8 at 0.85, but M1 elsewhere rises to 4.9 °C |
+| M1 overall | moves by at most 0.24 °C with f_adv. Mont Blanc wants more advection, the Bernese Alps and Monte Rosa less |
+| frozen tongues of Bossons and Taconnaz | not the summit's cold: f_ref cools the firn above 3500 m by 5–7 °C but moves the tongue beds by at most 0.06 °C. The cold is set locally, by a mean surface of −3.7 to −4.2 °C over thin ice (48–100 m) with no heat input in the ablation area |
+| controls | the Aletsch tongue does receive summit cold at low f_ref. The Grenzgletscher tongue stays temperate in every run, behind a temperate belt at 3000–3300 m |
+
+- **Inferred:** the model lacks a heat source in the ablation area. In reality, meltwater
+  refreezing in the cold winter snowpack on the ice, and water in crevasses, warm the ice surface.
+  In the model, water on ice bands runs off without releasing heat.
+- **Inferred:** the meltwater heat the firn receives must differ by site in a way the degree-day
+  melt does not capture. Shaded Taconnaz needs about a tenth of what sunny Monte Rosa needs. It is
+  the amount of water, not its depth, that is wrong there.
+
 ## What was wrong
 
 - **T_off was read as physics.** It is the third calibration factor, unbounded, and it closes the
@@ -298,8 +335,10 @@ changes (scorer rerun into `week2/fair_test_rerun`).
 
 ## What is still open
 
-- **Rule B:** the re-specified percolation rule ('front', GloGEM worktree `perc-wetting-front`)
-  against 'hl' with FRH, after its gate.
+- **Rule B is closed:** 'hl' stays. A meltwater depth limit needs a criterion that does not
+  depend on the thermal state it changes.
+- **Heat in the ablation area** (refreezing in the winter snowpack on ice), against the false
+  frozen tongues.
 - **Zone target D:** the forcing changes nothing in the 3000–3500 m zone (8 of 20 right with both).
   The zone gains must come from the percolation and the zone work.
 - **The frozen tongues of Bossons and Taconnaz** (above).
