@@ -210,3 +210,29 @@ balance.
   negative year removing exactly |b|, ageing at 20 years.
 - The scorer's known-answer check: FRH against itself gives no change.
 - Book chapter 9, memory and commits as each step lands. No config files committed.
+
+## Corrections after the code review (2026-10-14, before the run set)
+
+- **The ledger keeps 21 layers, not 20:** layers stay while their year is at least the current
+  year − 20, the convention of `firn_change.pro`. The code and the Python reference agree on this.
+- **Corvatsch's ledger is thick, not thin.** GloGEM's band balance at 3295–3365 m averages +0.9 to
+  +1.2 m w.e. a year, so the ledger holds 26–36 m w.e. until 1995 and 8–14 m w.e. in 2025. The
+  column there is only 14–19 m deep, so the ledger changes nothing at Corvatsch. Its problem is the
+  mass balance (Step 3a; the target is about 1 m w.e. a year too positive).
+- **The snow term lags within the year.** In October–December, snow that survived the year is
+  counted both in the new layer and in `sno`, until the snow store is reset. In negative years, the
+  firn melted that summer stays in the path until the year ends. Both effects are small (little
+  melt in those months; at most |b|) and are accepted. The alternative, the year-to-date balance,
+  would need a monthly reference balance in the spin-up.
+- **The floor.** With less than about 0.6 m w.e. of ledger plus snow, water still reaches node 1
+  (1 m), the same floor as 'hl'.
+- **The gate checks the logged limit.** The ledger log now carries the year's balance (full
+  precision) and the deepest limit used (GloGEM `20ba803`). Check 4 compares the wet depth with
+  that limit, not with the ledger alone, which flagged the snow.
+- **Review result (f4935bf):**
+  - no code error;
+  - the IDL loop equals the Python reference on 905 915 random year-steps;
+  - defaults byte-identical (373 files); the mass-balance logs identical;
+  - 'firn' is never deeper than 'hl'. It is shallower in 28.5 % of band-years.
+  - Gate-run wet depths, 'hl' → 'firn': Jungfraufirn 59–79 → 29–39 m by 2025; Hohsaas 29–44 → 14 m
+    by 2022.
