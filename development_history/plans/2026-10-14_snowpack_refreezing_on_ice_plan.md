@@ -73,3 +73,33 @@ Reported beside the rule:
   early in spring. The test is the borehole points in ice (RMSE 1.3 °C today).
 - If the tongues stay frozen, the missing heat is elsewhere: water in crevasses, or water content
   in temperate ice. That is stated, not tuned.
+
+## Outcome (2026-10-14): not adopted by the rule, by one borehole
+
+The run set is FRHS at 7 f_ref plus one run without deepening, from GloGEM `0f4cd85` (`ab565b7` +
+the review's rounding fix). It was scored by `snow_refreeze_rule.py` (icetemp `837c4e9`).
+
+| | FRH | FRHS |
+|---|---|---|
+| M1 / zone M1 (out of sample) | 2.58 / 1.82 °C | 2.50 / 1.82 °C |
+| robust class changes | | none (cold 65 → 62 and zone cold 3 → 2 change with the tolerance) |
+| warming: mean site error / ratio | 0.56 / 0.80 | 0.52 / 0.85 (difference −0.13 to 0.00) |
+| 1. A's conditions | | **pass** |
+| 2. frozen beds found / temperate beds called frozen | 12 of 14 / 2 | 11 of 14 / 1: **fail** |
+| 3. fronts of Tête Rousse / Altels frozen (2025) | 1.00 / 1.00 | 1.00 / 0.94: **pass** |
+| tongue beds below 2900 m, frozen share: Bossons / Taconnaz | 0.84 / 0.79 | 0.03 / 0.26 |
+| Aletsch, Grenzgletscher, Fiescher tongues | temperate | temperate |
+| zone target D against H | 0 | 0 |
+
+- **The bed that is lost** is Tête Rousse hole 64, at 32.5 m.
+  - Measured −2.34 °C. FRH already gives only −0.43 °C, and the switch takes it to −0.07 °C, past
+    the frozen threshold.
+  - Two bed holes improve: Grenzgletscher 175 is no longer called frozen, and Alphubel South goes
+    from −5.6 to −1.8 °C against a measured −2.1 °C.
+- **By the rule, the switch stays off.** The branch `snow-refreeze` is kept unmerged. The false
+  frozen tongues of Bossons and Taconnaz remain, as a stated limitation.
+- **Why Tête Rousse breaks.** The model gives Tête Rousse far too much winter snow (1.86 m w.e. in
+  June; precipitation factor at its 1.3 bound), and on its thin bands that snow fills most of the
+  ice column. The zone diagnosis traced the 3000–3500 m misses to the same excess snow. With
+  realistic snow, the refreezing heat there would be smaller. So the switch should be judged again
+  only once the snow on small high glaciers is right.

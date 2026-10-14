@@ -44,7 +44,9 @@
 > (`plans/2026-10-13_fair_test_preregistration.md`); a review panel checks it before any run.*
 > *Status (2026-10-14): the fair run set ran (58 runs, GloGEM `8c38120`): FRH central, H a full
 > sensitivity. Rule B: the percolation rule failed its gate twice, so 'hl' stays. Diagnostic runs of
-> advection: Taconnaz is a meltwater-amount problem, and the frozen tongues are local.*
+> advection: Taconnaz is a meltwater-amount problem, and the frozen tongues are local. The zone is too
+> much firn (GLAMOS); the snow-refreezing switch fixes the tongues but loses Tête Rousse's frozen bed, so it
+> stays off.*
 
 ## What we believed
 
@@ -350,7 +352,13 @@ Gate run (FRH, f_ref 0.85):
 | Tête Rousse and Altels fronts (lowest quarter of the bands, frozen share) | 1.00 → 1.00 and 1.00 → 0.94 |
 | warming at 10 m, mean over all bands and years | +0.3 to +1.5 °C; up to +6 to +10 °C on small thin glaciers (01150, 01195, 01565) |
 
-The decision rule, fixed before its run set (scorer icetemp `837c4e9`), decides on the 7-f_ref set.
+**The decision (7 f_ref values, scorer `837c4e9`): not adopted, by one borehole.**
+- M1 improves (2.58 → 2.50 °C), the warming error improves (0.56 → 0.52 °C), there are no robust
+  class losses, and the fronts of Tête Rousse and Altels stay frozen.
+- But the frozen bed of Tête Rousse hole 64 (32.5 m, measured −2.34 °C) is lost: the model was
+  already at −0.43 °C, and the switch takes it to −0.07 °C.
+- The cause is the same excess winter snow that breaks the zone. The switch should be judged again
+  once that snow is right; until then the false frozen tongues are a stated limitation.
 
 ## What was wrong
 
@@ -384,8 +392,11 @@ The decision rule, fixed before its run set (scorer icetemp `837c4e9`), decides 
 
 - **Rule B is closed:** 'hl' stays. A meltwater depth limit needs a criterion that does not
   depend on the thermal state it changes.
-- **Heat in the ablation area** (refreezing in the winter snowpack on ice), against the false
-  frozen tongues.
+- **Too much winter snow on small high glaciers** (precipitation factor at its 1.3 bound, model
+  ELA 125–150 m too low against GLAMOS). It is the common cause of the zone misses and of Tête
+  Rousse's warm bias, and it decides the snow-refreezing switch. It lies on the mass-balance side.
+- **The false frozen tongues** of Bossons and Taconnaz: a stated limitation until the switch can be
+  judged on realistic snow.
 - **Zone target D:** the forcing changes nothing in the 3000–3500 m zone (8 of 20 right with both).
   The zone gains must come from the percolation and the zone work.
 - **The frozen tongues of Bossons and Taconnaz** (above).
