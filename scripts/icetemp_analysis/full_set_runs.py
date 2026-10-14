@@ -24,6 +24,8 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
   --data-rules old: the borehole data rules before 2026-10-13, to compare with earlier runs.
+  --calibration-dir: another mass-balance calibration (e.g. a diagnostic recalibration of a subset); its
+            files keep their catchment suffix, so use the catchment they were calibrated on.
 Each run has its own run_dir, data/bayescal/<run_tag>_w<worker> (GloGEM writes every run to the same
 profile file names; a reused run_dir would skip the run through its .done file), the configuration of
 the alps_s2 ensemble (spin-up on), archives its raw profiles and records the GloGEM commit it ran on.
@@ -90,6 +92,8 @@ def main():
     ap.add_argument('--fadv', type=float, default=None)
     ap.add_argument('--no-deepen', action='store_true')
     ap.add_argument('--exclude-ids', default='', help='comma-separated RGI7 ids left out')
+    ap.add_argument('--calibration-dir', default=None,
+                    help='mass-balance calibration to use instead of the configured one (all its .dat files)')
     ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
                     help="'old': the borehole data rules before 2026-10-13 (regression gates)")
     args = ap.parse_args()
@@ -105,8 +109,8 @@ def main():
     cfg = CalibrationConfig(
         region=base.region, include_estimated=base.include_estimated,
         include_unassessed=base.include_unassessed, run_tag=f'{run_tag}_w{args.worker}',
-        calibration_source_dir=base.calibration_source_dir,
-        calibration_source_files=base.calibration_source_files,
+        calibration_source_dir=args.calibration_dir or base.calibration_source_dir,
+        calibration_source_files=None if args.calibration_dir else base.calibration_source_files,
         thermal_spinup='y', n_design_points=len(THETAS), remote_host=args.host,
         catchment=args.catchment, **VARIANTS[args.variant],
         **(dict(deepen_to_obs='n') if args.no_deepen else {}),
