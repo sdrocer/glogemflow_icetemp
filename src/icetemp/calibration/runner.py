@@ -53,7 +53,8 @@ RGI_REGION_CODES = {
 }
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-GLOGEM_DIR = REPO_ROOT / 'GloGEM'
+# ICETEMP_GLOGEM_DIR runs another GloGEM tree (e.g. a git worktree under test)
+GLOGEM_DIR = Path(os.environ.get('ICETEMP_GLOGEM_DIR', REPO_ROOT / 'GloGEM'))
 # raw monthly profiles of every training run, gzipped, outside the 10 GB home quota
 PROFILE_ARCHIVE_DIR = Path('/itet-stor/jabeer/net_scratch/icetemp_profiles')
 # RGI7 mass-balance calibration covering all of CentralEurope (mhuss; identical to Lander's copy)
@@ -226,7 +227,7 @@ enable_strain_heating   = 'n'   ; open question -- same SIA driving-stress basis
 firnice_forcing_toff    = '{forcing_toff}'   ; 'n' = thermal energy inputs without the MB t_offset
 firnice_hl1980          = '{hl1980}'   ; 'y' = Herron & Langway (1980) close-off depth as published
 firnice_lh_water        = '{lh_water}'   ; 'y' = latent heat per m of percolating water
-firnice_perm_limit      = '{perm_limit}'   ; 'profile' = model's own 830 kg/m3 depth; 'cold' = 4 m into cold firn
+firnice_perm_limit      = '{perm_limit}'   ; 'profile' = model's own 830 kg/m3 depth; 'front' = 4 m into cold firn below a wetting front
 firnice_thermal_lapse   = '{thermal_lapse}'   ; 'reanalysis' = ERA5's rate; 'stations' = the station rates
 firnice_deepen_to_obs   = '{deepen_to_obs}'   ; 'n' = borehole bands run to the band's ice thickness
 

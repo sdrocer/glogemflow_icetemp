@@ -75,7 +75,7 @@ class CalibrationConfig:
     forcing_toff: str = 'y'     # 'n' = thermal energy inputs without the mass-balance t_offset
     hl1980: str = 'n'           # 'y' = Herron & Langway (1980) close-off depth as published
     lh_water: str = 'n'         # 'y' = latent heat per m of percolating water
-    perm_limit: str = 'hl'      # 'profile' = the model's own 830 kg/m3 depth; 'cold' = at most 4 m into cold firn
+    perm_limit: str = 'hl'      # 'profile' = the model's own 830 kg/m3 depth; 'front' = at most 4 m into cold firn below a wetting front
     thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate; 'stations' = station rates
     deepen_to_obs: str = 'y'      # 'n' = borehole bands run to the band's ice thickness
     n_design_points: int = 100

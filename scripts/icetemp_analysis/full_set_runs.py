@@ -17,6 +17,7 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
             HC       H + meltwater at most 4 m into cold firn     FRHC  FRH + the same
             HR       H with ERA5's own lapse rate (separates the two parts of FRH)
             FRSH     FRH with the monthly station lapse rates (Jungfraujoch, Corvatsch)
+            FRHW/HW  FRH/H + meltwater past a temperate layer, at most 4 m into cold firn ('front')
   --no-deepen: borehole bands run to the band's ice thickness (the bed the product shows); in the tag
   --exclude-ids: glaciers left out of the run (e.g. the sealed 01161)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
@@ -26,6 +27,8 @@ Each run has its own run_dir, data/bayescal/<run_tag>_w<worker> (GloGEM writes e
 profile file names; a reused run_dir would skip the run through its .done file), the configuration of
 the alps_s2 ensemble (spin-up on), archives its raw profiles and records the GloGEM commit it ran on.
 Runs that share a catchment file must use the same glacier set.
+
+ICETEMP_GLOGEM_DIR=<tree> runs another GloGEM tree (a worktree under test); provenance records it.
 
 Run from the repo root: PYTHONPATH=src python scripts/icetemp_analysis/full_set_runs.py 0 --variant F
 """
@@ -56,7 +59,10 @@ VARIANTS = {'today': {}, 'R': {},
             'FRHC': dict(forcing_toff='n', thermal_lapse='reanalysis', hl1980='y', lh_water='y',
                          perm_limit='cold'),
             'HR': dict(thermal_lapse='reanalysis', hl1980='y', lh_water='y'),
-            'FRSH': dict(forcing_toff='n', thermal_lapse='stations', hl1980='y', lh_water='y')}
+            'FRSH': dict(forcing_toff='n', thermal_lapse='stations', hl1980='y', lh_water='y'),
+            'FRHW': dict(forcing_toff='n', thermal_lapse='reanalysis', hl1980='y', lh_water='y',
+                         perm_limit='front'),
+            'HW': dict(hl1980='y', lh_water='y', perm_limit='front')}
 
 
 class SubsetPipeline(CalibrationPipeline):
