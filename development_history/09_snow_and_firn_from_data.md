@@ -11,8 +11,8 @@
 > (Alexandra von der Esch's snowline calibration) and firn maps (Matthias Huss's firn model,
 > Janosch's first paper).
 >
-> *Status (2026-10-14): Step 1 of the plan of 2026-10-14 done; the firn model and the snow-line
-> scoring are running; Alexandra's code arrives as a GloGEM branch by the end of the week.*
+> *Status (2026-10-14): Step 1 done; snow lines, GLAMOS and the firn model compared (Step 2);
+> Alexandra's code arrives as a GloGEM branch by the end of the week.*
 
 ## What we believed
 
@@ -123,6 +123,44 @@ GLAMOS, glacier-wide, model minus GLAMOS over the same years:
   - measured (seasonal stakes): Corvatsch, Sex Rouge, Aletsch;
   - mostly inferred (GLAMOS method 0): Hohsaas and Alphubel;
   - Tortin's winter balance is inferred.
+
+### The firn model against the thermal model's firn (Step 2; agent diagnosis)
+
+The firn model (`firn_model/firn_change.pro`) was ported to Python. The port agrees with the IDL
+original cell by cell (to 5e-7, IDL's output rounding) on all ten glaciers. It was then run on the
+GLAMOS distributed mass balances of 9 calibration glaciers, 1970–2025, and averaged to GloGEM's
+10 m bands. Firn thickness is converted at an assumed 600 kg/m³.
+
+| zone bands | decade | firn model: firn share / thickness | thermal model: firn share / wet depth |
+|---|---|---|---|
+| Corvatsch 3295–3365 m | 1970s | 0.50 / 1.2 m | 1.00 / 12.8 m |
+| | 1990s–2000s | 0 (no firn 1982–2013) | 1.00 / 12.8 m |
+| | 2010s | 0.16 / 1.5 m | 1.00 / 12.8 m |
+| Hohsaas 3275–3345 m | 1980s | 1.00 / 15.7 m | 1.00 / 36.5 m |
+| | 2000s | 0.09 / 5.0 m | 0.99 / 36.4 m |
+| | 2020s | 0 | 0.44 / 36.4 m |
+| Aletsch (Jungfraufirn) 3415–3535 m | 2010s–2020s | 0.99–1.00 / 48–51 m | 1.00 / 68 m |
+
+- **Corvatsch and Hohsaas: the diagnosis holds.**
+  - The thermal model keeps permeable firn 20–30 years too long: Corvatsch until 2023–25, where
+    the firn model has none from 1982; Hohsaas until 2022–23, where the firn model loses it in
+    1998–2003.
+  - It also soaks it far deeper than the firn could be: 13–36 m against at most about 3–17 m.
+- **Jungfraufirn: the firn extent agrees.** Only the depth is wrong: water reaches 68 m against a
+  firn base of about 48 m.
+- **The meltwater depth limit (Herron & Langway close-off times perm_frac, 75–90 m, fixed per band)
+  is deeper than any firn column the firn model produces.** Step 3b (firn thickness from the mass
+  balance) targets exactly this.
+- **Glacier-wide on Aletsch, the thermal model has less firn than the firn model** since the
+  1990s (7 km² in the 2020s). So the excess firn is a small-glacier problem, not a general one.
+- **Caveats:**
+  - the GLAMOS outlines (about 2003) differ from RGI7: Hohsaas covers 0.19 of 1.79 km², all above
+    3215 m;
+  - the records of Fiescher, Gorner and Morteratsch start in 2005–2008, from zero firn;
+  - the measured-period grids differ strongly from the fixed-date ones in some years (Gorner 2025:
+    +0.11 against −3.14 m w.e.);
+  - Corvatsch's 2022 grid misses the summer;
+  - the firn model's thickness is capped by its 20-year rule.
 
 ## What was wrong
 
