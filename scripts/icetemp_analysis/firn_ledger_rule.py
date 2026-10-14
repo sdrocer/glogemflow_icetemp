@@ -34,18 +34,19 @@ TEMPERATE_SITES = ('Jungfraufirn', 'Lysgletscher', 'Fieschergletscher', 'Breitho
 
 
 def ledger_vs_wet(run, gids):
-    """Share of firn band-years whose wet depth exceeds the ledger depth by more than one node (1 m)."""
+    """Firn band-years whose wet depth exceeds the deepest meltwater limit the model used that year (the ledger of
+    the previous year plus the month's snow, logged as 'limit'); must be 0."""
     rows = []
     for g in gids:
         d = ft.BAYESCAL / run / ft.FIRNICE
         fl, wd = d / f'firnice_firnledger_{g}.dat', d / f'firnice_wetdepth_{g}.dat'
         if not (fl.exists() and wd.exists()):
             continue
-        L = pd.read_csv(fl, sep=r'\s+', comment='#', header=None, names=['elev', 'year', 'we', 'z', 'n', 'old'])
+        L = pd.read_csv(fl, sep=r'\s+', comment='#', header=None,
+                        names=['elev', 'year', 'we', 'z', 'n', 'old', 'b', 'lim'])
         W = pd.read_csv(wd, sep=r'\s+', comment='#', header=None, names=['elev', 'year', 'wd', 'lost'])
-        L['year'] = L.year + 1   # the ledger of the previous year limits this year's water
         m = W.merge(L, on=['elev', 'year'])
-        rows.append(dict(gid=g, n=len(m), above=int((m.wd > m.z + 1.0).sum())))
+        rows.append(dict(gid=g, n=len(m), above=int((m.wd > m.lim + 1e-6).sum())))
     return rows
 
 
