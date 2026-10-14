@@ -68,14 +68,75 @@ The thermal model on both calibrations (FRH, f_ref 0.85; below 15 m, 18 entities
   in firn and meltwater keeps them at 0 °C.
 - **Hohsaas gets slightly too cold.** The bias at 3275 m goes from −0.86 to −1.21 °C.
 
+### Snow lines and GLAMOS against today's calibration (Step 2; agent diagnosis)
+
+A GloGEM mass-balance run with full output (monthly snow line, ELA, winter and annual balance,
+1990–2025) was compared with two datasets:
+- the transient snow lines of Sommer et al. (12 of our glaciers; corrected snow line, QA ≥ 0.67,
+  weighted by 1/σ, May–October 2000–2025);
+- the GLAMOS series.
+
+Biases are model minus observation, in metres:
+
+| glacier (RGI7, km²) | wRMSE | bias May–Jun | Jul–Aug | Sep–Oct | end-of-summer snow line − model ELA |
+|---|---|---|---|---|---|
+| Aletsch (02596, 82) | 333 | −208 | +54 | +315 | +48 |
+| Gorner/Grenz (01225, 57) | 311 | −283 | +37 | +170 | −21 |
+| Fiescher (02611, 31) | 294 | −277 | +106 | +108 | +65 |
+| Morteratsch (02216, 16) | 317 | −199 | +84 | +273 | +45 |
+| Bossons (00773, 11) | 421 | −252 | +13 | +48 | −238 |
+| Lys (01205, 11) | 377 | −407 | +39 | +53 | −82 |
+| Taconnaz (00774, 5) | 402 | −456 | −84 | +4 | −196 |
+| Monte Rosa east face (01230, 4) | 452 | −281 | −442 | −153 | −415 |
+| Hohsaas (01112, 1.8) | 204 | −185 | −67 | +6 | 0 |
+| Gruben (01127, 1.2) | 226 | −138 | −126 | −51 | −122 |
+| Ortles (02821, 1.2) | 283 | −313 | +12 | −78 | −119 |
+
+- **Spring snow lasts too long on every glacier.** The May–June snow line is 140–460 m too low. The
+  model's snow line is the end-of-month state, so the true bias is larger.
+- **By the end of summer the glaciers split.**
+  - The big valley glaciers are right to slightly high (−21 to +135 m).
+  - The small or steep high glaciers keep their snow line, and so their firn line, 80–420 m too
+    low.
+- **The precipitation bound changes only the winter balance** (Hohsaas May–June −185 → −184 m). The
+  calibration keeps the annual target and gives back less snow as less melt.
+
+GLAMOS, glacier-wide, model minus GLAMOS over the same years:
+
+| glacier | years | winter balance, regional / 0.8 bound | annual balance | ELA |
+|---|---|---|---|---|
+| Aletsch | 1990–2025 | +0.34 | +0.09 | +29 m |
+| Corvatsch | 2013–25 | +0.38 / +0.05 | +0.74 / +0.81 | −150 / −138 m |
+| Hohsaas | 2018–25 | +0.54 / −0.05 | −0.08 / +0.09 | −126 / −116 m |
+| Tortin | 2015–25 | +0.08 | −0.14 | −6 m |
+| Sex Rouge | 2012–25 | −0.19 | +0.30 | (one year with an ELA on the glacier) |
+| Alphubel | 2016–25 | +0.96 | −0.58 | +21 m |
+
+- **The calibration target itself may be too positive for small glaciers.**
+  - Corvatsch's geodetic target (Hugonnet et al., 2000–2019) is −0.25 m w.e. a year, but GLAMOS
+    measures about −1.3 over 2013–19, when the model gives −0.6.
+  - At 3200–3350 m the model's band balance on Corvatsch and Hohsaas is 1.1–1.6 m w.e. too
+    positive, with either calibration.
+  - The outlines differ: GLAMOS Corvatsch is 0.17–0.23 km², RGI7 0.45 km². The band comparison at
+    equal elevations is not affected by that.
+- **Measured or inferred:**
+  - measured (seasonal stakes): Corvatsch, Sex Rouge, Aletsch;
+  - mostly inferred (GLAMOS method 0): Hohsaas and Alphubel;
+  - Tortin's winter balance is inferred.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
   factor sets how much snow falls; the snow line also depends on how the melt and the snow change
   with height. Lowering c_prec trades snow for melt and leaves the ELA nearly in place.
+- **On small glaciers, the target may be too positive.** The geodetic balances of glaciers under
+  about 1 km² can disagree strongly with GLAMOS (Corvatsch −0.25 against about −1.3 m w.e. a
+  year). A too positive target keeps the firn line low, whatever the snow.
 - **Possible cause, not yet tested:** the precipitation gradient (1.5 % per 100 m above the ERA5
   cell, the regional table). On small glaciers high above their cell it adds much snow at the top.
   The GLAMOS band winter balances of Corvatsch are nearly flat with height.
+- **Spring snow persists too long everywhere**, by 140–460 m in May–June. That changes the
+  insulation and the timing of meltwater for every glacier, not only the small ones.
 
 ## What is next
 
