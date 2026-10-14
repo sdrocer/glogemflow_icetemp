@@ -196,6 +196,33 @@ shorter.
   snowline constraint cannot correct a wrong annual target. Where GLAMOS exists, its balance is the
   better target for the diagnostic recalibration.
 
+### The firn model's layer removal (decision 1 of the firn-ledger plan)
+
+`firn_change.pro` handles a negative year as follows:
+- it wipes every older layer thinner than |b| without reducing |b|;
+- then it takes the full |b| again from the next, thicker layer.
+
+So it removes more than the year's loss. Running both rules on the GLAMOS grids of the 9 glaciers
+(the exact port, scratch `firnmodel/mc/`):
+
+| | firn area | firn mass |
+|---|---|---|
+| all glaciers and years: mass-conserving ÷ original | 1.036 | 1.016 |
+
+The difference concentrates where the firn is being lost on small glaciers:
+
+| glacier, decade | firn area, original rule | mass-conserving |
+|---|---|---|
+| Hohsaas, 2000s | 0.034 km² | 0.066 km² |
+| Sex Rouge, 2000s | 0.011 km² | 0.024 km² |
+| Alphubel, 2000s | 0.041 km² | 0.064 km² |
+| Tortin, 2020s | 0.045 km² | 0.078 km² |
+| Aletsch, 2020s | 37.6 km² | 41.5 km² |
+
+In the loss phase of small glaciers, the original removal roughly halves the firn area and makes
+the firn disappear earlier. The GloGEM ledger uses the mass-conserving rule (decision 1). Whether
+the published firn maps should be revisited is for Janosch and Matthias.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
