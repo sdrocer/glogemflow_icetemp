@@ -15,7 +15,7 @@ be defended later, in a paper, a thesis or a talk.
 | 5 | [The thermal spin-up](05_thermal_spinup.md) | 24–28 Sep 2026 | a one-year climate, a slow spin-up, and the drift correction |
 | 6 | [Firn extent and the mass-balance calibration](06_firn_extent_and_calibration.md) | 28 Sep 2026 – | not water in ice but the firn line; the runs used other glaciers' mass-balance parameters |
 | 7 | [The snow, the comparison and the calibration target](07_snow_comparison_target.md) | 30 Sep 2026 – | each reading at its date; the winter snow on ice barely insulated (a solver bug); the fix lowers the RMSE in all 32 runs; target T2 (every depth bin) tells f_ref and f_ins apart, coded and tried |
-| 8 | [The thermal forcing, the data we were losing, and the tests a forecast needs](08_thermal_forcing_and_the_tests_a_forecast_needs.md) | 12 Oct 2026 – | T_off closes budgets, it is not the air; a fair test needs own parameters; stations pick ERA5's lapse rate; sunshine fails at band level; the model warms half as fast as measured; a third of the deep data was being lost |
+| 8 | [The thermal forcing, the data we were losing, and the tests a forecast needs](08_thermal_forcing_and_the_tests_a_forecast_needs.md) | 12 Oct 2026 – | T_off closes budgets, it is not the air; a fair test needs own parameters; stations pick ERA5's lapse rate; sunshine fails at band level; the model warms half as fast as measured; a third of the deep data was being lost; the fair test makes the offset-free forcing central (not robust: H a full sensitivity), and without T_off the massifs want opposite meltwater heat |
 
 ## How chapters are written
 

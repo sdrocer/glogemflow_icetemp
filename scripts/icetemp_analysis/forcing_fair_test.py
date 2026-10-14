@@ -631,12 +631,17 @@ def main():
         res['reported'] = extras(P, E, obs_cls, dh.calibration_glaciers, outputs, W, chosen_by_v)
         FB = frozen_bed_table({(v, fr): run_name(TAG, v, fr) for v in DECIDE for fr in FREFS}, chosen_by_v, E)
         FB.to_csv(out / 'frozen_bed.csv', index=False)
-        res['frozen_bed'] = {v: dict(
-            frozen_found=f"{int((FB.frozen_meas & FB[f'frozen_{v}']).sum())} of {int(FB.frozen_meas.sum())}",
-            frozen_deep_cold_found=f"{int((FB.frozen_meas & FB.deep_cold & FB[f'frozen_{v}']).sum())} of "
-                                   f"{int((FB.frozen_meas & FB.deep_cold).sum())}",
-            temperate_called_frozen=int((~FB.frozen_meas & FB[f'frozen_{v}']).sum()))
-            for v in DECIDE if f'frozen_{v}' in FB}
+        res['frozen_bed'] = {}
+        for v in DECIDE:
+            if f'frozen_{v}' not in FB:
+                continue
+            F = FB[np.isfinite(FB[f'T_{v}'].astype(float))]   # holes the run models
+            res['frozen_bed'][v] = dict(
+                frozen_found=f"{int((F.frozen_meas & F[f'frozen_{v}']).sum())} of {int(F.frozen_meas.sum())}",
+                frozen_deep_cold_found=f"{int((F.frozen_meas & F.deep_cold & F[f'frozen_{v}']).sum())} of "
+                                       f"{int((F.frozen_meas & F.deep_cold).sum())}",
+                temperate_called_frozen=int((~F.frozen_meas & F[f'frozen_{v}']).sum()),
+                not_modelled=sorted(FB.loc[~FB.index.isin(F.index), 'glacier'].tolist()))
     P.to_csv(out / 'points.csv', index=False)
     (out / 'fair_test.json').write_text(json.dumps(res, indent=1, default=str))
     print(json.dumps({k: res[k] for k in ('counts', 'A', 'robustness')}, indent=1, default=str))
