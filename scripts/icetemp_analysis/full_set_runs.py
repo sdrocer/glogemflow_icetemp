@@ -18,6 +18,7 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
             HR       H with ERA5's own lapse rate (separates the two parts of FRH)
             FRSH     FRH with the monthly station lapse rates (Jungfraujoch, Corvatsch)
             FRHW/HW  FRH/H + meltwater past a temperate layer, at most 4 m into cold firn ('front')
+            FRHS     FRH + meltwater refreezing in the seasonal snow on ice bands
   --no-deepen: borehole bands run to the band's ice thickness (the bed the product shows); in the tag
   --exclude-ids: glaciers left out of the run (e.g. the sealed 01161)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
@@ -62,7 +63,9 @@ VARIANTS = {'today': {}, 'R': {},
             'FRSH': dict(forcing_toff='n', thermal_lapse='stations', hl1980='y', lh_water='y'),
             'FRHW': dict(forcing_toff='n', thermal_lapse='reanalysis', hl1980='y', lh_water='y',
                          perm_limit='front'),
-            'HW': dict(hl1980='y', lh_water='y', perm_limit='front')}
+            'HW': dict(hl1980='y', lh_water='y', perm_limit='front'),
+            'FRHS': dict(forcing_toff='n', thermal_lapse='reanalysis', hl1980='y', lh_water='y',
+                         snow_refreeze='y')}
 
 
 class SubsetPipeline(CalibrationPipeline):

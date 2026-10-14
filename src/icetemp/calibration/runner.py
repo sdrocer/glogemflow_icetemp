@@ -230,6 +230,7 @@ firnice_lh_water        = '{lh_water}'   ; 'y' = latent heat per m of percolatin
 firnice_perm_limit      = '{perm_limit}'   ; 'profile' = model's own 830 kg/m3 depth; 'front' = 4 m into cold firn below a wetting front
 firnice_thermal_lapse   = '{thermal_lapse}'   ; 'reanalysis' = ERA5's rate; 'stations' = the station rates
 firnice_deepen_to_obs   = '{deepen_to_obs}'   ; 'n' = borehole bands run to the band's ice thickness
+firnice_snow_refreeze   = '{snow_refreeze}'   ; 'y' = meltwater refreezes in the seasonal snow on ice bands
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -374,6 +375,7 @@ class GloGEMRunner:
     perm_limit: str = 'hl'      # 'profile' = water stops at the thermal model's own 830 kg/m3 depth
     thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate; 'stations' = station rates
     deepen_to_obs: str = 'y'      # 'n' = borehole bands run to the band's ice thickness, as elsewhere
+    snow_refreeze: str = 'n'      # 'y' = meltwater refreezes in the seasonal snow on ice bands
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -606,6 +608,7 @@ class GloGEMRunner:
             perm_limit=self.perm_limit,
             thermal_lapse=self.thermal_lapse,
             deepen_to_obs=self.deepen_to_obs,
+            snow_refreeze=self.snow_refreeze,
         )
         out_path.write_text(text)
         return out_path

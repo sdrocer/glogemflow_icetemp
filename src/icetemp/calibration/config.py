@@ -78,6 +78,7 @@ class CalibrationConfig:
     perm_limit: str = 'hl'      # 'profile' = the model's own 830 kg/m3 depth; 'front' = at most 4 m into cold firn below a wetting front
     thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate; 'stations' = station rates
     deepen_to_obs: str = 'y'      # 'n' = borehole bands run to the band's ice thickness
+    snow_refreeze: str = 'n'      # 'y' = meltwater refreezes in the seasonal snow on ice bands
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)
