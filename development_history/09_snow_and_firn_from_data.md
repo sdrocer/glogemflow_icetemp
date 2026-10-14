@@ -164,6 +164,38 @@ GLAMOS distributed mass balances of 9 calibration glaciers, 1970–2025, and ave
   - Corvatsch's 2022 grid misses the summer;
   - the firn model's thickness is capped by its 20-year rule.
 
+### Are the targets of small glaciers too positive? (agent diagnosis, 2026-10-14)
+
+34 GLAMOS series overlapping 2000–2019 were matched to RGI7 by overlaying cells. The geodetic
+target (Hugonnet et al., `geodetic/RGIv7.0/aggregated_2000_2020/11_mb_glspec.dat`) was then
+compared with GLAMOS, adjusted to the full period with the regional anomaly where the series is
+shorter.
+
+| group (outlines matching within 0.7–1.3) | Δ = target − GLAMOS, median |
+|---|---|
+| under 1 km², all (N = 10) | +0.26 m w.e. a⁻¹ |
+| under 1 km², measured (seasonal stakes, N = 5) | +0.24 |
+| 1 km² or more, measured (N = 8) | +0.04 |
+| rank correlation of Δ with area / median elevation | −0.41 (p 0.03) / −0.45 (p 0.02) |
+
+- **Small glaciers' targets are mildly too positive**, by about +0.25 m w.e. a year, with much
+  scatter: two of the five measured ones go the other way. This fits the geodetic noise of small
+  glaciers (stated errors 0.2–0.35).
+- **Corvatsch is the outlier, at +0.98.**
+  - About half comes from the outline: GLAMOS's glacier fills only 46 % of RGI7 02103, and the
+    rest lies lower and to the north.
+  - The rest is geodetic noise.
+  - The period is not the cause (correction −0.04).
+- **Wherever GLAMOS measures only part of a larger RGI7 outline** (Hohsaas, Felskinn, Corvatsch),
+  Δ is +0.6 to +1.0. The Hohsaas and Felskinn series are short and modelled, so this is weak
+  evidence.
+- **Side finding, core GloGEM:** the calibrated balance lies above the raw target for 94 % of the
+  4073 CentralEurope glaciers, by a median of +0.05 m w.e. a year. The calibration stops as soon as
+  it is within the tolerance, approaching from one side.
+- **For the snowline calibration:** the target is a second error source on small glaciers. A
+  snowline constraint cannot correct a wrong annual target. Where GLAMOS exists, its balance is the
+  better target for the diagnostic recalibration.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
