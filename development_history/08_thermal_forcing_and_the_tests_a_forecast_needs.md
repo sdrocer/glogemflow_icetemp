@@ -305,6 +305,53 @@ the flaw before the gate runs showed it, and the gate confirmed it twice (detail
   melt does not capture. Shaded Taconnaz needs about a tenth of what sunny Monte Rosa needs. It is
   the amount of water, not its depth, that is wrong there.
 
+### The 3000–3500 m zone: too much firn, not too much melt (2026-10-14)
+
+The melt, rain and firn status at the zone's misses were rebuilt and checked against GLAMOS, the
+borehole labels and the literature (agent diagnosis, scratch `zonediag/`). Values are means over
+1981–2020.
+
+| site (RGI7) | melt + rain | observed | verdict |
+|---|---|---|---|
+| Corvatsch 3295–3365 (02103) | 1.4–1.6 m w.e. | GLAMOS 2013–25: ELA 3381 m, against 3230 m in the model; band balance −0.60 (positive in 2 of 14 years), model about +0.3. Winter snow 1.3 against 0.94 m w.e. | firn where there is ice (high confidence for 2013–25) |
+| Hohsaas 3335 (01112) | 2.05 | GLAMOS 2018–25: ELA 3461 m, against 3335 m; band balance −1.37, model about +0.1; all holes labelled ice | firn where there is ice |
+| Tête Rousse 3135–3165 (00777) | 2.3–2.5 | cold holes labelled ice; snow-free tongue by late summer (Vincent et al. 2012) | firn where there is ice (moderate) |
+| Altels 3015 (01265) | 2.30 | no mass-balance data | the same, by elimination (low) |
+| Jungfraufirn 3415 (02596) | 1.04 | firn is real (GLAMOS band balance +1.5) | about a third of the water reaches depth in reality (inferred) |
+| Taconnaz 3415 / 3685–3785 (00774) | 1.35 / 0.5–0.7 | firn labels | 3415 m: cold ice carried down (Vincent et al. 2015); higher up, too little is known |
+
+- **Why f_ref cannot fix the small sites.** These bands use only 0.07–0.13 m w.e. a year to warm
+  their columns, out of the 1.4–2.5 m w.e. they receive. So even 10 % of the water keeps them at
+  0 °C. Water also reaches the bed, because the close-off depth (53–80 m) is deeper than the whole
+  column (19–44 m).
+- **Too much melt is ruled out.** The model's summer balance is smaller than GLAMOS's at Corvatsch
+  and Hohsaas.
+- **The common cause is too much winter snow on small high glaciers.** The precipitation factor
+  sits at its lower bound of 1.3 at 5 of the 6 sites and is still too high. As a result the firn
+  persists 125–150 m too low. This lies on the mass-balance side.
+- **Sunshine does not explain it.** The band-to-glacier sunshine ratios are 0.9–1.0.
+
+### Meltwater refreezing in the winter snow on ice: the gate (2026-10-14)
+
+`firnice_snow_refreeze` (GloGEM worktree `snow-refreeze`; plan
+`plans/2026-10-14_snowpack_refreezing_on_ice_plan.md`) lets the spring meltwater refreeze in the
+seasonal snow on ice bands, and as superimposed ice on the ice surface. An independent review found
+no code error. It did find a rounding slip, now fixed, and noted that on thin bands the snow fills
+most of the ice column, so the heat then reaches most of the ice.
+
+Gate run (FRH, f_ref 0.85):
+
+| check | result |
+|---|---|
+| default 'n' byte-identical; mass-balance files identical; nothing cools | pass |
+| wet-depth logs | differ only in bands that switch between firn and ice, which carry warmer ice-year temperatures into their firn years (3 rows in always-firn bands) |
+| Bossons tongue below 2900 m, frozen share of the bed | 0.84 → 0.01 |
+| Taconnaz tongue | 0.79 → 0.26 |
+| Tête Rousse and Altels fronts (lowest quarter of the bands, frozen share) | 1.00 → 1.00 and 1.00 → 0.94 |
+| warming at 10 m, mean over all bands and years | +0.3 to +1.5 °C; up to +6 to +10 °C on small thin glaciers (01150, 01195, 01565) |
+
+The decision rule, fixed before its run set (scorer icetemp `837c4e9`), decides on the 7-f_ref set.
+
 ## What was wrong
 
 - **T_off was read as physics.** It is the third calibration factor, unbounded, and it closes the
