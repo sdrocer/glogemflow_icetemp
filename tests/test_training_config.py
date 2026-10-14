@@ -33,6 +33,11 @@ def test_lapse_and_cold_percolation_reach_the_config(tmp_path):
     assert (s['firnice_perm_limit'], s['firnice_thermal_lapse']) == ('cold', 'reanalysis')
 
 
+def test_firn_ledger_reaches_the_config(tmp_path):
+    r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', perm_limit='firn')
+    assert settings(r.write_training_config())[0]['firnice_perm_limit'] == 'firn'
+
+
 def test_snow_refreeze_reaches_the_config(tmp_path):
     r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments')
     assert settings(r.write_training_config())[0]['firnice_snow_refreeze'] == 'n'

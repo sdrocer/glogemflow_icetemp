@@ -227,7 +227,7 @@ enable_strain_heating   = 'n'   ; open question -- same SIA driving-stress basis
 firnice_forcing_toff    = '{forcing_toff}'   ; 'n' = thermal energy inputs without the MB t_offset
 firnice_hl1980          = '{hl1980}'   ; 'y' = Herron & Langway (1980) close-off depth as published
 firnice_lh_water        = '{lh_water}'   ; 'y' = latent heat per m of percolating water
-firnice_perm_limit      = '{perm_limit}'   ; 'profile' = model's own 830 kg/m3 depth; 'front' = 4 m into cold firn below a wetting front
+firnice_perm_limit      = '{perm_limit}'   ; 'profile' = model's own 830 kg/m3 depth; 'firn' = no deeper than the firn ledger
 firnice_thermal_lapse   = '{thermal_lapse}'   ; 'reanalysis' = ERA5's rate; 'stations' = the station rates
 firnice_deepen_to_obs   = '{deepen_to_obs}'   ; 'n' = borehole bands run to the band's ice thickness
 firnice_snow_refreeze   = '{snow_refreeze}'   ; 'y' = meltwater refreezes in the seasonal snow on ice bands
