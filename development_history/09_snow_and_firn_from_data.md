@@ -155,7 +155,9 @@ GLAMOS distributed mass balances of 9 calibration glaciers, 1970–2025, and ave
   1990s (7 km² in the 2020s). So the excess firn is a small-glacier problem, not a general one.
 - **Caveats:**
   - the GLAMOS outlines (about 2003) differ from RGI7: Hohsaas covers 0.19 of 1.79 km², all above
-    3215 m;
+    3215 m. GLAMOS uses the Swiss Glacier Inventory, where Hohsaas is separate from the
+    Triftgletscher below it; RGI7 01112 counts both (Janosch). The geodetic target of 01112 is
+    therefore for the combined outline. The same may apply to other small Swiss glaciers;
   - the records of Fiescher, Gorner and Morteratsch start in 2005–2008, from zero firn;
   - the measured-period grids differ strongly from the fixed-date ones in some years (Gorner 2025:
     +0.11 against −3.14 m w.e.);
