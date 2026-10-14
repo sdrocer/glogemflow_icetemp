@@ -360,6 +360,20 @@ Gate run (FRH, f_ref 0.85):
 - The cause is the same excess winter snow that breaks the zone. The switch should be judged again
   once that snow is right; until then the false frozen tongues are a stated limitation.
 
+### Two checks left from the earlier plan (2026-10-14)
+
+- **Rule C (interaction): nothing is flagged.** No variant beats the choice (FRH with 'hl') on A's
+  conditions. HR (T_off kept, ERA5's lapse rate) has the best M1 (2.46 against 2.58 °C), but that
+  is below the 0.3 °C margin. FRH loses no class and no warming score against H, HR or FRSH, and
+  the zone M1 differs by under 0.01 °C.
+- **Do FRH's errors follow summer sunshine?** On the 75 high entities with week-1 sunshine values:
+  - with sunshine at the hole, Spearman −0.49; with sunshine of the band, −0.35. Shaded sites are
+    too warm and sunny sites too cold;
+  - shuffling whole glaciers gives p = 0.16 and 0.34, so it is not significant;
+  - the pattern is Taconnaz (shaded, up to +8.9 °C) against the Monte Rosa firn (sunny, down to
+    −6 °C). With 14 glaciers it cannot be separated from the massif itself.
+  - Sunshine remains a stated limitation, in line with the massif split of f_ref.
+
 ## What was wrong
 
 - **T_off was read as physics.** It is the third calibration factor, unbounded, and it closes the
