@@ -366,6 +366,35 @@ Questions for the port of the snowline calibration (Alexandra's branch):
 - **Elevation reference.** The raw snow line (SRTM, February 2000) fits GloGEM's fixed 2003
   geometry better than the surface-corrected one.
 
+### Alexandra's earlier snowline calibration, recovered from the git history (2026-10-15)
+
+Her deleted branch survives as three unreachable commits in the local GloGEM repository, on top of
+`ef61ec2`:
+- `716a39e`: `read_snowlinedata.pro`;
+- `2bc3c65`: the snowline calibration;
+- `5a1cf4d`, 24 April 2025: its switch in `input.pro`.
+
+It is kept as the **local** branch `alex-snowline-recovered` (not pushed). It is older than her
+paper, so the branch she uploads remains the reference.
+
+How it worked (`glogem_daily_snow.pro`, the one-script GloGEM, daily):
+- An outer loop scans the precipitation factor: 0.8, 1.0, …, 2.2 in steps of 0.2 (the paper says
+  0.8–3.0).
+- For each value, phases 2–3 run as usual: the degree-day factor, then T_off only if needed, to
+  match the geodetic balance.
+- After each value, `compare_snowline_rmse.pro` compares GloGEM's **daily** snow line (the highest
+  snow-free band) with every observation on its day of year. It uses a weighted RMSE with weights
+  1/σ.
+- At the first rise of the RMSE, a cubic spline through the values so far (`SPL_INIT`/
+  `SPL_INTERP`) gives the minimum, and one final run is made at that factor. So it is a greedy
+  search that assumes a single minimum.
+- Observations: one file per region, `snowline/snowline_<period>/<region>_snowline_median.dat`,
+  holding glacier id, median snow line, its standard deviation, year and day of year.
+
+For the port this answers most of the open questions: daily, the median, 1/σ, per-glacier
+stopping. What remains is the adaptation to our monthly thermal runs and to Sommer's nearly
+constant σ.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
