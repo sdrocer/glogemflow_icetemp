@@ -331,6 +331,41 @@ compared with the GLAMOS band winter balances over the elevations and years both
 - **For small glaciers without snow lines** (under 1 km²), the elevation relation of the excess
   could serve as a prior for the precipitation factor, alongside GLAMOS where it exists.
 
+### The snow-line observations, ready for the calibration (Step 1b, 2026-10-15)
+
+`scripts/icetemp_analysis/snowline/prepare_snowline_targets.py` (data in `data/snowlines/`)
+writes one observation file per calibration glacier from the Sommer et al. product. It covers the
+12 glaciers of 1 km² or more, about 600–1300 observations each from 2000–2025 at QA ≥ 4/6. It also
+writes the constraint per glacier:
+
+| constraint | glaciers |
+|---|---|
+| geodetic + snow lines | Bossons, Taconnaz, Hohsaas, Gruben, Lys, Gorner/Grenz, Monte Rosa east face, Morteratsch, Aletsch, Fiescher, Ortles, Hintereis |
+| GLAMOS balance instead of the geodetic target | Sex Rouge (8 years of seasonal stakes), Tortin, Alphubel |
+| geodetic only, flagged | Corvatsch: the GLAMOS outline covers half of RGI7 02103 |
+| geodetic only | Pelvoux, Tête Rousse, Mont Blanc summit, Grenzgletscher 4305 m (01195), Altels, Sphinxgrat, Titlis |
+
+- The files reproduce the scores of 2026-10-14 exactly.
+- **QA comes in sixths.** The earlier filter `QA ≥ 0.67` dropped the 4/6 level, so the scores of
+  2026-10-14 used QA 5/6 and 1 only.
+
+Questions for the port of the snowline calibration (Alexandra's branch):
+- **Weights.** Sommer's uncertainty is nearly constant (an error budget with a floor of about
+  106 m), so weighting by 1/σ does almost nothing. Her σ (Loibl et al.) was the spread along each
+  snow line.
+- **Which statistic.** Sommer gives the 10th percentile of snow-pixel elevations; she used the
+  median.
+- **Uneven sampling.** 7–19 observations a year in 2000–2012, 23–55 in 2013–2019. Recent years
+  dominate unless weighted per year.
+- **Model timing.** She ran GloGEM daily. We have only the end-of-month snow line, and
+  interpolating between month ends shifts the bias by −40 to −120 m. That needs a daily snow line
+  or a fixed rule.
+- **Fully snow-covered glaciers** (15–31 % of the observations). The product cannot go below the
+  glacier's 10th-percentile elevation, while the model returns the glacier's minimum. These cases
+  should be one-sided limits.
+- **Elevation reference.** The raw snow line (SRTM, February 2000) fits GloGEM's fixed 2003
+  geometry better than the surface-corrected one.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
