@@ -291,6 +291,46 @@ not a start-up artefact:
   least 15 layers in the ledger), fixed before the rerun (plan of 2026-10-15, decision 1).
 - **Yesterday's verdict stands:** the ledger also failed the zone condition.
 
+### Is the winter snow wrong in level or in its height profile? (Step 1a, 2026-10-15; agent diagnosis)
+
+GloGEM now writes the band winter balance (`bwelev_<id>.dat`, GloGEMflow `26e6fbe`). It was
+compared with the GLAMOS band winter balances over the elevations and years both cover (fixed date,
+1 October – 30 April).
+
+| glacier (RGI7) | GLAMOS years | winter balance, GLAMOS → model (m w.e.) | ratio | ratio trend with height in measured bins (per 100 m) |
+|---|---|---|---|---|
+| Sex Rouge (01309) | 14, measured | 1.63 → 1.45 | 0.89 | −0.14 |
+| Tortin (01039) | 11 | 1.11 → 1.20 | 1.08 | −0.06 |
+| Corvatsch (02103) | 11, measured | 0.80 → 1.25 | 1.57 | +0.04 |
+| Hohsaas, upper part (01112) | 8 | 1.05 → 1.81 | 1.72 | −0.43 |
+| Alphubel N (01150) | 10 | 0.73 → 1.68 | 2.31 | −0.60 |
+| Aletsch (02596) | 49, measured | 1.15 → 1.62 | 1.40 | −0.01 (2300–3700 m) |
+| Fiescher (02611) | 18, inferred | 1.42 → 1.46 | 1.03 | – |
+| Gorner (01225) | 18, inferred | 0.79 → 1.33 | 1.68 | – |
+| Morteratsch + Pers (02216) | 21, inferred | 1.25 → 0.93 | 0.74 | – |
+
+- **Within a glacier the profile shape is about right.**
+  - The model-to-GLAMOS ratio is flat with height; on the small glaciers it falls slightly.
+  - Scaling the model to GLAMOS's mean leaves 0.05–0.17 m w.e. on the small glaciers (0.4–0.9
+    before).
+  - The precipitation gradient (1.5 % per 100 m) is not too steep within a glacier.
+- **Between glaciers the level differs strongly**, and the excess grows with the glacier's mean
+  elevation (r = 0.92 over 9 glaciers; about +0.14 in the ratio per 100 m).
+  - One regional precipitation factor cannot fix this; a per-glacier factor without the 1.3 floor
+    can. That is what the snowline calibration provides.
+  - The cause is not settled: the distance each glacier is extrapolated from its ERA5 point, or
+    wind stripping snow off exposed summit glaciers.
+- **The one shape problem is on big glaciers above about 3600–3700 m:** GLAMOS's winter balance
+  decreases with height there, and the model's high-elevation cap (12.5 % at most) is too weak.
+  But GLAMOS has no winter points there, so that decline is GLAMOS's own model, not a measurement.
+- **What a precipitation/melt scan cannot fix:** the gradient of the annual balance.
+  - It is too shallow at Sex Rouge (0.65 against 1.43 m w.e. per 100 m) and Hohsaas (0.60 against
+    1.02).
+  - It is too steep on Fiescher's tongue, which is about 6 % debris-covered.
+  - Alphubel N gets 2.3× the snow and still loses too much, so its melt is far too high.
+- **For small glaciers without snow lines** (under 1 km²), the elevation relation of the excess
+  could serve as a prior for the precipitation factor, alongside GLAMOS where it exists.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
