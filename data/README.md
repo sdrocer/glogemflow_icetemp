@@ -49,3 +49,14 @@ BASE_DIR = Path('data/glogemflow')
   GloGEM's glacier masks. Rebuild with `python scripts/icetemp_analysis/borehole_outlines.py`
   (icetemp environment, needs pyproj). `icetemp.calibration.data.DataHandler` stops without it
   unless `outline_by_position=False`.
+- `snowlines/`: inputs and targets for the snowline calibration (plan of 2026-10-15).
+  - `sommer/`: the Alpine transient snow lines of Sommer et al. (ESSD preprint essd-2026-35;
+    Zenodo 10.5281/zenodo.18223929, tables only).
+  - `reference/`: the GLAMOS-to-RGI7 matching (`glamos_vs_geodetic.csv`, its `compare.py`) and the
+    snow-line scores of 2026-10-14.
+  - Built by `python scripts/icetemp_analysis/snowline/prepare_snowline_targets.py [--qa-min 0.6666]`:
+    - `tsla_csv/`, `tsla_glogem/`: one observation file per calibration glacier of 1 km² or more
+      (QA ≥ 4/6 by default; QA comes in sixths);
+    - `targets.csv`: the constraint per glacier;
+    - `eos_sla.csv`, `tsla_counts.csv`.
+  - `check_tsla_vs_model.py` reproduces the scores of 2026-10-14.
