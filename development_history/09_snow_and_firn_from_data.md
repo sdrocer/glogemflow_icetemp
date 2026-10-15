@@ -275,6 +275,22 @@ What the ledger does to the water path:
 - **The cooling guard** flags low firn bands at the firn line in the first two decades, where the
   ledger started thin from a small reference balance.
 
+### What the ledger's cooling guard flagged (2026-10-15, read-only check)
+
+The six band-decades that failed the guard are firn-line bands with thin or young firn over ice,
+not a start-up artefact:
+
+| band (RGI7) | the ledger | water reaches: ledger / 'hl' |
+|---|---|---|
+| Tortin 2855–2885 m (01039) | firn only from 1977–78, after good years: 3–4 m w.e. over ice | 8–9 m / 19–29 m |
+| Morteratsch 2875 m (02216), Ortles 3225 m (02821) | reference balance near zero: about 1 m w.e. | 4–5 m / 19–24 m |
+
+- **'hl' soaks 19–29 m deep through what is ice**, so the ledger is the more plausible model there.
+- **The guard cannot tell mature temperate firn from a thin young layer at the firn line.** For the
+  rerun after the snowline recalibration, it will protect only bands with a mature firn column (at
+  least 15 layers in the ledger), fixed before the rerun (plan of 2026-10-15, decision 1).
+- **Yesterday's verdict stands:** the ledger also failed the zone condition.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
