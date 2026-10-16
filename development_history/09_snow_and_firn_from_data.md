@@ -635,7 +635,8 @@ diagnosis, scratchpad `stepB/`)**
 - **So by the rule, the thermal runs do not use this recalibration** (Janosch decides).
 - **Why the daily c_prec does not carry over.** The monthly model's snow line is far too high in late
   summer, whatever c_prec: August +201 m, September +296 m on the 7 glaciers, with end-of-month values.
-  The daily model, in which c_prec was chosen, has no such bias (September +70 m).
+  The daily model, in which c_prec was chosen, shows far less (September +70 m on the 12 glaciers, in
+  the daily run of the all-months calibration; not the same sample, but the same pattern).
   - On Aletsch, Fiescher, Gorner and Lys, a lower c_prec raises a monthly snow line that is already too
     high.
   - The snow lines that matter for the thermal runs are the monthly model's. A c_prec chosen with them
