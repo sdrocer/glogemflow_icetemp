@@ -1,8 +1,7 @@
 # Design note: a probabilistic thermal-regime product (Step 4 of the plan of 2026-10-14)
 
-*Design only; computed at production. Janosch's addition of 2026-10-14. Daniel's 2024 plan of
-action proposed a "probability of being temperate"; its definitions are to be matched once the
-document is found.*
+*Design only; computed at production. Janosch's addition of 2026-10-14. (Daniel's 2024 plan of
+action is not a reference: the PhD goals have changed since; the latest progress report applies.)*
 
 ## Why
 
@@ -59,6 +58,5 @@ Per glacier, per elevation band, per year (or 5-year mean):
 
 ## Open
 
-- Daniel's 2024 definitions (temperate probability: of what, at which depth?).
 - Whether P(polythermal) should be split into "cold over temperate" and "temperate over cold"
   (layer order, as in the fair test's reported table).

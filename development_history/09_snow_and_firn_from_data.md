@@ -429,6 +429,8 @@ GloGEMflow as procedures, on the GloGEM branch `snowline-calibration` (worktree
 - The port therefore has an option, `snowline_definition = 'p10'`. It computes the product's
   statistic from the modelled snow-covered area. Her definition stays the default, as it suits
   snow lines traced at the snow-ice boundary (Loibl et al., 2025).
+
+![Two snow-line definitions on Morteratsch: her model's rule and Sommer's statistic](figures/ch09_snowline_definitions.svg)
 - The spring finding of 14 Oct survives this: leaving out the fully snow-covered days makes the
   May bias larger (−374 m → −510 m), not smaller.
 
@@ -451,6 +453,8 @@ GloGEMflow as procedures, on the GloGEM branch `snowline-calibration` (worktree
 - So a second variant uses the snow lines of May–September only. These reflect how winter snow
   and summer melt balance, which is what c_prec should explain. Autumn scenes are also the
   hardest to classify (low sun, fresh and patchy snow).
+
+![The snow-line error by month, before and after the snowline calibration](figures/ch09_error_by_month.svg)
 
 **c_prec by glacier** (daily, p10, raw snow lines; "low" / "high": the minimum lies at the end of
 the range 0.8–3.0):
@@ -477,6 +481,8 @@ the range 0.8–3.0):
 - Every scan stops at the first rise of the RMSE, however small. The fit tolerance alone moves
   the RMSE by about ±0.5 m.
 
+![RMSE of the daily snow line by scanned c_prec, all months and May–September](figures/ch09_rmse_curves.svg)
+
 **Does the recalibration raise T_off?** (test fixed in the plan; monthly re-fit of the 23
 calibration glaciers, GLAMOS targets for Sex Rouge, Tortin and Alphubel, against the same
 calibration without fixed c_prec)
@@ -495,6 +501,8 @@ calibration without fixed c_prec)
 - The five highest glaciers (Sphinxgrat, Pelvoux, Alphubel, the Colle Gnifetti area, Mont Blanc
   summit) have no snow lines and keep T_off up to 8.4 °C.
 - All re-fits close the targets (mean deviation 0.03, at most 0.10 m w.e.).
+
+![T_off against mean elevation, before and after the snowline calibration](figures/ch09_toff_by_elevation.svg)
 
 ## What was wrong
 
@@ -539,3 +547,40 @@ calibration without fixed c_prec)
 - GLAMOS: `/itet-stor/jabeer/glazioarch/GlacioBaseData/MassBalance/glacier/{corvatsch,hohsaas}_fix.dat`
 - Literature: Huss & Hock (2015); von der Esch et al. (in review, snowline calibration of GloGEM);
   Sommer et al. (2026, ESSD preprint); Beer et al. (2026, *The Cryosphere* 20, 5453–5473)
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| c_prec | precipitation factor: multiplies the reanalysis precipitation; calibration phase 1 |
+| DDF | degree-day factor, the melt factor for snow (ice: twice that); calibration phase 2 |
+| T_off | temperature offset added to the reanalysis temperature; calibration phase 3, only if DDF reaches its bounds |
+| target | the glacier's geodetic mass balance 2000–2020 (Hugonnet et al., 2021), which the calibration matches |
+| Ba, Bw | annual and winter mass balance [m w.e.] |
+| m w.e. | metres of water equivalent |
+| ELA | equilibrium-line altitude: where the annual balance is zero; close to the firn line |
+| firn line | lower limit of firn (snow older than one year) at the end of summer |
+| GLAMOS | Glacier Monitoring Switzerland: measured mass balances and outlines (SGI) |
+| WGMS | World Glacier Monitoring Service |
+| RGI7 | Randolph Glacier Inventory version 7: outlines and IDs (RGI6: the previous version) |
+| ERA5 | the ECMWF reanalysis (about 31 km); ERA5-Land: its land version (about 9 km) |
+| SRTM | Shuttle Radar Topography Mission: the elevation model of February 2000 (the raw snow lines refer to it) |
+| TSLA, SLA | (transient) snow-line altitude from satellite images (Sommer et al.; Loibl et al. for High Mountain Asia) |
+| p10 | the 10th percentile of the elevation of the snow-covered area: Sommer's snow-line statistic; `snowline_definition = 'p10'` computes it in GloGEM |
+| z10 | the elevation below which 10 % of the glacier area lies |
+| QA | quality flag of the Sommer product, in sixths (QA ≥ 4/6 used) |
+| RMSE, wRMSE | root-mean-square error; weighted (wRMSE) with 1/σ, σ the observation uncertainty |
+| gain | how much better the best c_prec fits the snow lines than the lowest scanned value (0.4) |
+| hydrological year | October to September, named after the year in which it ends |
+| FRH | the central thermal forcing since 14 Oct: no T_off in the thermal energy inputs, ERA5's lapse rate, meltwater depth after Herron & Langway (1980) |
+| FRHS | FRH with meltwater refreezing in the winter snow on ice bands |
+| FRHL | FRH with the firn ledger as the meltwater depth limit |
+| 'hl' | the current meltwater depth limit, after Herron & Langway (1980) |
+| firn ledger | annual firn layers per band kept from the mass balance; meltwater reaches no deeper than the firn they hold |
+| cooling guard | the ledger rule's check that no firn band 'hl' keeps temperate is cooled by more than 0.2 °C |
+| f_ref | the thermal model's refreezing parameter (share of meltwater that refreezes in the firn) |
+| M1 | the main score of the thermal model: RMSE against borehole temperatures below 15 m, each outline weighted equally |
+| entity | a borehole site (glacier and elevation band), scored as one unit |
+| zone, zone target D | the 3000–3800 m band of the firn–no-firn transition (3000–3500 m until 16 Oct); target D: at least 2 more zone entities in the right temperature class than variant H |
+| perm_frac | the old permeability fraction of the thermal model (chapter 1) |
+| IDL | the programming language of GloGEM |
