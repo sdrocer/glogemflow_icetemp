@@ -53,7 +53,7 @@ significance when Gornergletscher alone was removed (p = 0.115). With 11 glacier
 transferability could not be shown. The reading: **the parameters were absorbing missing
 physics, not describing real glacier-to-glacier differences.**
 
-<!-- FIGURE: per-glacier optima in (perm_frac, dT_scale) space, one marker per glacier sized by n obs, design box outlined; source: notebooks/archive/06_parameter_identifiability.ipynb (figs/parameter_agreement.png) -->
+![Each glacier's own best perm_frac and dT_scale, fitted alone](figures/ch02_glacier_optima.svg)
 
 ### 2. `perm_frac` barely moves the model (2026-09-10)
 
@@ -92,8 +92,9 @@ negligible, so both reduce to (ρ/ρ_ice) × the ice value, and density cancels 
 
 Heat capacity really is close to linear in density; conductivity is not. At 250 kg m⁻³ the old
 form gave 0.583 W m⁻¹ K⁻¹ against 0.149 (Calonne 2011) and 0.088 (Sturm 1997), with Yen (1981)
-about 9 % above Calonne: roughly 4× too conductive. Real snow diffuses heat at roughly 0.28× the
-rate of ice; GloGEM gave 1.00×.
+about 9 % above Calonne: roughly 4× too conductive. Real snow diffuses heat at roughly 0.26× the
+rate of ice (Calonne, against the model's ice at 900 kg m⁻³ and 0 °C; 0.28× was first written here, from
+pure ice); GloGEM gave 1.00×.
 
 ### 4. The CART offset was doing insulation's job, badly
 
@@ -296,7 +297,7 @@ A first check on Grenzgletscher (2026-09-08) confirmed that `f_adv` reaches the 
 the column was ~0.4–0.5 °C colder over 80 m than at 1.0, consistent with more cold ice arriving
 from upglacier.
 
-<!-- FIGURE: conductivity vs density — old linear mix, Calonne ×0.6/1.0/1.4, Sturm, Yen, with the k_ice cap; and the resulting snow/ice diffusivity ratio; source: settings.pro constants and the tables in GloGEM commit 1aef7f6 -->
+![Snow and firn conductivity and diffusivity before and after 1aef7f6](figures/ch02_conductivity.svg)
 
 ## What is still open
 

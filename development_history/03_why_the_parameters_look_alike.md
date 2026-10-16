@@ -85,7 +85,7 @@ The fit was still better than before. Notebook 03's best run reached an RMSE of 
 saved notebook output scores only 7 of the 48 design points, and the old number came from runs
 without the spin-up.
 
-<!-- FIGURE: dT/dparameter vs depth for f_ref, f_ins (sign-flipped) and f_adv on three Grenzgletscher entities (tongue ~2500 m, mid ~4000 m, Colle Gnifetti ~4450 m), showing f_ref and −f_ins overlapping; source: notebooks/02_parameter_sensitivity.ipynb section C, run grenz_tuning3 -->
+![How f_ref, f_ins and f_adv change the temperature with depth on three Grenzgletscher bands](figures/ch03_depth_shapes.svg)
 
 ### Seven Alpine glaciers: 32-point sweep (launched 2026-09-22)
 
@@ -162,14 +162,20 @@ sweep:
 
 | | |
 |---|---|
-| modelled resolved depth | median **44 m** (a quarter of entities ≤ 29 m; only 8 of 65 reach 79 m) |
-| deepest borehole | **348 m** (Grenzgletscher tongue; the model resolves 41 m there) |
+| modelled resolved depth | median **44 m** (a quarter of entities ≤ 29 m; only 8 of 66 reach 79 m) |
+| deepest borehole | **348 m** (Grenzgletscher tongue, 2605 m band; the model resolves 79 m there) |
 | observations inside the modelled column | **538 of 776 (69 %)** |
 | observations below it, silently dropped | **238 (31 %)** |
 | entities where the borehole outruns the model | **25 of 66** |
 | Glacier de Tête Rousse, the frozen-front hazard case | model resolves 19 m of a 70 m column; **88 of 106 observations dropped** |
 
-<!-- FIGURE: per entity, modelled resolved column depth vs deepest borehole observation (1:1 line; points below it lose data), Tête Rousse and Grenzgletscher tongue labelled; source: scripts/icetemp_analysis/depth_window.py on data/bayescal/alps_sensitivity_w0 -->
+![Modelled column depth against the deepest borehole reading, per entity](figures/ch03_depth_window.svg)
+
+*Checked on 2026-10-16, when the figure was drawn: the table describes the borehole table of
+22 September (icetemp `43c7574`); two entries were corrected then (66 entities, not 65; 79 m resolved
+at the deepest borehole, not 41 m). Since the outline reassignment of 13 October (`cf140d0`), the same
+check gives 59 entities and 465 of 716 readings inside the model column (Tête Rousse: 138 of 178
+dropped).*
 
 On top of that, the bottom node of every column was never written to the output file, so all
 basal signal was invisible to the calibration. And 30 of 65 entities were already warmer than

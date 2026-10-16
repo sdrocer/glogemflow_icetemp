@@ -82,7 +82,7 @@ cross-validation (fit on four fifths, test on the fifth left out). A one-variabl
 `T_amplitude` scored 0.332 ± 0.040. The large ± means the tree's skill depended on which boreholes
 happened to be in the test fold.
 
-<!-- FIGURE: the 4-leaf CART (split thresholds and leaf values) next to its cross-validated vs training r²; source: notebooks/archive/02_glenglat_ML.ipynb (fig_09_decision_tree) -->
+![The four-leaf decision tree and its training vs cross-validated skill](figures/ch01_cart.svg)
 
 ### First validation against boreholes
 
@@ -265,7 +265,7 @@ labels were capped at 80 m, which hid the deep tongue rows the elevation split h
 the fixes only 4.5 % of folds were pinned. Ground truth is now uncapped, because capping it would
 have relabelled Tête Rousse, observed to 70 m, as cold.
 
-<!-- FIGURE: parameter map (perm_frac × dT_scale) — balanced score as background, region where both recall and specificity exceed 50 % hatched, campaign-8 posterior cloud and campaign-7 point overlaid; source: figs/paramspace_target_vs_posterior.png (scripts/figures/fig_paramspace.py, sweep25.csv) -->
+![Where the model meets the classification bar, and where campaigns 7 and 8 put the parameters](figures/ch01_paramspace.svg)
 
 ## What is still open
 
