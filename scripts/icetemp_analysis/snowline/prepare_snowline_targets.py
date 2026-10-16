@@ -8,7 +8,7 @@ Inputs
 
 Outputs (in OUT)
   tsla_csv/tsla_RGI70-11.xxxxx.csv   one clean observation file per glacier
-  tsla_glogem/xxxxx.dat              plain-text version for an IDL reader
+  snowline_2000_2020/11_snowline_median.dat   all glaciers, read by GloGEM's snowline calibration
   eos_sla.csv                        Sommer end-of-summer SLA per glacier and year, with SO/TO codes
   tsla_counts.csv                    observation counts per glacier and QA level
   targets.csv                        target table for all catchment glaciers
@@ -132,14 +132,26 @@ def prepare_tsla(gid, qa_min, eos_v, eos_d):
     return out, cnt, eos
 
 
-def write_glogem(gid, df, qa_min):
-    os.makedirs(f'{OUT}/tsla_glogem', exist_ok=True)
-    d = pd.to_datetime(df.date)
-    with open(f'{OUT}/tsla_glogem/{gid}.dat', 'w') as f:
-        f.write(f'# RGI70-11.{gid} TSLA Sommer et al. n={len(df)} QA>={qa_min:.3f} 2000-2025; '
-                f'cols: year month day sla_m(SLA_CORR, m a.s.l.) sigma_m(SLA_ERROR)\n')
-        for y, m, dd, s, e in zip(d.dt.year, d.dt.month, d.dt.day, df.sla_m, df.sigma_m):
-            f.write(f'{y:4d} {m:2d} {dd:2d} {s:8.1f} {e:6.1f}\n')
+def doy365(dates):
+    """Day of year on GloGEM's daily calendar (365 days; 29 Feb taken as 28 Feb)."""
+    return dates.dt.dayofyear - (dates.dt.is_leap_year & (dates.dt.dayofyear >= 60)).astype(int)
+
+
+def write_glogem(tsla, qa_min):
+    """All glaciers in one file, in the format of GloGEM's read_snowlinedata.pro (A. von der Esch):
+    one header line, then: RGI id, snow line [m a.s.l.], stdev [m], year, day of year (365-day calendar).
+    11_snowline_median.dat holds SLA_CORR (on the surface of the observation date), _raw.dat the SLA on
+    the SRTM DEM of February 2000, closer to GloGEM's fixed inventory geometry."""
+    os.makedirs(f'{OUT}/snowline_2000_2020', exist_ok=True)
+    n = sum(len(df) for df in tsla.values())
+    for suffix, col, label in (('', 'sla_m', 'SLA_CORR'), ('_raw', 'sla_raw_m', 'SLA (raw, SRTM 2000)')):
+        with open(f'{OUT}/snowline_2000_2020/11_snowline_median{suffix}.dat', 'w') as f:
+            f.write(f'RGI-ID SLA_m sigma_m year doy365  (Sommer et al. TSLA, {label} / SLA_ERROR, QA>={qa_min:.3f}, '
+                    f'2000-2025, {len(tsla)} glaciers, {n} observations)\n')
+            for gid, df in tsla.items():
+                d = pd.to_datetime(df.date)
+                for s, e, y, j in zip(df[col], df.sigma_m, d.dt.year, doy365(d)):
+                    f.write(f'RGI70-11.{gid} {s:8.1f} {e:6.1f} {y:4d} {j:3d}\n')
 
 
 def read_fix(short):
@@ -178,17 +190,18 @@ def main():
     ids = catchment_ids()
     eos_v, eos_d = read_eos()
 
-    counts, eos_all, ntsla = [], [], {}
+    counts, eos_all, ntsla, tsla = [], [], {}, {}
     for gid in ids:
         df, cnt, eos = prepare_tsla(gid, qa_min, eos_v, eos_d)
         if df is None:
             ntsla[gid] = (0, 0)
             continue
         df.to_csv(f'{OUT}/tsla_csv/tsla_RGI70-11.{gid}.csv', index=False)
-        write_glogem(gid, df, qa_min)
+        tsla[gid] = df
         counts.append(cnt)
         eos_all += eos
         ntsla[gid] = (len(df), int(df.hydro_year.between(Y0, Y1).sum()))
+    write_glogem(tsla, qa_min)
     counts = pd.DataFrame(counts)
     counts.insert(1, 'name', counts.gid.map(NAMES))
     counts.to_csv(f'{OUT}/tsla_counts.csv', index=False, float_format='%.1f')
