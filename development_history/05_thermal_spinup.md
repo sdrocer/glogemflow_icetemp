@@ -257,3 +257,15 @@ splits Monte Rosa at 4400 m.*
 - Figures: `development_history/figures/make_ch05.py`
 - Code: `GloGEM/procedures/initialise/spinup_firnicetemp_thermal.pro`,
   `procedures/processing/downscale_gcmdata_monthly.pro`, `procedures/flow/spinup_flowmodel.pro`
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| drift | the year-to-year change of the column temperature that the spin-up drives to zero |
+| ERA5 | the ECMWF reanalysis (the climate input) |
+| f_ref, f_ins, f_adv | the thermal model's three parameters since chapter 2: f_ref the share of melt and rain that enters the column and refreezes (code `refreeze_frac`); f_ins the scaling of the snow and firn conductivity, low = more insulation (code `insul_scale`); f_adv the scaling of the horizontal advection |
+| IDL | the programming language of GloGEM |
+| RGI, RGI6, RGI7 | Randolph Glacier Inventory (glacier outlines and IDs), versions 6 and 7 |
+| RMSE | root-mean-square error between model and measurement |
+| spin-up | running the thermal model until its temperatures no longer depend on the starting profile |

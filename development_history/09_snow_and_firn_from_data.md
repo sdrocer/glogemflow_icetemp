@@ -578,7 +578,7 @@ calibration without fixed c_prec)
 | 'hl' | the current meltwater depth limit, after Herron & Langway (1980) |
 | firn ledger | annual firn layers per band kept from the mass balance; meltwater reaches no deeper than the firn they hold |
 | cooling guard | the ledger rule's check that no firn band 'hl' keeps temperate is cooled by more than 0.2 °C |
-| f_ref | the thermal model's refreezing parameter (share of meltwater that refreezes in the firn) |
+| f_ref | the thermal model's refreezing parameter: the share of melt and rain that enters the column and refreezes |
 | M1 | the main score of the thermal model: RMSE against borehole temperatures below 15 m, each outline weighted equally |
 | entity | a borehole site (glacier and elevation band), scored as one unit |
 | zone, zone target D | the 3000–3800 m band of the firn–no-firn transition (3000–3500 m until 16 Oct); target D: at least 2 more zone entities in the right temperature class than variant H |

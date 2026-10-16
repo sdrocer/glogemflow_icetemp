@@ -307,3 +307,27 @@ failed the **classification** bar. Open at that point:
   `780520a`, `d5628b1`, `26a526a`, `461cf33`, `dad18bf`
 - icetemp commits: `02999e7`, `880a0a3`, `a8e8deb`, `a9494d0`, `a374a60`, `643eff0`, `8c316a0`,
   `5bf3522`
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| B1, B2, B4 | the physics bugs found in the July–August campaigns (listed in the text) |
+| CART | classification and regression tree: the decision tree that set the initial firn warming ΔT_firn from seasonal amplitude and elevation |
+| emulator | a fast statistical copy of the model, trained on real runs |
+| ERA5 | the ECMWF reanalysis (the climate input) |
+| glenglat | the global englacial temperature database (Jacquemart et al.), the borehole data |
+| IDL | the programming language of GloGEM |
+| k-NN, NN | k nearest neighbours: a correction taken from the most similar calibrated glaciers |
+| KO | Kennedy–O'Hagan: Bayesian calibration with a model-discrepancy term |
+| LOO | leave-one-out: hold one glacier out, calibrate on the rest, predict it |
+| MCMC | Markov chain Monte Carlo: the random-walk sampler that maps the parameter posterior |
+| perm_frac | the old permeability fraction: the share of the firn column meltwater could reach (replaced in chapter 2) |
+| PMP | pressure-melting point: the highest temperature ice can have at its depth |
+| RGI, RGI6, RGI7 | Randolph Glacier Inventory (glacier outlines and IDs), versions 6 and 7 |
+| RMSE | root-mean-square error between model and measurement |
+| SIA | shallow-ice approximation (the flow model used for advection velocities) |
+| SVD | singular value decomposition: compresses the output profiles for the emulator |
+| T_amplitude | seasonal air-temperature amplitude (maritime against continental climate) |
+| T_maat | mean annual air temperature at the band |
+| Tier 1, Tier 2, Tier 3 | the calibration ladder: per-glacier fits (1), regressions of the parameters on glacier properties (2), the Kennedy–O'Hagan Bayesian calibration (3) |

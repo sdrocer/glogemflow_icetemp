@@ -128,3 +128,11 @@ divides the column into slices.
 - Runs: `data/bayescal/ab_explicit_w0`, `ab_implicit_w0`, `ab_stencil_w0`, `stepA_w0`, `fix3_w0`,
   `fix3b_w0`, `latfix_w0`
 - Figures: `development_history/figures/make_ch04.py`
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| depth window | the depths at which model and boreholes are compared |
+| f_ref, f_ins, f_adv | the thermal model's three parameters since chapter 2: f_ref the share of melt and rain that enters the column and refreezes (code `refreeze_frac`); f_ins the scaling of the snow and firn conductivity, low = more insulation (code `insul_scale`); f_adv the scaling of the horizontal advection |
+| RGI, RGI6, RGI7 | Randolph Glacier Inventory (glacier outlines and IDs), versions 6 and 7 |

@@ -447,7 +447,7 @@ Gate run (FRH, f_ref 0.85):
 | T_off | temperature offset of the mass-balance calibration (phase 3), added to the reanalysis temperature when c_prec and DDF reach their bounds |
 | c_prec, DDF | precipitation factor and degree-day (melt) factor of the mass-balance calibration |
 | both bounds | c_prec at its lower bound (1.3) and DDF at its upper bound (4.5): only T_off can close the budget |
-| f_ref, f_ins, f_adv | the thermal model's three parameters: refreezing (how much meltwater heat enters the firn), insulation scaling, advection scaling |
+| f_ref, f_ins, f_adv | the thermal model's three parameters: f_ref the share of melt and rain that enters the column and refreezes; f_ins the scaling of the snow and firn conductivity (low = more insulation); f_adv the scaling of the horizontal advection |
 | R, F, H, FH, P (runs of 12 Oct) | R: the reference (today's model); F: no T_off in the thermal energy inputs; H: Herron & Langway (1980) meltwater depth and latent heat per metre of water; FH: both; P: water stopping at the model's own 830 kg/m³ depth |
 | H, HR, FRH, FRSH (fair run set) | H: the package above with T_off kept and a floor on the lapse rate; R in a name: ERA5's own lapse rate; F: no T_off; S: station lapse rates. FRH is the central forcing since 14 Oct |
 | 'hl', 'front' | meltwater depth limits: Herron & Langway (1980) (the default); the first-wet-month front (rule B, failed) |

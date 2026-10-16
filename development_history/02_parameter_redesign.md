@@ -329,3 +329,20 @@ from upglacier.
   `notebooks/01_parameter_preflight.ipynb`
 - GloGEM commits: `2b24e54`, `efb382a`, `1aef7f6`, `fdd1ecb`, `d072e0f`, `154dc6c`, `bb981b7`
 - icetemp commits: `ca37122`, `56d0e08`, `b0ba1ef`, `7ba8596`, `e870750`, `cb22f02`
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| CART | classification and regression tree: the decision tree that set the initial firn warming ΔT_firn from seasonal amplitude and elevation |
+| f_ref, f_ins, f_adv | the thermal model's three parameters since chapter 2: f_ref the share of melt and rain that enters the column and refreezes (code `refreeze_frac`); f_ins the scaling of the snow and firn conductivity, low = more insulation (code `insul_scale`); f_adv the scaling of the horizontal advection |
+| f_rf | the old refreezing fraction in the latent-heat term |
+| GEMB | the Glacier Energy and Mass Balance model (Gardner et al., 2023), whose snow relations were followed |
+| IDL | the programming language of GloGEM |
+| insul_scale, refreeze_frac | the GloGEM variable names of f_ins and f_ref |
+| perm_frac | the old permeability fraction: the share of the firn column meltwater could reach (replaced in chapter 2) |
+| PMP | pressure-melting point: the highest temperature ice can have at its depth |
+| RGI, RGI6, RGI7 | Randolph Glacier Inventory (glacier outlines and IDs), versions 6 and 7 |
+| RMSE | root-mean-square error between model and measurement |
+| SIA | shallow-ice approximation (the flow model used for advection velocities) |
+| T_air, T_surf | air temperature; the thermal model's surface temperature |

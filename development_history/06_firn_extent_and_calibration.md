@@ -261,3 +261,17 @@ left out.
 - Code: `icetemp/calibration/{calibrator,writeback,validation,runner,data}.py`;
   GloGEM `procedures/processing/finalize_annual_massbalance.pro`,
   `procedures/write/write_firnicetemp_validation.pro`, `procedures/processing/firnice_temperature_model.pro`
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| c_prec, DDF | precipitation factor and degree-day (melt) factor of the mass-balance calibration |
+| ELA, AAR | equilibrium-line altitude; accumulation-area ratio |
+| f_ref, f_ins, f_adv | the thermal model's three parameters since chapter 2: f_ref the share of melt and rain that enters the column and refreezes (code `refreeze_frac`); f_ins the scaling of the snow and firn conductivity, low = more insulation (code `insul_scale`); f_adv the scaling of the horizontal advection |
+| firn mask | the bands the thermal model treats as firn |
+| IDL | the programming language of GloGEM |
+| RGI, RGI6, RGI7 | Randolph Glacier Inventory (glacier outlines and IDs), versions 6 and 7 |
+| RMSE | root-mean-square error between model and measurement |
+| T_off | temperature offset of the mass-balance calibration (phase 3) |
+| WGMS | World Glacier Monitoring Service (measured mass balances) |

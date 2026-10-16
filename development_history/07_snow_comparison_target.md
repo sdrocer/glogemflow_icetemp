@@ -803,3 +803,20 @@ the 7 test glaciers (f_ref 0.35, f_ins 0.79), test the prediction on glaciers no
 - Code: icetemp `src/icetemp/calibration/{data,runner,validation,calibrator,design,pipeline,config}.py`; GloGEM
   `procedures/processing/firnice_temperature_model.pro`,
   `procedures/write/prepare_output_firnicetemp.pro`, `procedures/write/write_firnicetemp_validation.pro`
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| emulator | a fast statistical copy of the model, trained on real runs |
+| entity | a borehole site (glacier and elevation band), scored as one unit |
+| f_ref, f_ins, f_adv | the thermal model's three parameters since chapter 2: f_ref the share of melt and rain that enters the column and refreezes (code `refreeze_frac`); f_ins the scaling of the snow and firn conductivity, low = more insulation (code `insul_scale`); f_adv the scaling of the horizontal advection |
+| GMIP4 | GlacierMIP4, the glacier model intercomparison the regional runs were for |
+| IDL | the programming language of GloGEM |
+| MCMC | Markov chain Monte Carlo: the random-walk sampler that maps the parameter posterior |
+| RGI, RGI6, RGI7 | Randolph Glacier Inventory (glacier outlines and IDs), versions 6 and 7 |
+| RMSE | root-mean-square error between model and measurement |
+| Step 0–5b (S0–S5b) | the steps of the chapter's plan, as in its diagram |
+| T1, T2, T3 | the three comparison targets: T1 one value per borehole entity, T2 every 1 m depth bin, T3 point and month |
+| T_before, T_after, T_model | the model temperatures of the months before and after a reading, and their interpolation to the reading's date |
+| WGMS | World Glacier Monitoring Service (measured mass balances) |

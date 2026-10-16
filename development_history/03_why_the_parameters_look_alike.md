@@ -275,3 +275,18 @@ inconsistency with the flow and mass-balance modules, which a paper must state.
 - Runs: `data/bayescal/grenz_tuning3`, `alps_sensitivity_w0`, `_w1`, `_w2`
 - icetemp commits: `cb22f02` (notebooks), `43c7574` (sensitivity drivers); GloGEM `bb981b7`
   (the T_amplitude argument for dropping the CART)
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| CART | classification and regression tree: the decision tree that set the initial firn warming ΔT_firn from seasonal amplitude and elevation |
+| depth window | the depths at which model and boreholes are compared |
+| f_geo | a scaling of the geothermal heat flux at the bed |
+| f_ref, f_ins, f_adv | the thermal model's three parameters since chapter 2: f_ref the share of melt and rain that enters the column and refreezes (code `refreeze_frac`); f_ins the scaling of the snow and firn conductivity, low = more insulation (code `insul_scale`); f_adv the scaling of the horizontal advection |
+| IDL | the programming language of GloGEM |
+| perm_frac | the old permeability fraction: the share of the firn column meltwater could reach (replaced in chapter 2) |
+| PMP | pressure-melting point: the highest temperature ice can have at its depth |
+| RMSE | root-mean-square error between model and measurement |
+| T_amplitude | seasonal air-temperature amplitude (maritime against continental climate) |
+| T_maat | mean annual air temperature at the band |
