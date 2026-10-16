@@ -395,6 +395,107 @@ For the port this answers most of the open questions: daily, the median, 1/σ, p
 stopping. What remains is the adaptation to our monthly thermal runs and to Sommer's nearly
 constant σ.
 
+### The port of the snowline calibration, and what it says about our snow (2026-10-16)
+
+Alexandra uploaded her code as the branch `Snowline-calibration` (16 Oct). It is now ported into
+GloGEMflow as procedures, on the GloGEM branch `snowline-calibration` (worktree
+`GloGEM_wt_snowline`; documentation `docs/source/calibration/snowline.md`).
+- `calibrate_snowline = 'y'` runs her scan of c_prec (daily runs only).
+- `calibrate_cprec_file` keeps c_prec fixed in a standard calibration, for the glaciers it lists.
+  This is how the daily result is carried into the monthly model: c_prec is fixed, and DDF and
+  T_off are fitted again.
+
+**Checks.**
+- With the switches off, every calibration file is byte-identical to GloGEMflow (monthly, 23
+  glaciers; daily, 4). So is the forward-run output, daily and monthly.
+- Python replicas of the RMSE, the snow line and the spline step agree with IDL
+  (`scripts/icetemp_analysis/snowline/check_snowline_port.py`).
+- An independent review found two points to fix:
+  - a crash when the first glacier of a run has no snow lines (fixed, and tested on all 23
+    calibration glaciers);
+  - the gridded T_off of the second calibration round couples fixed and free glaciers in the same
+    grid cell (documented).
+- The review also found a bug in her script, which the port does not have: in a catchment
+  spanning several grid cells, phase 3 took the DDF of another glacier.
+
+**Her snow line is not the snow line of the Sommer product.**
+- Her model snow line is the highest snow-free band, or the lowest band when the whole glacier is
+  under snow. Sommer's value is the 10th percentile of the elevation of the snow-covered pixels.
+  A fully snow-covered glacier therefore gives its own 10th-percentile elevation: about 400 m
+  above the terminus of Morteratsch, 1100 m on Bossons.
+- On those days the comparison carries a fixed error that no c_prec can change. The RMSE curves
+  are flat (225–914 m), 10 of 12 glaciers stop at the lowest value (0.8), and Lys runs to the
+  highest (3.0) with T_off +5.8 °C.
+- The port therefore has an option, `snowline_definition = 'p10'`. It computes the product's
+  statistic from the modelled snow-covered area. Her definition stays the default, as it suits
+  snow lines traced at the snow-ice boundary (Loibl et al., 2025).
+- The spring finding of 14 Oct survives this: leaving out the fully snow-covered days makes the
+  May bias larger (−374 m → −510 m), not smaller.
+
+**Inputs.**
+- ERA5 daily; the raw snow lines on the SRTM surface of February 2000, which suits GloGEM's fixed
+  inventory geometry.
+- At c_prec = 1, the daily and the monthly model put the same precipitation on 11 of 12 glaciers
+  (within 0.4 %); the 0.2 mm d⁻¹ threshold removes almost nothing.
+- Taconnaz gets 22 % more in the daily run, because the two paths pick different grid points.
+- c_prec is therefore carried over by amount (`cprec_transfer.py`).
+
+**The remaining error, by month.**
+- After the calibration (all months, p10), the spring snow lines are right on average: April
+  +40 m, May −12 m, June −109 m.
+- The largest errors are now in October and November: in November the model is −240 m too low,
+  with an RMSE of 550 m. These two months hold 45 % of the squared error.
+- The model covers the lower glacier with autumn snow where the images still show bare ice.
+  Less precipitation means less autumn snow, which is why several glaciers run to the lowest
+  value.
+- So a second variant uses the snow lines of May–September only. These reflect how winter snow
+  and summer melt balance, which is what c_prec should explain. Autumn scenes are also the
+  hardest to classify (low sun, fresh and patchy snow).
+
+**c_prec by glacier** (daily, p10, raw snow lines; "low" / "high": the minimum lies at the end of
+the range 0.8–3.0):
+
+| RGI7 | glacier | all months | May–Sep | gain over the range |
+|---|---|---|---|---|
+| 03116 | Hintereis | 1.94 | 1.87 | 38 % |
+| 02216 | Morteratsch | 2.20 | 2.15 | 16 % |
+| 02596 | Gr. Aletsch | 1.12 | 1.13 | 15 % |
+| 02611 | Fiescher | 1.06 | 1.09 | 9 % |
+| 01225 | Gorner/Grenz | 0.80 low | 0.92 | 6 % |
+| 01205 | Lys | 1.60 | 0.80 low | 4 % |
+| 00773 | Bossons | 3.00 high | 0.99 | 4 % |
+| 01230 | Monte Rosa E face | 0.80 low | 0.80 low | 3 % |
+| 02821 | Ortles (Alta) | 0.80 low | 0.80 low | 0.3 % |
+| 00774, 01112, 01127 | Taconnaz, Hohsaas, Gruben | 0.80 low | 0.80 low | 0 (still lowest at 0.4) |
+
+- "Gain" is how much better the best value fits than the lowest one, in a scan from 0.4 (all
+  months).
+- Four glaciers are clearly constrained, and give the same c_prec in both variants.
+- For the others the curve is flat: a minimum "low" means only that less snow does no harm. It
+  is not an optimum. Taconnaz, Hohsaas and Gruben keep improving down to 0.4 × ERA5, which is
+  not physical.
+- Every scan stops at the first rise of the RMSE, however small. The fit tolerance alone moves
+  the RMSE by about ±0.5 m.
+
+**Does the recalibration raise T_off?** (test fixed in the plan; monthly re-fit of the 23
+calibration glaciers, GLAMOS targets for Sex Rouge, Tortin and Alphubel, against the same
+calibration without fixed c_prec)
+
+| sample | median T_off (before → all months / May–Sep) | share above 2 °C | both bounds |
+|---|---|---|---|
+| all 23 | 0.61 → 0.00 / 0.00 °C | 26 % → 26 % / 17 % | 11 → 7 / 8 |
+| mean elevation above 3400 m (7) | 2.71 → **4.46** / 1.23 °C | 57 % → 71 % / 43 % | 6 → 4 / 5 |
+| the 12 with snow lines | 0.73 → 0.12 / 0.00 °C | 17 % → 17 % / 0 % | 5 → 1 / 2 |
+
+- **All months: flagged.** Bossons gets c_prec 3.0 and T_off +4.5 °C; Lys rises from 2.7 to
+  3.4 °C.
+- **May–September: not flagged.** Bossons drops to 0.0 °C and Lys to 1.2 °C.
+- In both variants, T_off disappears on Hohsaas, Gruben and Gorner. Monte Rosa east face drops
+  from 4.1 to 0.5 °C.
+- The five highest glaciers (Sphinxgrat, Pelvoux, Alphubel, the Colle Gnifetti area, Mont Blanc
+  summit) have no snow lines and keep T_off up to 8.4 °C.
+- All re-fits close the targets (mean deviation 0.03, at most 0.10 m w.e.).
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
@@ -408,6 +509,12 @@ constant σ.
   The GLAMOS band winter balances of Corvatsch are nearly flat with height.
 - **Spring snow persists too long everywhere**, by 140–460 m in May–June. That changes the
   insulation and the timing of meltwater for every glacier, not only the small ones.
+- **The model's snow line was not the product's.** GloGEM reports the highest snow-free band (the
+  lowest band under full snow cover); the Sommer product reports the 10th percentile of the
+  snow-covered area. Compared directly, fully snow-covered days add a fixed error that no
+  precipitation factor can remove (2026-10-16).
+- **Autumn snow lines pull c_prec down.** After the snowline calibration, October–November
+  carry 45 % of the remaining error: the model snows on the lower glacier too early.
 
 ## What is next
 

@@ -141,17 +141,21 @@ def write_glogem(tsla, qa_min):
     """All glaciers in one file, in the format of GloGEM's read_snowlinedata.pro (A. von der Esch):
     one header line, then: RGI id, snow line [m a.s.l.], stdev [m], year, day of year (365-day calendar).
     11_snowline_median.dat holds SLA_CORR (on the surface of the observation date), _raw.dat the SLA on
-    the SRTM DEM of February 2000, closer to GloGEM's fixed inventory geometry."""
+    the SRTM DEM of February 2000, closer to GloGEM's fixed inventory geometry; _raw_may_sep.dat the raw
+    SLA of May-September only."""
     os.makedirs(f'{OUT}/snowline_2000_2020', exist_ok=True)
     n = sum(len(df) for df in tsla.values())
-    for suffix, col, label in (('', 'sla_m', 'SLA_CORR'), ('_raw', 'sla_raw_m', 'SLA (raw, SRTM 2000)')):
+    for suffix, col, label, months in (('', 'sla_m', 'SLA_CORR', range(1, 13)),
+                                       ('_raw', 'sla_raw_m', 'SLA (raw, SRTM 2000)', range(1, 13)),
+                                       ('_raw_may_sep', 'sla_raw_m', 'SLA (raw, SRTM 2000)', range(5, 10))):
         with open(f'{OUT}/snowline_2000_2020/11_snowline_median{suffix}.dat', 'w') as f:
             f.write(f'RGI-ID SLA_m sigma_m year doy365  (Sommer et al. TSLA, {label} / SLA_ERROR, QA>={qa_min:.3f}, '
-                    f'2000-2025, {len(tsla)} glaciers, {n} observations)\n')
+                    f'2000-2025, months {months[0]}-{months[-1]}, {len(tsla)} glaciers, {n} observations in all months)\n')
             for gid, df in tsla.items():
                 d = pd.to_datetime(df.date)
-                for s, e, y, j in zip(df[col], df.sigma_m, d.dt.year, doy365(d)):
-                    f.write(f'RGI70-11.{gid} {s:8.1f} {e:6.1f} {y:4d} {j:3d}\n')
+                for s, e, y, j, m in zip(df[col], df.sigma_m, d.dt.year, doy365(d), d.dt.month):
+                    if m in months:
+                        f.write(f'RGI70-11.{gid} {s:8.1f} {e:6.1f} {y:4d} {j:3d}\n')
 
 
 def read_fix(short):
