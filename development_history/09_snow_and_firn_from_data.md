@@ -551,15 +551,15 @@ Janosch's comments on the plan of the afternoon led to four changes.
 
 | RGI6 | glacier | standard: ours / hers (c_prec, DDF, T_off) | snowline: ours / hers |
 |---|---|---|---|
-| 13.45334 | Urumqi West | 0.800, 3.343, 0.00 / 0.800, 3.267, 0.00 | running |
-| 13.06974 | Suek | 1.278, 3.000, 0.00 / 1.292, 3.000, 0.00 | running |
-| 13.06361 | Karabatkak | 1.688, 3.000, 0.00 / 1.593, 3.000, 0.00 | running |
-| 13.08624 | Tuyuksu | 1.676, 3.000, 0.00 / 1.706, 3.000, 0.00 | running |
-| 13.08055 | Sary-Tor | 0.800, 4.298, 0.00 / 0.800, 4.383, 0.00 | running |
-| 13.11609 | Golubin | 2.500, 2.879, 0.00 / 3.000, 2.846, 0.00 | running |
-| 13.08054 | Bordu | 0.800, 4.113, 0.00 / 0.800, 4.157, 0.00 | running |
-| 13.07064 | Glacier 354 | 0.800, 4.364, 0.00 / 0.800, 4.386, 0.00 | running |
-| 13.18096 | Abramov | 1.500, 3.000, 0.00 / 1.573, 3.000, 0.00 | running |
+| 13.45334 | Urumqi West | 0.800, 3.343, 0.00 / 0.800, 3.267, 0.00 | 1.156, 4.323, 0.00 / 1.138, 4.500, 0.00 |
+| 13.06974 | Suek | 1.278, 3.000, 0.00 / 1.292, 3.000, 0.00 | 0.937, 2.388, 0.00 / 0.961, 2.500, 0.00 |
+| 13.06361 | Karabatkak | 1.688, 3.000, 0.00 / 1.593, 3.000, 0.00 | 0.800, 1.750, 0.00 / 0.837, 1.860, 0.00 |
+| 13.08624 | Tuyuksu | 1.676, 3.000, 0.00 / 1.706, 3.000, 0.00 | 0.800, 1.750, −0.21 / 0.800, 1.750, 0.00 |
+| 13.08055 | Sary-Tor | 0.800, 4.298, 0.00 / 0.800, 4.383, 0.00 | 0.800, 4.500, 0.00 / 0.800, 4.500, 0.00 |
+| 13.11609 | Golubin | 2.500, 2.879, 0.00 / 3.000, 2.846, 0.00 | **0.800, 1.750, −1.52 / 2.400, 2.825, 0.00** |
+| 13.08054 | Bordu | 0.800, 4.113, 0.00 / 0.800, 4.157, 0.00 | 1.021, 4.500, 0.13 / 1.053, 4.500, 0.23 |
+| 13.07064 | Glacier 354 | 0.800, 4.364, 0.00 / 0.800, 4.386, 0.00 | 1.027, 4.500, 0.22 / 1.023, 4.500, 0.27 |
+| 13.18096 | Abramov | 1.500, 3.000, 0.00 / 1.573, 3.000, 0.00 | **0.800, 1.750, 0.00 / 3.000, 4.500, 1.00** |
 | 14.14311 | Patsio | 0.800, 4.500, 1.00 / 0.800, 4.500, 1.00 | 1.548, 4.500, 2.67 / 1.604, 4.500, 3.00 |
 | 14.15990 | Chhota Shigri | 0.800, 4.500, 0.26 / 0.800, 4.500, 0.27 | 1.070, 4.500, 1.00 / 1.050, 4.500, 1.00 |
 | 15.03954 | Yala | 0.800, 4.500, 0.82 / 0.800, 4.500, 0.84 | 1.673, 4.500, 1.88 / 1.536, 4.500, 1.87 |
@@ -568,6 +568,10 @@ Janosch's comments on the plan of the afternoon led to four changes.
   T_off within 0.02 °C. Karabatkak and Abramov differ by about 0.1 in c_prec. Golubin sits at our
   regional upper bound of 2.5, while hers reached 3.0: a different bound in her set-up, not a model
   difference.
+- The snowline calibration agrees on 10 of 12 glaciers (c_prec within about 0.15, T_off within
+  0.33 °C).
+  - Abramov and Golubin differ strongly: ours stops at the lowest value (0.8), hers ran to 3.0 and 2.4.
+    Not explained yet; her data folder is readable, so a run on her exact inputs can test it.
 - At Yala the snowline c_prec differs by 0.14 while T_off agrees. The curve is flat there (78.43 m at
   1.6, 78.49 m at 1.8), and a rise of 0.07 m ended the scan, so a tiny difference moves the stop by a
   step.
@@ -611,6 +615,31 @@ against the same calibration without fixed c_prec):
   and 3.1 → 3.9), with T_off still 0.
 - The re-fit closes every target: mean deviation 0.036 m w.e.; the largest, 0.125, is the same in the
   baseline.
+
+**Does the snow get better in the monthly model? (step B, rule fixed in the plan; agent
+diagnosis, scratchpad `stepB/`)**
+- The test: monthly forward runs 1999–2025 with the standard calibration and with the 7 snowline values,
+  both with the p10 snow line, against Sommer's May–September snow lines and against GLAMOS.
+- The 16 unchanged glaciers are bit-identical between the two runs.
+- **(a) The snow line fits better: true, but by about 1 %.**
+  - On the 7 glaciers, the weighted RMSE goes from 319.8 to 316.0 m; resampling the years, every draw
+    improves (−5.9 to −1.9 m).
+  - Only Morteratsch (−33 m), Hintereis (−31 m) and Bossons (−6 m) improve. Aletsch (+12.7 m), Fiescher
+    (+5.8 m), Gorner (+2.3 m) and Lys (+0.8 m) get slightly worse.
+- **(b) The winter balance does not move away from GLAMOS: false.**
+  - Gr. Aletsch is the only changed glacier with a full-outline GLAMOS series (25 measured years). Its
+    gap grows from 0.064 to 0.117 m w.e. (GLAMOS 1.25, before 1.32, after 1.14), and the ELA error
+    from +76 to +100 m.
+  - Morteratsch moves much closer (0.40 → 0.10 m w.e.; ELA error +118 → +42 m), but GLAMOS measures
+    only its Pers tributary there (outline ratio 0.46).
+- **So by the rule, the thermal runs do not use this recalibration** (Janosch decides).
+- **Why the daily c_prec does not carry over.** The monthly model's snow line is far too high in late
+  summer, whatever c_prec: August +201 m, September +296 m on the 7 glaciers, with end-of-month values.
+  The daily model, in which c_prec was chosen, has no such bias (September +70 m).
+  - On Aletsch, Fiescher, Gorner and Lys, a lower c_prec raises a monthly snow line that is already too
+    high.
+  - The snow lines that matter for the thermal runs are the monthly model's. A c_prec chosen with them
+    is the next candidate.
 
 ## What was wrong
 
