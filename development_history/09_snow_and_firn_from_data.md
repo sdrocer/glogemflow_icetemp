@@ -504,6 +504,114 @@ calibration without fixed c_prec)
 
 ![T_off against mean elevation, before and after the snowline calibration](figures/ch09_toff_by_elevation.svg)
 
+### The afternoon of 16 October: a target fix, a wider zone, and her numbers reproduced
+
+Janosch's comments on the plan of the afternoon led to four changes.
+
+**The geodetic target was averaged over 19 of its 20 years** (GloGEM `d075c98`; pushed for main as
+`fix/geodetic-target-period`, `a1fb2fa`).
+- `calibrate_single_glacier.pro` averaged hydrological years 2001–2019 (`n gt p0`): January–September
+  2000 and October–December 2019 of the Hugonnet period were left out. It has been so since the first
+  commit of the code.
+- OGGM 1.6.2 averages calendar years 2000–2019, all 20.
+- Now the calibration runs from 1999 and averages the 20 hydrological years 2000–2019.
+- The extra year is a spin-up. Started in 2000 without the previous year's snow, the first year comes
+  out up to 0.106 m w.e. too negative (mean 0.031). One spin-up year is within 0.002 m w.e. of two.
+- Effect on the 23 calibration glaciers: c_prec changes on Morteratsch only (1.395 → 1.371), DDF on
+  12 (mean +0.011) and T_off on 10 (mean +0.019 °C, at most +0.21 on Bossons).
+- Janosch chose the spin-up year (rather than averaging from the first year without one).
+
+**The zone is now 3000–3800 m.**
+- Janosch's paper places the firn–no-firn transition, the band where being right about snow and firn
+  matters most, up to 3800 m.
+- With it the zone holds 27 of the 105 scored entities (20 before):
+
+| where the zone entities lie | entities |
+|---|---|
+| glaciers without snow lines: Tête Rousse (00777) 8, Corvatsch (02103) 4, Alphubel (01150) 2, Altels (01265) 1 | 15 |
+| snow lines that do not fix c_prec: Hohsaas (01112) 5, Taconnaz (00774) 3 | 8 |
+| a glacier the snow lines fix: Aletsch (02596) | 4 |
+
+- So the snowline recalibration can hardly change zone target D. Its value lies with the big glaciers,
+  their boreholes and fronts.
+- The scorer's zone limits change before the next run set; this is recorded as an amendment.
+
+**Full refreezing stopped without the thermal model** (`07d694d`).
+- `refreezing_full = 'y'` stopped with "Variable is undefined: TL_RF" whenever the firn and ice
+  temperature model was off, i.e. in every calibration. Its state was set only in the thermal model's
+  set-up since the modular split.
+- It is now set for every glacier, and runs that worked are unchanged.
+
+**Her numbers reproduced without her files (gate 3).**
+- Her paper has no data archive, and her result folders are not readable for us. But her High
+  Mountain Asia snow lines are, and her supplement (Table S3) lists the calibrated parameters of her
+  12 test glaciers.
+- The port, run with her settings (ERA5-Land daily, RGI6, full refreezing, her snow-line definition and
+  range, the old target period), against her table:
+
+| RGI6 | glacier | standard: ours / hers (c_prec, DDF, T_off) | snowline: ours / hers |
+|---|---|---|---|
+| 13.45334 | Urumqi West | 0.800, 3.343, 0.00 / 0.800, 3.267, 0.00 | running |
+| 13.06974 | Suek | 1.278, 3.000, 0.00 / 1.292, 3.000, 0.00 | running |
+| 13.06361 | Karabatkak | 1.688, 3.000, 0.00 / 1.593, 3.000, 0.00 | running |
+| 13.08624 | Tuyuksu | 1.676, 3.000, 0.00 / 1.706, 3.000, 0.00 | running |
+| 13.08055 | Sary-Tor | 0.800, 4.298, 0.00 / 0.800, 4.383, 0.00 | running |
+| 13.11609 | Golubin | 2.500, 2.879, 0.00 / 3.000, 2.846, 0.00 | running |
+| 13.08054 | Bordu | 0.800, 4.113, 0.00 / 0.800, 4.157, 0.00 | running |
+| 13.07064 | Glacier 354 | 0.800, 4.364, 0.00 / 0.800, 4.386, 0.00 | running |
+| 13.18096 | Abramov | 1.500, 3.000, 0.00 / 1.573, 3.000, 0.00 | running |
+| 14.14311 | Patsio | 0.800, 4.500, 1.00 / 0.800, 4.500, 1.00 | 1.548, 4.500, 2.67 / 1.604, 4.500, 3.00 |
+| 14.15990 | Chhota Shigri | 0.800, 4.500, 0.26 / 0.800, 4.500, 0.27 | 1.070, 4.500, 1.00 / 1.050, 4.500, 1.00 |
+| 15.03954 | Yala | 0.800, 4.500, 0.82 / 0.800, 4.500, 0.84 | 1.673, 4.500, 1.88 / 1.536, 4.500, 1.87 |
+
+- The standard calibration agrees closely on 9 of 12 glaciers: c_prec within 0.03, DDF within 0.09,
+  T_off within 0.02 °C. Karabatkak and Abramov differ by about 0.1 in c_prec. Golubin sits at our
+  regional upper bound of 2.5, while hers reached 3.0: a different bound in her set-up, not a model
+  difference.
+- At Yala the snowline c_prec differs by 0.14 while T_off agrees. The curve is flat there (78.43 m at
+  1.6, 78.49 m at 1.8), and a rise of 0.07 m ended the scan, so a tiny difference moves the stop by a
+  step.
+- Her files use calendar days (day 366) and contain observations with σ = 0 (left out; none on her
+  test glaciers).
+
+**Which glaciers keep their snowline c_prec: a bootstrap over years** (step A1, rule fixed in the
+plan; `cprec_bootstrap.py`).
+- One snowline run per single c_prec (0.4, 0.6, … 3.0), with DDF and T_off fitted as in the scan and
+  the fixed target period, then a daily forward run with the p10 snow line.
+- Per glacier: the c_prec with the lowest weighted RMSE against the May–September snow lines, over the
+  whole range (not the scan's first rise). The 20 hydrological years are resampled 1000 times for its
+  90 % range.
+- A glacier keeps its c_prec only if that range reaches neither end of the scan.
+- All 168 fixed-value runs close their targets (largest deviation 0.047 m w.e.).
+- The forward runs reproduce the calibration's own snow line to within 0.5 m RMSE.
+
+![The c_prec the snow lines ask for, with its 90 % range from resampling the years](figures/ch09_cprec_bootstrap.svg)
+
+- **Kept (7):** Bossons 0.99 (0.98–1.01), Lys 0.90 (0.64–2.02), Gorner/Grenz 0.94 (0.67–1.00),
+  Morteratsch 2.13 (1.71–2.28), Aletsch 1.13 (1.02–1.57), Fiescher 1.11 (1.03–1.54), Hintereis 1.87
+  (1.70–2.19).
+- **Not kept (5):** Taconnaz, Hohsaas, Gruben and Monte Rosa east face (best at the lowest value,
+  0.4), and Ortles (range 0.40–3.00).
+- Bossons' curve is shallow (4 % gain), but its minimum barely moves when the years are resampled.
+  Lys is wide but stays inside the range.
+
+**The recalibration with the 7, and T_off** (step A2; monthly re-fit on the fixed target period,
+against the same calibration without fixed c_prec):
+
+| sample | median T_off before → after | share above 2 °C | both bounds |
+|---|---|---|---|
+| all 23 | 0.64 → 0.25 °C | 26 % → 22 % | 10 → 10 |
+| mean elevation above 3400 m (7) | 2.74 → 1.59 °C | 57 % → 43 % | 5 → 5 |
+| the 7 recalibrated | 1.00 → 0.00 °C | 14 % → 0 % | 2 → 2 |
+
+- **Not flagged.** T_off falls or stays at zero on all 7:
+  - Gorner 0.69 → 0, Bossons 1.00 → 0;
+  - Fiescher 1.00 → 0.49, Aletsch 1.88 → 1.67, Lys 2.74 → 1.59.
+- Morteratsch (1.37 → 2.12) and Hintereis (1.30 → 1.86) get more snow and more melt (DDF 3.0 → 4.1
+  and 3.1 → 3.9), with T_off still 0.
+- The re-fit closes every target: mean deviation 0.036 m w.e.; the largest, 0.125, is the same in the
+  baseline.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
@@ -584,3 +692,5 @@ calibration without fixed c_prec)
 | zone, zone target D | the 3000–3800 m band of the firn–no-firn transition (3000–3500 m until 16 Oct); target D: at least 2 more zone entities in the right temperature class than variant H |
 | perm_frac | the old permeability fraction of the thermal model (chapter 1) |
 | IDL | the programming language of GloGEM |
+| bootstrap | resampling the observation years with replacement, to see how much a result depends on which years were observed |
+| A0–A2, B, C | the steps of the plan of 16 Oct (afternoon): A the recalibration (A0 gate 3, A1 the bootstrap, A2 the monthly re-fit), B the snow check, C the thermal reruns |

@@ -13,6 +13,10 @@ fwd_p10raw), weighted bias and share of the squared error by month.
 ch09_toff_by_elevation: T_off of the 23 calibration glaciers before (standard monthly calibration,
 refit_none) and after the snowline calibration (refit_p10raw: all months; refit_seas: May-September),
 against the area-weighted mean elevation (toff_test.py tables).
+ch09_cprec_bootstrap: c_prec that fits the May-September snow lines best (full-sample spline minimum over
+0.4-3.0) and its 5-95 % range from 1000 bootstrap draws over the 20 hydrological years (cprec_bootstrap.py,
+boot_result/cprec_bootstrap.csv; one snowline run per single c_prec, fixed target period); kept if the range
+reaches neither end of the scan.
 """
 import sys
 from pathlib import Path
@@ -275,8 +279,35 @@ def fig_toff_by_elevation():
     save(fig, 'ch09_toff_by_elevation')
 
 
+def fig_cprec_bootstrap():
+    t = pd.read_csv(SNOWCAL / 'boot_result' / 'cprec_bootstrap.csv', dtype={'ID': str}).set_index('ID')
+    t = t.sort_values('c_full')
+    fig, ax = plt.subplots(figsize=(8.5, 4.6), facecolor=SURFACE)
+    style(ax)
+    ax.grid(axis='x', color=GRID, lw=0.6)
+    ax.axvspan(0.4, 3.0, color='#f3f2ee', zorder=0)
+    ax.axvline(1.3, color=INK2, lw=1, ls='--', zorder=1)
+    ax.text(1.32, len(t) - 0.4, 'standard calibration: 1.3\n(its lower bound)', color=INK2, fontsize=8, va='top')
+    for i, (gid, r) in enumerate(t.iterrows()):
+        col = AFTER if r.kept else NEUTRAL
+        ax.plot([r.c_p05, r.c_p95], [i, i], color=col, lw=5, solid_capstyle='round', zorder=2)
+        ax.plot([r.c_full], [i], marker='o', ms=7, color=INK if r.kept else INK2, mec=SURFACE, zorder=3)
+    ax.set_yticks(range(len(t)), [f'{NAMES[g]} ({g})' for g in t.index])
+    ax.set_xlim(0.3, 3.1)
+    ax.set_xlabel('c_prec that fits the snow lines best', color=INK)
+    handles = [plt.Line2D([], [], color=AFTER, lw=5, label='90 % range, kept'),
+               plt.Line2D([], [], color=NEUTRAL, lw=5, label='90 % range reaches the end of the scan: not kept'),
+               plt.Line2D([], [], marker='o', color=INK, lw=0, label='best fit (all years)')]
+    ax.legend(handles=handles, fontsize=8, frameon=False, labelcolor=INK, loc='lower right')
+    fig.text(0.01, 0.005, 'May–September snow lines (Sommer et al., raw, p10), one daily run per c_prec 0.4–3.0 (shaded), '
+             '1000 draws over the 20 years.', color=INK2, fontsize=8)
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    save(fig, 'ch09_cprec_bootstrap')
+
+
 if __name__ == '__main__':
     fig_snowline_definitions()
     fig_rmse_curves()
     fig_error_by_month()
     fig_toff_by_elevation()
+    fig_cprec_bootstrap()
