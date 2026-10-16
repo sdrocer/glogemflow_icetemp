@@ -104,6 +104,8 @@ Across the 4073 CentralEurope glaciers:
 | reaching above 4000 m (58, all targets) | — | — | 42 glaciers |
 | mean elevation below 3000 m | rare | about 0 | rare |
 
+![T_off of the 4073 CentralEurope glaciers against their median elevation](figures/ch08_toff_by_elevation.svg)
+
 - At the top of the Alps the model keeps too much snow even with the least snow and the most melt
   the bounds allow, and T_off removes it as melt.
 - Two opposite causes hide behind that:
@@ -237,12 +239,7 @@ polythermal profile; the model finds 9–10.
 **Why rule A is not robust: the two big massifs want opposite meltwater heat.** In-sample M1 by
 massif and f_ref shows it:
 
-```
- f_ref with the lowest M1          0.1                 0.55                 1.0
-   H    Mont Blanc, Monte Rosa      .  ●●                                         (both 0.25)
-   FRH  Mont Blanc                  ●                                              (0.10)
-   FRH  Monte Rosa                                                         ●      (1.00)
-```
+![In-sample M1 by f_ref on the Mont Blanc and Monte Rosa massifs, H and FRH](figures/ch08_massif_split.svg)
 
 - T_off had been absorbing, glacier by glacier, a real difference in how much meltwater heats the
   firn: Monte Rosa's sunny high firn (Lys, Breithorn) needs more than the degree-day melt without
@@ -442,3 +439,30 @@ Gate run (FRH, f_ref 0.85):
     Mattea et al. (2021); Hoelzle et al. (2011);
   - hanging glaciers and hazards: Vincent et al. (2015, 2020); Faillettaz et al. (2015);
   - Tête Rousse: Gilbert et al. (2012).
+
+## Glossary
+
+| term | meaning |
+|---|---|
+| T_off | temperature offset of the mass-balance calibration (phase 3), added to the reanalysis temperature when c_prec and DDF reach their bounds |
+| c_prec, DDF | precipitation factor and degree-day (melt) factor of the mass-balance calibration |
+| both bounds | c_prec at its lower bound (1.3) and DDF at its upper bound (4.5): only T_off can close the budget |
+| f_ref, f_ins, f_adv | the thermal model's three parameters: refreezing (how much meltwater heat enters the firn), insulation scaling, advection scaling |
+| R, F, H, FH, P (runs of 12 Oct) | R: the reference (today's model); F: no T_off in the thermal energy inputs; H: Herron & Langway (1980) meltwater depth and latent heat per metre of water; FH: both; P: water stopping at the model's own 830 kg/m³ depth |
+| H, HR, FRH, FRSH (fair run set) | H: the package above with T_off kept and a floor on the lapse rate; R in a name: ERA5's own lapse rate; F: no T_off; S: station lapse rates. FRH is the central forcing since 14 Oct |
+| 'hl', 'front' | meltwater depth limits: Herron & Langway (1980) (the default); the first-wet-month front (rule B, failed) |
+| M1 | the main score: RMSE of modelled against measured temperatures below 15 m, each outline with ≥ 3 points weighted equally |
+| M2 | the class score of the fair test (temperature classes cold / polythermal / temperate) |
+| entity | a borehole site (glacier and elevation band), scored as one unit |
+| massif | the group of glaciers left out together when f_ref is chosen on the others ("leaving one massif out") |
+| rule A, rule B, rule C | pre-registered adoption rules: A the forcing (FRH against H), B the meltwater depth limit in cold firn, C interactions between variants |
+| zone | the 3000–3500 m band, widened to 3000–3800 m on 16 Oct (chapter 9) |
+| ERA5 | the ECMWF reanalysis |
+| ELA | equilibrium-line altitude |
+| GLAMOS, GLIMS | Glacier Monitoring Switzerland; the Global Land Ice Measurements from Space inventory (glacier ids) |
+| RGI7 | Randolph Glacier Inventory version 7 |
+| DJF | December–February |
+| CG08, CG13, CG21, CG99, GG99, GG08 | borehole campaigns on Colle Gnifetti and Grenzgletscher (glenglat ids; the two digits are the year) |
+| HC, FRHC | H (or FRH) with meltwater reaching at most 4 m into cold firn (`firnice_perm_limit = 'cold'`; gate runs) |
+| DEMs | digital elevation models |
+| IDL | the programming language of GloGEM |

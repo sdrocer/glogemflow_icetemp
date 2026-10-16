@@ -572,7 +572,7 @@ calibration without fixed c_prec)
 | RMSE, wRMSE | root-mean-square error; weighted (wRMSE) with 1/σ, σ the observation uncertainty |
 | gain | how much better the best c_prec fits the snow lines than the lowest scanned value (0.4) |
 | hydrological year | October to September, named after the year in which it ends |
-| FRH | the central thermal forcing since 14 Oct: no T_off in the thermal energy inputs, ERA5's lapse rate, meltwater depth after Herron & Langway (1980) |
+| FRH | the central thermal forcing since 14 Oct: no T_off in the thermal energy inputs (F), ERA5's lapse rate (R), meltwater depth after Herron & Langway (1980) and latent heat per metre of water (H) |
 | FRHS | FRH with meltwater refreezing in the winter snow on ice bands |
 | FRHL | FRH with the firn ledger as the meltwater depth limit |
 | 'hl' | the current meltwater depth limit, after Herron & Langway (1980) |
