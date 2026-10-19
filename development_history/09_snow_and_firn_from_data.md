@@ -839,19 +839,17 @@ evening, archived in `plans/`).
 
 ## What is next
 
-- **The firn ledger** (Janosch, 19 Oct; the monthly snow-line test is not adopted). Next steps
-  are in the plan of 19 Oct.
-- **The 360-day thermal year and the zone limits (3000–3800 m)** go into the next thermal run set.
-- **The firn model** (`glogemflow_icetemp/firn_model/firn_change.pro`, Beer et al. 2026), driven
-  by the GLAMOS distributed mass balances, on our 9 Swiss calibration glaciers. Its firn extent and
-  thickness by band and year are compared with the thermal firn mask and the meltwater depth.
-- **The snow lines:**
-  - today's calibration against the Alpine transient snow lines (Sommer et al., ESSD preprint
-    essd-2026-35) and the GLAMOS ELAs;
-  - then Alexandra's snowline calibration, ported from her GloGEM branch into a procedure on
-    GloGEMflow.
-- **Firn thickness for the meltwater depth:** a bookkeeping per band with the firn model's rules
-  (Step 3b of the plan).
+Continued in chapter 10, "The firn ledger" (plan of 19 Oct, `plans/2026-10-19_firn_ledger_plan.md`):
+- **the ledger against the firn model,** first its rules on the GLAMOS balances, then its input,
+  GloGEM's balances;
+- **the perfect-firn test:** would the ledger improve the thermal model if the model's firn lines
+  were right?
+- **a rerun of the ledger** with the 360-day thermal year, the 3000–3800 m zone and the refined
+  cooling guard;
+- **3b-ii,** a firn column that follows the ledger.
+
+The snow lines (Sommer et al.) and Alexandra's snowline calibration are done (this chapter); the
+monthly snow cycle stays a stated limitation of the mass balance.
 
 ## Sources
 
