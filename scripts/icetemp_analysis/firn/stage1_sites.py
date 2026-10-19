@@ -1,12 +1,16 @@
-"""Stage 1 of the missing-heat plan (development_history/plans/2026-10-19_missing_heat_plan.md), fixed before its runs.
+"""Stage 1 of the missing-heat plan (development_history/plans/2026-10-19_missing_heat_plan.md), fixed before its runs
+were read. Compared as the calibration and the scoring compare: each borehole reading below 15 m at its own depth and
+date against the model in the borehole's elevation band, at f_ref 0.85. Runs are given as LABEL=RUN_DIR (data/bayescal).
 
-Bias (model minus measured) per borehole site at f_ref 0.85, for each run given as LABEL=RUN_DIR (data/bayescal).
-Rule for a fix X (S, W, S+W, S+B), read on its run with the observed firn and mask (FRHLO + X):
-  passes to stage 2 if Corvatsch and Hohsaas are within +-1 C, and no other site of the 9 GLAMOS glaciers has an
-  |bias| larger than in FRH (today, the run labelled 'FRH', or 'FRH-C0' for the B pair) by more than 0.5 C.
-Also printed: every site, so the top row (X with today's firn) shows whether X alone overshoots.
+Per band (entity = site x 10 m band): RMSE and bias of the readings below 15 m. Rule for a fix X, read on its run with
+the observed firn and mask (FRHLO + X):
+  passes to stage 2 if every band of Corvatsch and Hohsaas has an RMSE of at most 1 C, and no other band of the 9 GLAMOS
+  glaciers has an RMSE larger than in today's run (FRH, or FRH-C0 for the mass-balance pair) by more than 0.5 C.
+(Amended 2026-10-19 before any stage-1 result was read: the first version compared site means over all bands and
+depths, which can hide errors of opposite sign; Janosch: compare per band, and the curve with depth.)
+Also written: every reading (depth, measured, each run), for the depth profiles.
 
-Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/firn/stage1_sites.py OUT_CSV \
+Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/firn/stage1_sites.py OUT_PREFIX \
            LABEL=RUN [LABEL=RUN ...] --fixes LABEL:BASE [LABEL:BASE ...]
   e.g. --fixes FRHLOS:FRH FRHLOS-B:FRH-C0  (the fix's observed-firn run and the 'today' run it is judged against)
 """
@@ -21,13 +25,13 @@ from icetemp.calibration import thermal_structure as ts
 from icetemp.calibration.data import DataHandler
 
 G9 = ['01112', '02103', '02596', '01150', '01039', '01309', '02611', '01225', '02216']
-KEY = ('Vadret dal Corvatsch', 'Hohsaasgletscher')
+KEY = ('02103', '01112')      # Corvatsch, Hohsaas
 WITHIN, WORSE = 1.0, 0.5
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('out_csv')
+    ap.add_argument('out_prefix')
     ap.add_argument('runs', nargs='+')
     ap.add_argument('--fixes', nargs='*', default=[])
     a = ap.parse_args()
@@ -38,26 +42,31 @@ def main():
     outs = {lab: pickle.load(open(ft.BAYESCAL / run / 'training_runs' / 'design_0000.output.pkl', 'rb'))
             for lab, run in runs.items()}
     P = ft.points_frame(E, outs)
-    P['site'] = P.entity.str.split('@').str[0]
+    P = P[P.rgi.isin(G9)].reset_index(drop=True)
+    P.to_csv(f'{a.out_prefix}_points.csv', index=False, float_format='%.3f')
     rows = []
-    for s, d in P.groupby('site'):
-        r = dict(site=s, rgi=d.rgi.iloc[0], glamos=d.rgi.iloc[0] in G9, n=len(d), obs=d.obs.mean())
+    for e, d in P.groupby('entity', sort=False):
+        r = dict(band=e, rgi=d.rgi.iloc[0], n=len(d), depth_lo=d.depth.min(), depth_hi=d.depth.max(), obs=d.obs.mean())
         for lab in runs:
-            r[lab] = (d[lab] - d.obs).mean()
+            err = d[lab] - d.obs
+            r[f'rmse_{lab}'], r[f'bias_{lab}'] = float(np.sqrt((err ** 2).mean())), float(err.mean())
         rows.append(r)
-    T = pd.DataFrame(rows).set_index('site')
-    T.to_csv(a.out_csv, float_format='%.3f')
-    pd.set_option('display.width', 250)
-    print('bias per site, model minus measured [C], f_ref 0.85')
-    print(T.round(2).to_string())
+    T = pd.DataFrame(rows).set_index('band')
+    T.to_csv(f'{a.out_prefix}_bands.csv', float_format='%.3f')
+    pd.set_option('display.width', 250, 'display.max_rows', 200)
+    print('per band, readings below 15 m: RMSE (bias) model minus measured [C], f_ref 0.85')
+    show = T[['rgi', 'n', 'depth_lo', 'depth_hi', 'obs']].copy()
+    for lab in runs:
+        show[lab] = [f'{x:.2f} ({y:+.2f})' for x, y in zip(T[f'rmse_{lab}'], T[f'bias_{lab}'])]
+    print(show.round(2).to_string())
     for spec in a.fixes:
         fix, base = spec.split(':')
-        g = T[T.glamos]
-        key_ok = all(abs(g.loc[k, fix]) <= WITHIN for k in KEY)
-        others = g.drop(list(KEY))
-        worse = others[(others[fix].abs() - others[base].abs()) > WORSE]
-        print(f'{fix} (against {base}): Corvatsch {g.loc[KEY[0], fix]:+.2f}, Hohsaas {g.loc[KEY[1], fix]:+.2f} '
-              f'-> within +-{WITHIN}: {key_ok}; other sites worse by > {WORSE}: {list(worse.index)} '
+        key = T[T.rgi.isin(KEY)]
+        key_ok = bool((key[f'rmse_{fix}'] <= WITHIN).all())
+        others = T[~T.rgi.isin(KEY)]
+        worse = others[(others[f'rmse_{fix}'] - others[f'rmse_{base}']) > WORSE]
+        print(f'{fix} (against {base}): Corvatsch/Hohsaas bands with RMSE > {WITHIN}: '
+              f'{list(key.index[key[f"rmse_{fix}"] > WITHIN])}; other bands worse by > {WORSE}: {list(worse.index)} '
               f'-> PASSES: {key_ok and worse.empty}')
 
 
