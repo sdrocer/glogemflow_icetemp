@@ -4,7 +4,8 @@ run set was scored (plan development_history/plans/2026-10-14_firn_ledger_plan.m
   base  FRH  (tag fair, GloGEM 8c38120),  new  FRHL = FRH + firnice_perm_limit 'firn' (tag firn)
   both at the 7 f_ref values, f_ins 1.017, f_ref chosen leaving one massif out (as rule A)
 'firn' replaces 'hl' if all hold:
-  1. it gains, net, at least 2 robust zone entities (band centre 3005-3495 m)
+  1. it gains, net, at least 2 robust zone entities (band centre 3005-3495 m; forcing_fair_test.ZONE, 3005-3795 m
+     since 16 Oct, so a rerun of this script uses the wider zone)
   2. no condition of rule A breaks against FRH (M1, robust class losses overall and in the zone, warming)
   3. no firn band that 'hl' keeps temperate at 10 m below the cold-firn limit is cooled to more than 0.2 C
      below the melting point (rule B's guard, percolation_rule_b.band_cooling, at f_ref 0.85)

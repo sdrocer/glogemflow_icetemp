@@ -43,3 +43,15 @@ def test_snow_refreeze_reaches_the_config(tmp_path):
     assert settings(r.write_training_config())[0]['firnice_snow_refreeze'] == 'n'
     r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', snow_refreeze='y')
     assert settings(r.write_training_config())[0]['firnice_snow_refreeze'] == 'y'
+
+
+def test_firn_switches_reach_the_config(tmp_path):
+    def read(r):
+        s, text = settings(r.write_training_config())
+        age = re.search(r'^firnice_firn_age\s*=\s*(\d+)', text, flags=re.M).group(1)
+        return age, s['firnice_firn_obs_dir'], s['firnice_firn_obs_mask'], s['firnice_firn_column']
+    r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments')
+    assert read(r) == ('20', '', 'n', 'fixed')
+    r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', firn_age=30,
+                     firn_obs_dir='/x/firnobs', firn_obs_mask='y', firn_column='ledger')
+    assert read(r) == ('30', '/x/firnobs', 'y', 'ledger')

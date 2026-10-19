@@ -79,6 +79,10 @@ class CalibrationConfig:
     thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate; 'stations' = station rates
     deepen_to_obs: str = 'y'      # 'n' = borehole bands run to the band's ice thickness
     snow_refreeze: str = 'n'      # 'y' = meltwater refreezes in the seasonal snow on ice bands
+    firn_age: int = 20            # 'firn' ledger: years a layer stays firn
+    firn_obs_dir: str = ''        # perfect-firn test (diagnostic): folder of firnobs_<id>.dat, observed band balances
+    firn_obs_mask: str = 'n'      # 'y' = observed bands also take the thermal firn mask from the observations
+    firn_column: str = 'fixed'    # 'ledger' = the firn density (conduction, heat capacity) follows the ledger (3b-ii)
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)

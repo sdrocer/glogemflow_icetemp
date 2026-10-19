@@ -231,6 +231,10 @@ firnice_perm_limit      = '{perm_limit}'   ; 'profile' = model's own 830 kg/m3 d
 firnice_thermal_lapse   = '{thermal_lapse}'   ; 'reanalysis' = ERA5's rate; 'stations' = the station rates
 firnice_deepen_to_obs   = '{deepen_to_obs}'   ; 'n' = borehole bands run to the band's ice thickness
 firnice_snow_refreeze   = '{snow_refreeze}'   ; 'y' = meltwater refreezes in the seasonal snow on ice bands
+firnice_firn_age        = {firn_age}   ; years a layer stays firn in the 'firn' ledger
+firnice_firn_obs_dir    = '{firn_obs_dir}'   ; perfect-firn test (diagnostic): observed band balances
+firnice_firn_obs_mask   = '{firn_obs_mask}'   ; 'y' = observed bands also take the firn mask from them
+firnice_firn_column     = '{firn_column}'   ; 'ledger' = the firn density follows the ledger (3b-ii)
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -376,6 +380,10 @@ class GloGEMRunner:
     thermal_lapse: str = 'floor'  # 'reanalysis' = ERA5's own lapse rate; 'stations' = station rates
     deepen_to_obs: str = 'y'      # 'n' = borehole bands run to the band's ice thickness, as elsewhere
     snow_refreeze: str = 'n'      # 'y' = meltwater refreezes in the seasonal snow on ice bands
+    firn_age: int = 20            # 'firn' ledger: years a layer stays firn
+    firn_obs_dir: str = ''        # perfect-firn test (diagnostic): folder of firnobs_<id>.dat, observed band balances
+    firn_obs_mask: str = 'n'      # 'y' = observed bands also take the thermal firn mask from the observations
+    firn_column: str = 'fixed'    # 'ledger' = the firn density (conduction, heat capacity) follows the ledger (3b-ii)
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -609,6 +617,10 @@ class GloGEMRunner:
             thermal_lapse=self.thermal_lapse,
             deepen_to_obs=self.deepen_to_obs,
             snow_refreeze=self.snow_refreeze,
+            firn_age=self.firn_age,
+            firn_obs_dir=self.firn_obs_dir,
+            firn_obs_mask=self.firn_obs_mask,
+            firn_column=self.firn_column,
         )
         out_path.write_text(text)
         return out_path

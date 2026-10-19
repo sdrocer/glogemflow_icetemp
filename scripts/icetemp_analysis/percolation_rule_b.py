@@ -92,12 +92,22 @@ def cold_firn_limit(gid):
     return dict(zip((da[:, 1] + 5).astype(int), COLD_FIRN_N + (COLD_FIRN_S - COLD_FIRN_N) * (1 - np.cos(ang)) / 2))
 
 
-def band_cooling(run_hl, run_new, gids):
+def ledger_layers(run, gid):
+    """Number of annual layers in the firn ledger per band and year (firnice_firnledger_<id>.dat)."""
+    L = pd.read_csv(ft.BAYESCAL / run / ft.FIRNICE / f'firnice_firnledger_{gid}.dat', sep=r'\s+', comment='#',
+                    header=None, names=['elev', 'year', 'we', 'z', 'n', 'old', 'b', 'lim'])
+    return L.pivot_table(index='elev', columns='year', values='n')
+
+
+def band_cooling(run_hl, run_new, gids, min_layers=None):
     """Condition 3: firn bands below the cold-firn limit that 'hl' keeps temperate at 10 m and the new
-    rule cools to more than COOL below the melting point (decade means)."""
+    rule cools to more than COOL below the melting point (decade means). min_layers (refined guard, plan of
+    2026-10-15, decision 1): only band-decades whose ledger in run_new holds on average at least that many
+    annual layers (mature firn) are checked."""
     rows, n_checked = [], 0
     for g in gids:
         a, b = read_band_table(run_hl, 'temp_10m', g), read_band_table(run_new, 'temp_10m', g)
+        nl = ledger_layers(run_new, g) if min_layers else None
         fl = pd.read_csv(ft.BAYESCAL / run_hl / ft.FIRNICE / f'firnice_firnline_{g}.dat', sep=r'\s+', comment='#',
                          header=None, names=['year', 'ela', 'aar', 'firnline', 'n_fi', 'n_if']).set_index('year')
         lim = cold_firn_limit(g)
@@ -108,6 +118,10 @@ def band_cooling(run_hl, run_new, gids):
                 yrs = [y for y in range(y0, y1 + 1) if y in a.columns and y in fl.index]
                 if not yrs or np.mean(elev >= fl.loc[yrs, 'firnline'].to_numpy()) <= 0.5:
                     continue
+                if nl is not None:
+                    ly = [y for y in yrs if y in nl.columns]
+                    if elev not in nl.index or not ly or nl.loc[elev, ly].mean() < min_layers:
+                        continue
                 th, tn = a.loc[elev, yrs].mean(), b.loc[elev, yrs].mean()
                 if not (np.isfinite(th) and th >= TEMPERATE_HL):
                     continue

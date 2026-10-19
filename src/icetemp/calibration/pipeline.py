@@ -103,7 +103,9 @@ class CalibrationPipeline:
                              lh_water=self.config.lh_water, perm_limit=self.config.perm_limit,
                              thermal_lapse=self.config.thermal_lapse,
                              deepen_to_obs=self.config.deepen_to_obs,
-                             snow_refreeze=self.config.snow_refreeze)
+                             snow_refreeze=self.config.snow_refreeze,
+                             firn_age=self.config.firn_age, firn_obs_dir=self.config.firn_obs_dir,
+                             firn_obs_mask=self.config.firn_obs_mask, firn_column=self.config.firn_column)
         if self.config.calibration_source_dir is not None:
             runner_kwargs['calibration_source_dir'] = self.config.calibration_source_dir
         if self.config.calibration_source_files is not None:

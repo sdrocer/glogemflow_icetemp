@@ -45,7 +45,9 @@ FINS0, FADV0 = 1.017, 1.0
 FINS_CHECK = [0.785, 1.25]
 NODEEP = [('H', 0.55), ('FRH', 0.55)]
 DEEP = 15.0
-ZONE, ZONE_WIDE = (3005, 3495), (2950, 3550)    # entity band centre, m a.s.l.
+# entity band centre, m a.s.l.; the zone is 3000-3800 m since 2026-10-16 (Janosch: the firn-no-firn transition
+# reaches 3800 m); runs scored before used (3005, 3495) and (2950, 3550)
+ZONE, ZONE_WIDE = (3005, 3795), (2950, 3850)
 MIN_POINTS = 3                                  # outlines with fewer points stay out of M1
 MARGIN_M1 = 0.3
 LOSS_OVERALL = dict(polythermal=2, temperate=2, total=4)
@@ -54,7 +56,7 @@ TOLS = ('0.05', 'hole', '0.5')                  # robustness bracket
 TOL_PER_M = 0.0002                              # C per m depth, minimum tolerance
 SEALED = {'01161'}
 EXPECT = dict(entities=105, points=800, outlines=19, massifs=7,
-              classes=dict(cold=83, polythermal=16, temperate=6), zone=dict(cold=13, polythermal=6, temperate=1))
+              classes=dict(cold=83, polythermal=16, temperate=6), zone=dict(cold=19, polythermal=6, temperate=2))
 MASSIFS = {
     'Mont Blanc': ['00773', '00774', '00777', '00786'],
     'Monte Rosa': ['01195', '01205', '01225', '01230'],
