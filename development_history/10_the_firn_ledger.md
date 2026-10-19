@@ -161,7 +161,8 @@ The ledger of 14 Oct and the spin-up have the same.
 1. **The ledger keeps the 14 Oct rule,** with the zone at 3000–3800 m and the cooling guard checked
    only on mature firn (at least 15 layers). On the 14 Oct runs that guard finds none of the six old
    failures; all were young firn-line firn.
-2. **The perfect-firn reading** is on the 15 zone sites of Hohsaas, Corvatsch, Aletsch and Alphubel:
+2. **The perfect-firn reading** is on the zone bands of Hohsaas, Corvatsch, Aletsch and Alphubel (4 sites,
+   15 bands; counted in sites since the amendment below):
    - if FRHL itself gains at least 2 robust sites over FRH, the ledger works already;
    - if only FRHL-O does, investing in the snow and firn lines pays off;
    - if FRHL-O does not, the right firn lines would not fix these sites.
@@ -170,6 +171,44 @@ The ledger of 14 Oct and the spin-up have the same.
    - no net loss of zone sites;
    - the guard holds;
    - the frozen-bed table holds.
+
+**Counting sites, not bands** (amendment of 19 Oct, Janosch's decision while the batch ran, before any
+result was looked at; icetemp `45e05e7`):
+- **His question:** should the boreholes of one elevation bin be merged into one median, so that the
+  benchmark has the model's dimension?
+- **Why not a median:**
+  - Within a model band there is little to merge: the scoring unit is already one site in one 10 m
+    band, and only 3 of 102 glacier-band cells hold more than one site.
+  - Boreholes sit at chosen places (ice-core saddles, hazard sites); a median does not turn them into a
+    band mean.
+  - A single value per band throws away depth and time. Depth is what separates f_ref from f_ins
+    (chapter 7), and time is what the warming test needs.
+- **But the question uncovered a real flaw:** the 105 scored entities come from 20 sites, and the 27
+  zone entities from 7:
+
+  | site | zone bands |
+  |---|---|
+  | Tête Rousse | 8 |
+  | Hohsaas | 5 |
+  | Corvatsch | 4 |
+  | Jungfraufirn | 4 |
+  | Taconnaz | 3 |
+  | Alphubel | 2 |
+  | Altels | 1 |
+
+  Neighbouring bands of one site lie within about 70 m, where neighbouring holes already differ by
+  2.2–2.7 °C (chapter 8). They are not independent evidence, and "a gain of 2" could be two bands of
+  one site.
+- **So the gain conditions now count sites.**
+  - A site gains when more than half of its zone bands gain robustly and none loses; it loses in the
+    mirror case.
+  - The ledger needs a net gain of 2 of the 7 zone sites; the perfect-firn reading 2 of its 4 sites;
+    3b-ii no net loss of sites.
+  - The band counts are reported beside.
+  - Rule A's loss conditions stay per band, the stricter way for losses.
+- **Kept for the Bayesian calibration (Step 5):** each hole is modelled as the band's value plus a site
+  deviation of about 1.5–1.9 °C, shared by all its readings. That brings the benchmark to the model's
+  dimension without losing depth or time.
 
 **The batch** (tag `b19`; 53 runs, started 19 Oct 13:01):
 - H, FRH, FRHL, FRHL-o, FRHL-O, FRHL + 3b-ii and FRHL-O + 3b-ii, each at the 7 f_ref values;
@@ -207,7 +246,9 @@ The ledger of 14 Oct and the spin-up have the same.
 | FRH, FRHL | the central thermal variant (no T_off, ERA5 lapse rate, Herron & Langway meltwater); FRHL: with the ledger |
 | FRHL-o, FRHL-O | the ledger fed the observed balance: o the thickness only, O also the firn mask |
 | 3b-ii | the firn density follows the ledger instead of one fixed profile |
-| robust zone site | a borehole site in the zone whose temperature class is right across the f_ref values |
+| robust zone site | a borehole site in the zone whose temperature class is right across the f_ref values; since 19 Oct a site counts as gained when more than half of its zone bands gain and none loses |
+| site, entity | site: one borehole location (e.g. Hohsaas); entity: a site in one 10 m band, the unit the readings are compared in |
+| floor | how close a band model can come to a single borehole: neighbouring holes differ by 2.2–2.7 °C, so about 1.5–1.9 °C |
 | perfect-firn test | the thermal model with the ledger fed observed instead of modelled band balances: what the ledger would do if the model's firn were right |
 | firn base | the depth of the ledger plus this winter's snow on the thermal density profile; caps the meltwater, and with 3b-ii sets the firn/ice column |
 | close-off depth, burial | Herron & Langway's depth where firn pores close (caps the water under 'hl' and 'firn'); burial: the downward motion of the column by accumulation |
