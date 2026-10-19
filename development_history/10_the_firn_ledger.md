@@ -10,9 +10,9 @@
 > 10–30 m w.e. of firn at Hohsaas, Corvatsch and Alphubel where the observations leave almost none.
 > The ledger is right; its input is not.
 >
-> *Status (2026-10-19): check 5 done. Next: the perfect-firn test (would the ledger help if the
-> firn lines were right?), the rerun with the agreed amendments, and a firn column that follows the
-> ledger (3b-ii). Plan: `plans/2026-10-19_firn_ledger_plan.md`.*
+> *Status (2026-10-19, 13:00): check 5 done. The perfect-firn test, the rerun with the agreed
+> amendments and 3b-ii (a firn column that follows the ledger) are built, reviewed and gated; their
+> batch is running. Plan: `plans/2026-10-19_firn_ledger_plan.md`.*
 
 ## What we believed
 
@@ -94,19 +94,92 @@ small high glaciers:
 - The open question is whether the ledger would help if the firn were right. That is the
   perfect-firn test, next.
 
+### What was built and checked for the batch of 19 Oct
+
+**The perfect-firn test** (GloGEM `firn-ledger`, `f8e8c4f`; a diagnostic switch, never for production).
+The same thermal model and ledger, but on the 9 GLAMOS glaciers the ledger is fed the observed band
+balance. Only the firn changes; melt, rain, snow and air temperature stay GloGEM's.
+
+```
+                                     the ledger is fed by          the firn mask (which bands are firn)
+ FRH     ('hl', today)               -                              GloGEM
+ FRHL    (the ledger as it is)       GloGEM's band balance          GloGEM
+ FRHL-o  (observed firn thickness)   GLAMOS band balance            GloGEM
+ FRHL-O  (observed firn line too)    GLAMOS band balance            GLAMOS (same rule: 5-year mean > 0)
+```
+
+- **The observed balances:** `firn/write_firn_obs.py` writes them from the band tables of check 5,
+  for every band and year with at least 3 GLAMOS cells.
+- **The start:** each band starts from the steady state of its first ten observed years. This applies
+  only where the observations begin by 1972; Fiescher, Gorner and Morteratsch (from 2005–2008) keep
+  GloGEM's start.
+- **The close-off depth and the burial of observed bands** also use the observed start balance (a
+  finding of the review).
+
+**3b-ii, the firn column follows the ledger** (`184c9cd`, switch `firnice_firn_column = 'ledger'`):
+
+```
+ today (every firn band)              3b-ii (the column follows the ledger)
+ 0 m  ░ firn 250 kg/m³                0 m  ░ firn
+      ▒ firn, denser with depth       8 m  ▒ firn base = ledger + this winter's snow
+ 35 m ▒ 830 (pores close)                  █ ice 900 kg/m³: conducts and stores heat like ice
+ 49 m █ ice                                █
+```
+
+- **Above the firn base the column is firn, below it ice.** The base is the ledger plus this
+  winter's snow, the same depth that already caps the meltwater; the node straddling it is blended.
+- **A firn band whose ledger is empty is an ice column:** its snow insulates as on ice, and its
+  meltwater runs off.
+
+**The thermal year now has 365 days** (GloGEMflow `a687448`):
+- The thermal model counted every month as 30 days; now it uses each month's real length.
+- The mass balance is unchanged, and the borehole temperatures move by at most 0.08 °C. It is in all
+  the runs of the batch, so H and FRH are rerun too.
+
+**An independent review** (max effort) of all three found no code error. It led to four changes
+(`7851994`):
+- the observed start balance also sets the close-off depth and the burial;
+- an empty ledger gets no meltwater;
+- the top node's slice is corrected;
+- a wrong observation folder now stops the run.
+
+**One known limitation is kept and stated:** from October to December, last summer's surviving
+snow is counted twice (in the ledger and in the snow), so the firn base is about 1 m too deep then.
+The ledger of 14 Oct and the spin-up have the same.
+
+**The gate** (`firn/gate_b19.py`, all pass):
+
+| check | result |
+|---|---|
+| defaults unchanged | the ledger branch's FRH = GloGEMflow's FRH (52 files byte-identical) |
+| the new switches change nothing when off | FRHL unchanged (55 files); FRHL-o = FRHL on glaciers without observations |
+| the mass balance is untouched | snow logbooks and ELA/AAR identical |
+| the ledger is the Python reference | 31 968 band-years, at most 0.00004 m w.e. apart |
+| observed bands take the observations | Hohsaas: all 1242 observed band-years, and all 23 start states |
+
+**The rules, fixed before the runs** (icetemp `018592f`, `firn_batch_rule.py`):
+1. **The ledger keeps the 14 Oct rule,** with the zone at 3000–3800 m and the cooling guard checked
+   only on mature firn (at least 15 layers). On the 14 Oct runs that guard finds none of the six old
+   failures; all were young firn-line firn.
+2. **The perfect-firn reading** is on the 15 zone sites of Hohsaas, Corvatsch, Aletsch and Alphubel:
+   - if FRHL itself gains at least 2 robust sites over FRH, the ledger works already;
+   - if only FRHL-O does, investing in the snow and firn lines pays off;
+   - if FRHL-O does not, the right firn lines would not fix these sites.
+3. **3b-ii is adopted unless it is worse than FRHL:**
+   - M1 not worse by more than 0.1 °C;
+   - no net loss of zone sites;
+   - the guard holds;
+   - the frozen-bed table holds.
+
+**The batch** (tag `b19`; 53 runs, started 19 Oct 13:01):
+- H, FRH, FRHL, FRHL-o, FRHL-O, FRHL + 3b-ii and FRHL-O + 3b-ii, each at the 7 f_ref values;
+- FRH and FRHL without deepening;
+- FRHL with 15- and 30-year ageing.
+
 ## What is next
 
-1. **The perfect-firn test.** The same thermal model and ledger, but on the GLAMOS glaciers the
-   ledger is fed the observed band balance:
-   - FRHL-o: the thickness only;
-   - FRHL-O: the thickness and the firn mask.
-
-   If FRHL-O gains at least 2 robust zone sites over FRH (on Hohsaas, Corvatsch, Aletsch, Alphubel),
-   investing in the snow and firn lines pays off.
-2. **The rerun of the ledger** on the current code: the 360-day thermal year, the 3000–3800 m zone,
-   and the refined cooling guard (mature firn only).
-3. **3b-ii:** the firn density, and with it conduction and heat capacity, follows the ledger instead
-   of one fixed profile.
+- **The batch's results:** the perfect-firn verdict (Janosch's question), the ledger's rule and 3b-ii.
+  Then the next decision: invest in the snow and firn lines of the mass balance, or not.
 
 ## Sources
 
@@ -135,3 +208,9 @@ small high glaciers:
 | FRHL-o, FRHL-O | the ledger fed the observed balance: o the thickness only, O also the firn mask |
 | 3b-ii | the firn density follows the ledger instead of one fixed profile |
 | robust zone site | a borehole site in the zone whose temperature class is right across the f_ref values |
+| perfect-firn test | the thermal model with the ledger fed observed instead of modelled band balances: what the ledger would do if the model's firn were right |
+| firn base | the depth of the ledger plus this winter's snow on the thermal density profile; caps the meltwater, and with 3b-ii sets the firn/ice column |
+| close-off depth, burial | Herron & Langway's depth where firn pores close (caps the water under 'hl' and 'firn'); burial: the downward motion of the column by accumulation |
+| cooling guard (mature firn) | no firn band that the baseline keeps temperate may be cooled by more than 0.2 °C; checked only where the ledger holds at least 15 layers |
+| gate | checks a new switch must pass before its runs count: unchanged when off, mass balance untouched, matches its reference |
+| 365-day thermal year | the thermal model's step now follows each month's real length (it counted 30-day months) |
