@@ -2,21 +2,27 @@
 fixed before the runs. All runs (tag b19) carry the 360-day thermal year; zone 3005-3795 m (forcing_fair_test.ZONE);
 the 7 f_ref values at f_ins 1.017, f_ref chosen leaving one massif out (as rule A).
 
-1. The ledger (14 Oct rule, with the two amendments decided before this batch): FRHL replaces FRH if
-   a. it gains, net, at least 2 robust zone entities;
+Counting unit (amendment of 2026-10-19, decided by Janosch before any result was looked at): the gain conditions count
+SITES (the borehole site, the entity name before '@'), not 10 m bands: the 27 zone entities are 7 sites, and
+neighbouring bands of one site are not independent evidence. A site gains when more than half of its zone bands gain
+robustly and none loses; it loses in the mirror case. Band counts are reported beside. Rule A's loss conditions stay
+per band (the stricter way for losses).
+
+1. The ledger (14 Oct rule, with the amendments decided before this batch): FRHL replaces FRH if
+   a. it gains, net, at least 2 robust zone sites;
    b. no condition of rule A breaks against FRH;
    c. no firn band that FRH keeps temperate at 10 m below the cold-firn limit is cooled to more than 0.2 C below
       the melting point, checked only where the ledger holds mature firn (>= 15 layers on average in the decade;
       decision 1 of 15 Oct);
    d. the frozen-bed table does not lose (no measured frozen bed lost, at most 2 temperate beds called frozen).
-2. The perfect-firn test (diagnostic): on the 15 zone entities of the four glaciers with GLAMOS grids over the
-   whole run (Hohsaas 01112, Corvatsch 02103, Gr. Aletsch 02596, Alphubel 01150), the net robust gain of FRHL,
-   FRHLo (ledger fed the observed band balance) and FRHLO (also the observed firn mask) over FRH:
+2. The perfect-firn test (diagnostic): on the zone sites of the four glaciers with GLAMOS grids over the whole run
+   (Hohsaas 01112, Corvatsch 02103, Gr. Aletsch 02596, Alphubel 01150: 4 sites, 15 zone entities), the net robust
+   site gain of FRHL, FRHLo (ledger fed the observed band balance) and FRHLO (also the observed firn mask) over FRH:
      FRHL >= 2: the ledger works already | FRHL < 2 and FRHLO >= 2: the input is the bottleneck, investing in
      snow and firn lines pays off | FRHLO < 2: the right firn lines would not fix these sites.
    Reported with it: zone M1 on those four outlines; M1 on all entities of the 9 GLAMOS glaciers.
 3. 3b-ii (the firn column follows the ledger): FRHLD replaces FRHL unless it is worse:
-   a. M1 not worse by more than 0.1 C; b. no net loss of robust zone entities; c. the guard of 1c against FRHL;
+   a. M1 not worse by more than 0.1 C; b. no net loss of robust zone sites; c. the guard of 1c against FRHL;
    d. the frozen-bed table does not lose against FRHL.
 Reported: zone target D (each against H), FRHLOD against FRHLO, the ageing runs (15, 30 years), fronts and tongues
 (runs without deepening), the temperate sites, wet depth against the ledger.
@@ -70,6 +76,24 @@ def subset_gain(obs_cls, ra, rb_, names):
     return sum(g - l for g, l in chg.values()), chg
 
 
+def site_changes(obs_cls, a_cls, b_cls, names):
+    """Robust changes per site (entity name before '@'): a site gains when more than half of its bands in `names`
+    gain robustly and none loses, and loses in the mirror case. Returns the net site gain and a table per site."""
+    per = {}
+    for n in names:
+        ok_a = [a_cls[n][t] == obs_cls[n][t] for t in ft.TOLS]
+        ok_b = [b_cls[n][t] == obs_cls[n][t] for t in ft.TOLS]
+        d = per.setdefault(n.split('@')[0], dict(bands=0, gain=0, loss=0))
+        d['bands'] += 1
+        d['gain'] += int(all(ok_b) and not any(ok_a))
+        d['loss'] += int(all(ok_a) and not any(ok_b))
+    for d in per.values():
+        d['site'] = 'gain' if d['gain'] > d['bands'] / 2 and d['loss'] == 0 else \
+            'loss' if d['loss'] > d['bands'] / 2 and d['gain'] == 0 else 'none'
+    net = sum(d['site'] == 'gain' for d in per.values()) - sum(d['site'] == 'loss' for d in per.values())
+    return net, per
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('out_dir', nargs='?', default='/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week3/batch_rule')
@@ -104,18 +128,21 @@ def main():
 
     # 1. the ledger
     _, _, c = rb.compare(P, E, obs_cls, W, (TAG, 'FRH'), (TAG, 'FRHL'))
+    zone = P.band.between(*ft.ZONE)
+    ZN = sorted(P[zone].entity.unique())
+    s1, sites1 = site_changes(obs_cls, R['FRH']['cls'], R['FRHL']['cls'], ZN)
     cool, n_chk = rb.band_cooling(ft.run_name(TAG, 'FRH', rb.FREF_BANDS), ft.run_name(TAG, 'FRHL', rb.FREF_BANDS),
                                   gids, min_layers=MIN_LAYERS)
     fb_ok, fb, FB = frozen_bed(E, {v: R[v]['chosen'] for v in ('FRH', 'FRHL')}, 'FRH', 'FRHL')
     FB.to_csv(out / 'frozen_bed_FRH_FRHL.csv', index=False)
-    r1 = dict(a_zone_net_gain=c['zone_net_gain'], a=c['zone_net_gain'] >= 2, b=bool(c['cond2']),
+    r1 = dict(a_zone_net_site_gain=s1, a=s1 >= 2, zone_sites=sites1, reported_zone_net_band_gain=c['zone_net_gain'],
+              b=bool(c['cond2']),
               A_detail=c['A_conditions'], warming_ci=c['warming_ci'], zone_robust_changes=c['zone_robust_changes'],
               c=not cool, bands_checked=n_chk, bands_cooled=cool, d=fb_ok, frozen_bed=fb)
     r1['adopt_firn'] = bool(r1['a'] and r1['b'] and r1['c'] and r1['d'])
     res['1_ledger'] = r1
 
     # 2. the perfect-firn test
-    zone = P.band.between(*ft.ZONE)
     S4 = sorted(P[zone & P.rgi.isin(GLAMOS4)].entity.unique())
     r2 = dict(n_entities=len(S4), entities=S4,
               obs_classes={c_: sum(obs_cls[n]['hole'] == c_ for n in S4) for c_ in ft.CLASSES})
@@ -125,8 +152,9 @@ def main():
                      glamos9_M1=ft.m1(Qv[Qv.rgi.isin(GLAMOS9)], 'oos'),
                      classes={n: dict(obs=obs_cls[n]['hole'], model=R[v]['cls'][n]['hole']) for n in S4})
         if v != 'FRH':
-            r2[v]['net_gain'], r2[v]['changes'] = subset_gain(obs_cls, R['FRH'], R[v], S4)
-    g_l, g_o = r2['FRHL']['net_gain'], r2['FRHLO']['net_gain']
+            r2[v]['net_site_gain'], r2[v]['sites'] = site_changes(obs_cls, R['FRH']['cls'], R[v]['cls'], S4)
+            r2[v]['reported_net_band_gain'], r2[v]['band_changes'] = subset_gain(obs_cls, R['FRH'], R[v], S4)
+    g_l, g_o = r2['FRHL']['net_site_gain'], r2['FRHLO']['net_site_gain']
     r2['verdict'] = ('the ledger works already' if g_l >= 2 else
                      'the input is the bottleneck: investing in snow and firn lines pays off' if g_o >= 2 else
                      'the right firn lines would not fix these sites')
@@ -138,8 +166,10 @@ def main():
                                 gids, min_layers=MIN_LAYERS)
     fb3_ok, fb3, FB3 = frozen_bed(E, {v: R[v]['chosen'] for v in ('FRHL', 'FRHLD')}, 'FRHL', 'FRHLD')
     FB3.to_csv(out / 'frozen_bed_FRHL_FRHLD.csv', index=False)
+    s3, sites3 = site_changes(obs_cls, R['FRHL']['cls'], R['FRHLD']['cls'], ZN)
     r3 = dict(M1=(ra['M1'], rd['M1']), zone_M1=(ra['zone_M1'], rd['zone_M1']),
-              a=rd['M1'] <= ra['M1'] + MARGIN_3BII, b_zone_net_gain=c3['zone_net_gain'], b=c3['zone_net_gain'] >= 0,
+              a=rd['M1'] <= ra['M1'] + MARGIN_3BII, b_zone_net_site_gain=s3, b=s3 >= 0, zone_sites=sites3,
+              reported_zone_net_band_gain=c3['zone_net_gain'],
               zone_robust_changes=c3['zone_robust_changes'], robust_changes=c3['robust_changes'],
               c=not cool3, bands_checked=n3, bands_cooled=cool3, d=fb3_ok, frozen_bed=fb3)
     r3['adopt_3bii'] = bool(r3['a'] and r3['b'] and r3['c'] and r3['d'])
@@ -151,7 +181,8 @@ def main():
     res['target_D'] = {}
     for v in VARS[1:]:
         _, _, cd = rb.compare(P, E, obs_cls, W, (TAG, 'H'), (TAG, v))
-        res['target_D'][v] = dict(zone_net_gain_vs_H=cd['zone_net_gain'], met=cd['zone_net_gain'] >= 2)
+        sd, _ = site_changes(obs_cls, R['H']['cls'], R[v]['cls'], ZN)
+        res['target_D'][v] = dict(zone_net_site_gain_vs_H=sd, met=sd >= 2, reported_zone_net_band_gain=cd['zone_net_gain'])
     res['ageing'] = {}
     for a, run in AGES.items():
         o = pickle.load(open(ft.BAYESCAL / run / 'training_runs' / 'design_0000.output.pkl', 'rb'))
