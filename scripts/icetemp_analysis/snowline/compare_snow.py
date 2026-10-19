@@ -1,7 +1,15 @@
-"""Step B: BEFORE (fwdB_none_fixed) vs AFTER (fwdB_boot7) snow line, winter balance, ELA.
+"""Snow check of a c_prec recalibration: BEFORE vs AFTER monthly forward runs, snow line against Sommer's
+satellite snow lines, winter balance and ELA against GLAMOS, and the adoption rule.
 
-Usage: python compare_snow.py [OUT_DIR]   (tables and verdict.txt are written to OUT_DIR, default: the current folder)
+Step B (plan of 2026-10-16, afternoon): the defaults (fwdB_none_fixed vs fwdB_boot7, all May-September readings,
+hydrological years 1999-2025, condition (a) on the month-end values).
+The monthly snow-line test (plan of 2026-10-16, evening): --rising (readings up to each glacier-year's highest
+one), --years 2000 2025, --primary int (interpolated between month ends).
+
+Usage: python compare_snow.py [OUT_DIR] [--before RUN] [--after RUN] [--changed ID ...] [--rising]
+                              [--years Y0 Y1] [--primary mon|int]
 """
+import argparse
 import calendar
 import glob
 import os
@@ -10,15 +18,24 @@ import sys
 import numpy as np
 import pandas as pd
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-RUNS = {'before': '/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week2/snowcal/fwdB_none_fixed',
-        'after': '/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week2/snowcal/fwdB_boot7'}
+SNOWCAL = '/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week2/snowcal'
+ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+ap.add_argument('out', nargs='?', default=os.getcwd())
+ap.add_argument('--before', default=f'{SNOWCAL}/fwdB_none_fixed')
+ap.add_argument('--after', default=f'{SNOWCAL}/fwdB_boot7')
+ap.add_argument('--changed', nargs='+', default=['00773', '01205', '01225', '02216', '02596', '02611', '03116'])
+ap.add_argument('--rising', action='store_true', help='snow-line readings up to each glacier-year\'s highest one')
+ap.add_argument('--years', type=int, nargs=2, default=(1999, 2025), help='hydrological years of the readings')
+ap.add_argument('--primary', choices=('mon', 'int'), default='mon', help='model value for condition (a)')
+A = ap.parse_args()
+OUT = A.out
+RUNS = {'before': A.before, 'after': A.after}
 SUB = 'monthly/CentralEurope/PAST/PAST_original'
 DATA = '/home/jabeer/projects/glogemflow_development/glogemflow_icetemp/data/snowlines'
 FIX = '/itet-stor/jabeer/glazioarch/GlacioBaseData/MassBalance/glacier'
 MH = '/scratch_net/vierzack06_fourth/mhuss/MassBalance_all'
 Y0, NY = 1999, 27
-CHANGED = ['00773', '01205', '01225', '02216', '02596', '02611', '03116']
+CHANGED = A.changed
 TSLA = ['00773', '00774', '01112', '01127', '01205', '01225', '01230', '02216', '02596', '02611', '02821', '03116']
 MEAS_W = (1, 2, 4, 5)  # GLAMOS methods with a measured winter balance
 
@@ -69,14 +86,18 @@ sl = {r: {k: v.reshape(NY, 12) for k, v in table(r, 'Snowline_mon').items()} for
 obs = []
 for gid in TSLA:
     d = pd.read_csv(f'{DATA}/tsla_csv/tsla_RGI70-11.{gid}.csv', parse_dates=['date'])
-    d = d[(d.qa >= 0.666) & d.month.between(5, 9) & d.hydro_year.between(Y0, Y0 + NY - 1)].copy()
+    d = d[(d.qa >= 0.666) & d.month.between(5, 9) & d.hydro_year.between(*A.years)].copy()
+    if A.rising:
+        top = d.loc[d.groupby('hydro_year').sla_raw_m.idxmax()].set_index('hydro_year').date
+        d = d[d.date <= d.hydro_year.map(top)].copy()
     d['gid'] = gid
     for r in RUNS:
         d[f'{r}_mon'] = [model_month(sl[r][gid], t.year, t.month) for t in d.date]
         d[f'{r}_int'] = [model_interp(sl[r][gid], t) for t in d.date]
     obs.append(d)
 obs = pd.concat(obs, ignore_index=True)
-obs['group'] = np.where(obs.gid.isin(CHANGED), 'changed7', 'unchanged5')
+GC, GU = f'changed{len(CHANGED)}', f'unchanged{len(TSLA) - len(CHANGED)}'
+obs['group'] = np.where(obs.gid.isin(CHANGED), GC, GU)
 obs.to_csv(f'{OUT}/snowline_matched_obs.csv', index=False, float_format='%.1f')
 
 
@@ -97,11 +118,11 @@ for gid, d in obs.groupby('gid'):
     rows.append(dict(rgi7=gid, name=NAME[gid], changed=gid in CHANGED,
                      yrs=f'{d.hydro_year.min()}-{d.hydro_year.max()}', **stats_block(d)))
 for grp, d in obs.groupby('group'):
-    rows.append(dict(rgi7=f'POOLED_{grp}', name='pooled (obs-weighted 1/sigma)', changed=grp == 'changed7',
+    rows.append(dict(rgi7=f'POOLED_{grp}', name='pooled (obs-weighted 1/sigma)', changed=grp == GC,
                      yrs=f'{d.hydro_year.min()}-{d.hydro_year.max()}', **stats_block(d)))
 SLG = pd.DataFrame(rows)
 # glacier-mean of per-glacier scores (each glacier weighted equally) as a sensitivity
-for grp, ch in (('changed7', True), ('unchanged5', False)):
+for grp, ch in ((GC, True), (GU, False)):
     s = SLG[(SLG.changed == ch) & ~SLG.rgi7.str.startswith('POOLED')]
     rec = dict(rgi7=f'GLACIERMEAN_{grp}', name='mean of per-glacier scores', changed=ch, yrs='')
     for c in s.columns:
@@ -123,7 +144,7 @@ SLM.to_csv(f'{OUT}/snowline_by_month.csv', index=False, float_format='%.1f')
 rows = []
 for (gid, m), d in obs[obs.gid.isin(CHANGED)].groupby(['gid', 'month']):
     rows.append(dict(rgi7=gid, name=NAME[gid], month=m, **stats_block(d)))
-pd.DataFrame(rows).to_csv(f'{OUT}/snowline_by_glacier_month_changed7.csv', index=False, float_format='%.1f')
+pd.DataFrame(rows).to_csv(f'{OUT}/snowline_by_glacier_month_{GC}.csv', index=False, float_format='%.1f')
 
 # sensitivity: drop inferred full-snow / snow-free observations
 rows = []
@@ -297,6 +318,7 @@ BP = BP.pivot_table(index=['rgi7', 'source', 'years_sel', 'z_lo', 'z_hi', 'A_obs
 BP.to_csv(f'{OUT}/glamos_Bw_band_profiles.csv', index=False, float_format='%.3f')
 
 # ---------------- 4. sanity: unchanged glaciers ----------------
+SAN_N = len([g for g in table('before', 'Area') if g not in CHANGED])
 rows = []
 VARS = ['Snowline_mon', 'Winter_balance_sfc', 'Annual_Balance_sfc', 'ELA', 'Accumulation_sfc', 'Snowmelt_sfc',
         'Icemelt_sfc', 'Volume', 'Area', 'AAR', 'Precipitation_mon', 'Melt_mon']
@@ -316,7 +338,7 @@ for gid in ca.index:
     for c in ('DDFsnow', 'Cprec', 'T_off', 'Ba', 'Bw'):
         rows.append(dict(var=f'calib_{c}', rgi7=gid, name=NAME.get(gid, ''), max_absdiff=abs(cb.loc[gid, c] - ca.loc[gid, c]),
                          mean_absdiff=abs(cb.loc[gid, c] - ca.loc[gid, c]), mean_before=ca.loc[gid, c], idx_max=0))
-SAN = pd.DataFrame(rows); SAN.to_csv(f'{OUT}/sanity_unchanged16.csv', index=False, float_format='%.4g')
+SAN = pd.DataFrame(rows); SAN.to_csv(f'{OUT}/sanity_unchanged{SAN_N}.csv', index=False, float_format='%.4g')
 cal = ca[['DDFsnow', 'DDFice', 'Cprec', 'T_off', 'Bw', 'Ba']].join(cb[['DDFsnow', 'DDFice', 'Cprec', 'T_off', 'Bw', 'Ba']],
                                                                     lsuffix='_before', rsuffix='_after')
 cal.insert(0, 'name', [NAME.get(g, '') for g in cal.index])
@@ -324,11 +346,11 @@ cal.insert(1, 'changed', [g in CHANGED for g in cal.index])
 cal.to_csv(f'{OUT}/calibration_before_after.csv', float_format='%.3f')
 
 # ---------------- 5. adoption rule ----------------
-pc = SLG[SLG.rgi7 == 'POOLED_changed7'].iloc[0]
-cond_a = pc.after_wrmse_mon < pc.before_wrmse_mon
+pc = SLG[SLG.rgi7 == f'POOLED_{GC}'].iloc[0]
+cond_a = pc[f'after_wrmse_{A.primary}'] < pc[f'before_wrmse_{A.primary}']
 # year-block bootstrap of the pooled wRMSE difference (resample hydrological years, all 7 glaciers together)
 rng = np.random.default_rng(0)
-d7 = obs[obs.group == 'changed7']
+d7 = obs[obs.group == GC]
 yrs = np.sort(d7.hydro_year.unique())
 byy = {y: d7[d7.hydro_year == y] for y in yrs}
 boot = []
@@ -340,13 +362,21 @@ BOOT = pd.DataFrame(dict(variant=['model_month', 'model_interp'],
                          d_wrmse=[pc.d_wrmse_mon, pc.d_wrmse_int],
                          p05=np.percentile(boot, 5, axis=0), p50=np.percentile(boot, 50, axis=0),
                          p95=np.percentile(boot, 95, axis=0), frac_improved=(boot < 0).mean(axis=0)))
-BOOT.to_csv(f'{OUT}/snowline_pooled_bootstrap_changed7.csv', index=False, float_format='%.2f')
+BOOT.to_csv(f'{OUT}/snowline_pooled_bootstrap_{GC}.csv', index=False, float_format='%.2f')
 print(BOOT.round(2))
 cb_rows = BW[BW.counts_for_cond_b]
 cond_b = bool(cb_rows.cond_b_pass.all())
 with open(f'{OUT}/verdict.txt', 'w') as f:
-    f.write(f'(a) pooled wRMSE changed7 May-Sep (model_month): before {pc.before_wrmse_mon:.1f} m, after {pc.after_wrmse_mon:.1f} m -> {cond_a}\n')
-    f.write(f'    sensitivity model_interp: before {pc.before_wrmse_int:.1f}, after {pc.after_wrmse_int:.1f}\n')
+    if A.primary == 'mon' and not A.rising:
+        f.write(f'(a) pooled wRMSE {GC} May-Sep (model_month): before {pc.before_wrmse_mon:.1f} m, after {pc.after_wrmse_mon:.1f} m -> {cond_a}\n')
+        f.write(f'    sensitivity model_interp: before {pc.before_wrmse_int:.1f}, after {pc.after_wrmse_int:.1f}\n')
+    else:
+        sel = 'up to each year\'s highest reading' if A.rising else 'May-Sep'
+        f.write(f'(a) pooled wRMSE {GC}, {sel}, {A.years[0]}-{A.years[1]} (model_{"interp" if A.primary == "int" else "month"}): '
+                f'before {pc[f"before_wrmse_{A.primary}"]:.1f} m, after {pc[f"after_wrmse_{A.primary}"]:.1f} m -> {cond_a}\n')
+        other = 'mon' if A.primary == 'int' else 'int'
+        f.write(f'    sensitivity model_{"month" if other == "mon" else "interp"}: before {pc[f"before_wrmse_{other}"]:.1f}, '
+                f'after {pc[f"after_wrmse_{other}"]:.1f}\n')
     for _, r in cb_rows.iterrows():
         f.write(f'(b) {r.rgi7} {r["name"]} [{r.source}, {r.yrs}, n={r.n_years}] obs {r.Bw_obs:.3f} before {r.Bw_before:.3f} '
                 f'after {r.Bw_after:.3f}: |d| {r.absdiff_before:.3f} -> {r.absdiff_after:.3f} pass={r.cond_b_pass} {r.flag}\n')
