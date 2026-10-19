@@ -797,9 +797,10 @@ evening, archived in `plans/`).
 - **So c_prec is the wrong knob for the snow line.** It sets how much snow falls, while the snow line
   depends on where and when snow lies. This is the same lesson as from the daily route (step B) and
   from the precipitation bound (Step 1).
-- **By the rules, the recalibration is not adopted** (Janosch decides). If it stands:
-  - the thermal reruns (C) go ahead on the standard mass balance;
-  - the monthly snow cycle becomes a stated limitation of the mass balance.
+- **By the rules, the recalibration is not adopted.** Janosch agreed (19 Oct):
+  - the thermal runs keep the standard mass balance;
+  - the monthly snow cycle becomes a stated limitation of the mass balance;
+  - the work turns to the firn ledger, the firn-layer tracking begun on 14 Oct.
 
 **Housekeeping, same day:**
 - The target fix is on main and GloGEMflow.
@@ -838,11 +839,9 @@ evening, archived in `plans/`).
 
 ## What is next
 
-- **Janosch's decision on the monthly snow-line test** (done 2026-10-19; not adopted by its rules).
-  If it is not adopted:
-  - the thermal reruns (C) on the standard mass balance;
-  - with the 360-day thermal year fixed;
-  - with the zone limits at 3000–3800 m.
+- **The firn ledger** (Janosch, 19 Oct; the monthly snow-line test is not adopted). Next steps
+  are in the plan of 19 Oct.
+- **The 360-day thermal year and the zone limits (3000–3800 m)** go into the next thermal run set.
 - **The firn model** (`glogemflow_icetemp/firn_model/firn_change.pro`, Beer et al. 2026), driven
   by the GLAMOS distributed mass balances, on our 9 Swiss calibration glaciers. Its firn extent and
   thickness by band and year are compared with the thermal firn mask and the meltwater depth.
