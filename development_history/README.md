@@ -16,7 +16,8 @@ be defended later, in a paper, a thesis or a talk.
 | 6 | [Firn extent and the mass-balance calibration](06_firn_extent_and_calibration.md) | 28 Sep 2026 – | not water in ice but the firn line; the runs used other glaciers' mass-balance parameters |
 | 7 | [The snow, the comparison and the calibration target](07_snow_comparison_target.md) | 30 Sep 2026 – | each reading at its date; the winter snow on ice barely insulated (a solver bug); the fix lowers the RMSE in all 32 runs; target T2 (every depth bin) tells f_ref and f_ins apart, coded and tried |
 | 8 | [The thermal forcing, the data we were losing, and the tests a forecast needs](08_thermal_forcing_and_the_tests_a_forecast_needs.md) | 12 Oct 2026 – | T_off closes budgets, it is not the air; a fair test needs own parameters; stations pick ERA5's lapse rate; sunshine fails at band level; the model warms half as fast as measured; a third of the deep data was being lost; the fair test makes the offset-free forcing central (not robust: H a full sensitivity), and without T_off the massifs want opposite meltwater heat |
-| 9 | [Snow and firn from data](09_snow_and_firn_from_data.md) | 14 Oct 2026 – | the precipitation bound fixes the winter snow but not the snow line; less snow restores Tête Rousse's frozen bed; snow lines and firn maps must pin the firn |
+| 9 | [Snow and firn from data](09_snow_and_firn_from_data.md) | 14–19 Oct 2026 | the precipitation bound fixes the winter snow but not the snow line; less snow restores Tête Rousse's frozen bed; snow lines and firn maps must pin the firn |
+| 10 | [The firn ledger](10_the_firn_ledger.md) | 19 Oct 2026 – | the ledger's rules reproduce the firn model; fed GloGEM's balance it holds 10–30 m w.e. of firn where observations leave none |
 
 ## How chapters are written
 
