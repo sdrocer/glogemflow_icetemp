@@ -21,6 +21,11 @@ ch09_daily_vs_monthly: the daily and the monthly model on the same satellite sno
 May-September; scripts/icetemp_analysis/snowline/daily_vs_monthly.py): (a) weighted bias by month, monthly model at its
 standard calibration (fwdB_none_fixed, interpolated between month ends) against the range of the daily runs over
 c_prec 0.4-3.0 (boot/f*); (b) the summer's highest snow line (July-September, mean over the years) per glacier.
+ch09_monthly_test: the monthly snow-line test (plan of 2026-10-16 evening): (a) c_prec that fits the rise of the
+monthly snow line best, with its 5-95 % range from 1000 draws over the hydrological years 2000-2025
+(mtest_result/cprec_bootstrap_monthly.csv), against the daily route (A1, boot_result/cprec_bootstrap.csv, carried
+to the monthly model by precipitation amount); (b) T_off of the five recalibrated glaciers, standard calibration
+(refit_none_fixed) and with the kept values (refit_mtest5; toff_test_mtest5.csv).
 """
 import sys
 from pathlib import Path
@@ -357,6 +362,52 @@ def fig_daily_vs_monthly():
     save(fig, 'ch09_daily_vs_monthly')
 
 
+def fig_monthly_test():
+    m = pd.read_csv(SNOWCAL / 'mtest_result' / 'cprec_bootstrap_monthly.csv', dtype={'ID': str}).set_index('ID')
+    d = pd.read_csv(SNOWCAL / 'boot_result' / 'cprec_bootstrap.csv', dtype={'ID': str}).set_index('ID')
+    tf = pd.read_csv(SNOWCAL / 'toff_test_mtest5.csv', dtype={'ID': str}).set_index('ID')
+    order = m.sort_values('c_full').index
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10.5, 5.0), facecolor=SURFACE, gridspec_kw=dict(width_ratios=[1.6, 1]))
+    style(a1)
+    a1.grid(axis='x', color=GRID, lw=0.6)
+    a1.axvline(1.3, color=INK2, lw=1, ls='--', zorder=1)
+    for i, gid in enumerate(order):
+        for dy, r, col, scale in ((0.17, m.loc[gid], BEFORE, 1.0), (-0.17, d.loc[gid], AFTER, d.loc[gid, 'ratio'])):
+            a1.plot([r.c_p05 * scale, r.c_p95 * scale], [i + dy, i + dy], color=col, lw=4, solid_capstyle='round',
+                    alpha=1.0 if r.kept else 0.3, zorder=2)
+            a1.plot([r.c_full * scale], [i + dy], marker='o', ms=6, color=col if r.kept else NEUTRAL, mec=SURFACE,
+                    zorder=3)
+    a1.set_yticks(range(len(order)), [NAMES[g] for g in order])
+    a1.set_xlim(0.3, 3.1)
+    a1.set_xlabel('c_prec of the monthly model that fits the snow lines best', color=INK)
+    a1.set_title('(a) what the snow lines ask for', loc='left', color=INK, fontsize=10)
+    a1.set_ylim(-1.0, len(order) - 0.5)
+    a1.text(1.33, -0.75, 'standard calibration: 1.3', color=INK2, fontsize=8, va='center')
+    handles = [plt.Line2D([], [], color=BEFORE, lw=4, label='monthly test (rise of the snow line)'),
+               plt.Line2D([], [], color=AFTER, lw=4, label='daily route (A1), carried to monthly'),
+               plt.Line2D([], [], color=INK2, lw=4, alpha=0.3, label='faint: range reaches the end, not kept')]
+    a1.legend(handles=handles, fontsize=8, frameon=False, labelcolor=INK, loc='lower right')
+    style(a2)
+    a2.grid(axis='x', color=GRID, lw=0.6)
+    ch = tf[tf.changed_cprec].sort_values('T_off_after')
+    for i, (gid, r) in enumerate(ch.iterrows()):
+        a2.annotate('', xy=(r.T_off_after, i), xytext=(r.T_off_before, i),
+                    arrowprops=dict(arrowstyle='->', color=INK2, lw=1.2, shrinkA=5, shrinkB=5))
+        a2.plot([r.T_off_before], [i], marker='o', ms=8, color=NEUTRAL, mec=SURFACE, mew=2, lw=0, zorder=3)
+        a2.plot([r.T_off_after], [i], marker='o', ms=8, color=BEFORE, mec=SURFACE, mew=2, lw=0, zorder=3)
+    a2.set_yticks(range(len(ch)), [f'{NAMES[g]} ({r.zmean:.0f} m)' for g, r in ch.iterrows()])
+    a2.set_xlabel('T_off [°C]', color=INK)
+    a2.set_title('(b) T_off of the five recalibrated', loc='left', color=INK, fontsize=10)
+    handles = [plt.Line2D([], [], marker='o', color=NEUTRAL, lw=0, ms=7, label='standard calibration'),
+               plt.Line2D([], [], marker='o', color=BEFORE, lw=0, ms=7, label='with the monthly-test c_prec')]
+    a2.legend(handles=handles, fontsize=8, frameon=False, labelcolor=INK, loc='lower right')
+    fig.text(0.01, 0.005, 'Sommer snow lines (raw, qa ≥ 4/6), May up to each year\'s highest reading, 2000–2025; '
+             '14 monthly calibrations with c_prec fixed at 0.4–3.0.\nKept if the 90 % range reaches neither 0.4 nor 3.0. '
+             '(b): mean elevation in brackets.', color=INK2, fontsize=8)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    save(fig, 'ch09_monthly_test')
+
+
 if __name__ == '__main__':
     fig_snowline_definitions()
     fig_rmse_curves()
@@ -364,3 +415,4 @@ if __name__ == '__main__':
     fig_toff_by_elevation()
     fig_cprec_bootstrap()
     fig_daily_vs_monthly()
+    fig_monthly_test()

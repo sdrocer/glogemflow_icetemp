@@ -508,8 +508,8 @@ calibration without fixed c_prec)
 
 Janosch's comments on the plan of the afternoon led to four changes.
 
-**The geodetic target was averaged over 19 of its 20 years** (GloGEM `d075c98`; pushed for main as
-`fix/geodetic-target-period`, `a1fb2fa`).
+**The geodetic target was averaged over 19 of its 20 years** (GloGEM `d075c98`; on main as `a1fb2fa` and
+on the shared GloGEMflow as `5dc500b` since 19 Oct).
 - `calibrate_single_glacier.pro` averaged hydrological years 2001–2019 (`n gt p0`): January–September
   2000 and October–December 2019 of the Hugonnet period were left out. It has been so since the first
   commit of the code.
@@ -541,6 +541,10 @@ Janosch's comments on the plan of the afternoon led to four changes.
   temperature model was off, i.e. in every calibration. Its state was set only in the thermal model's
   set-up since the modular split.
 - It is now set for every glacier, and runs that worked are unchanged.
+- *Update 19 Oct:* main was never affected. There the thermal set-up is included for every glacier.
+  The fix went to the shared GloGEMflow only (`cfff689`), after test calibrations:
+  - default refreezing byte-identical before and after;
+  - full refreezing stopped before and runs after.
 
 **Her numbers reproduced without her files (gate 3).**
 - Her paper has no data archive, and her result folders are not readable for us. But her High
@@ -743,6 +747,66 @@ September bias by only 17 m).
   - that acts like raising f_ref by 1.4 %, far less than one step of the f_ref scan.
 - **It is fixed together with the thermal reruns (C).**
 
+### The monthly snow-line test (2026-10-19)
+
+**What it asked:** which c_prec does the monthly model's own snow line ask for, and does that c_prec
+make the snow better without making T_off worse? The rules were fixed before the runs (plan of 16 Oct,
+evening, archived in `plans/`).
+
+**What was run** (`week2/snowcal/mtest`, `mtest_result`, `refit_mtest5`, `fwdM_mtest5`, `stepM4`):
+1. **Fourteen monthly calibrations** of the 23 calibration glaciers. In each, c_prec of the 12
+   snow-line glaciers was fixed at one value from 0.4 to 3.0.
+   - Every run closes its targets: within 0.12 m w.e.; Aletsch at c_prec 3.0 within 0.18.
+   - Each was followed by a forward run, 1999–2025, with the p10 snow line.
+2. **The bootstrap** (`cprec_bootstrap.py monthly`):
+   - the snow line interpolated to each reading's date;
+   - only the readings up to each year's highest one, 2000–2025 (5154 readings);
+   - 1000 draws over the years;
+   - a glacier is kept if its 90 % range reaches neither 0.4 nor 3.0.
+3. **The re-fit of the 23** with the kept values, and the T_off test.
+4. **The snow check** against Sommer's snow lines and GLAMOS (`compare_snow.py --rising --primary int`).
+
+![The c_prec the monthly snow line asks for, against the daily route, and what it does to T_off](figures/ch09_monthly_test.svg)
+
+**What the snow lines ask for:**
+- **Five of 12 are kept:** Morteratsch 1.79, Lys 1.93, Aletsch 1.98, Fiescher 2.27, Hintereis 2.38.
+- **They are all above the standard 1.3,** and Aletsch and Fiescher are far above the daily route
+  (1.1).
+- **The curves are broad:**
+  - Aletsch's RMSE is 238–244 m everywhere from 1.2 to 2.6.
+  - Lys's curve is flat (327–331 m over the whole range). Its value is kept by the rule but means
+    little.
+- **What the higher c_prec gains** over the standard is 2–13 m of snow-line RMSE, on 158–240 m.
+
+**What it does** (the five glaciers recalibrated, the other 18 unchanged):
+
+| check | standard calibration | with the monthly-test c_prec | the rule |
+|---|---|---|---|
+| snow-line wRMSE, the five, rise of the snow line | 242.3 m | 236.2 m (−2.5 %; 94 % of year draws improve) | (a) met |
+| winter balance, Gr. Aletsch (GLAMOS 1.25 m w.e., 25 measured years) | 1.32 | **2.01** | (b) **not met**: the gap grows from 0.06 to 0.75 m w.e. |
+| winter balance, Morteratsch (Pers only; outline ratio 0.46) | 0.81 (GLAMOS 1.21) | 1.09 | closer, flagged |
+| ELA error, Aletsch / Morteratsch | +76 / +118 m | +17 / +68 m | (information) |
+| T_off, median of the 7 glaciers above 3400 m | 2.74 °C | **4.00 °C** | **flagged** (Lys 2.74 → 4.00) |
+| T_off, the five recalibrated (median) | 1.00 °C | 2.60 °C | Fiescher 1.00 → 2.83, Aletsch 1.88 → 2.60 |
+
+**What it means:**
+- **The snow lines and GLAMOS disagree about the amount of snow.**
+  - The snow line and the ELA ask for more winter snow, with more melt to keep the annual balance.
+  - GLAMOS says Aletsch's winter snow was already about right (1.32 against 1.25).
+  - With c_prec 1.98 it is 60 % too much, and T_off rises to melt it.
+- **So c_prec is the wrong knob for the snow line.** It sets how much snow falls, while the snow line
+  depends on where and when snow lies. This is the same lesson as from the daily route (step B) and
+  from the precipitation bound (Step 1).
+- **By the rules, the recalibration is not adopted** (Janosch decides). If it stands:
+  - the thermal reruns (C) go ahead on the standard mass balance;
+  - the monthly snow cycle becomes a stated limitation of the mass balance.
+
+**Housekeeping, same day:**
+- The target fix is on main and GloGEMflow.
+- The refreezing fix is on GloGEMflow only.
+- `snowline-calibration` is rebased on the updated local GloGEMflow. Gate 1, with the snowline
+  switches off, still gives byte-identical calibrations, monthly and daily.
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
@@ -768,15 +832,17 @@ September bias by only 17 m).
   (2026-10-16).
 - **The monthly thermal year had 360 days** (`rf_dt` counts 30-day months); small, fixed with the
   thermal reruns.
+- **The snow lines and GLAMOS ask for different amounts of snow.** The c_prec that fits the monthly
+  snow line best gives Aletsch 60 % more winter snow than GLAMOS measures, and raises T_off. A single
+  precipitation factor cannot satisfy both (2026-10-19).
 
 ## What is next
 
-- **The monthly snow-line test (approved 2026-10-19).**
-  - Fourteen monthly calibrations with c_prec fixed at 0.4–3.0 for the 12 snow-line glaciers.
-  - Each scored on the rise of the snow line up to each year's highest reading.
-  - The bootstrap over years, the re-fit of the 23, the T_off test, and the snow check against
-    Sommer and GLAMOS (`compare_snow.py`).
-  - Then Janosch's decision on adoption.
+- **Janosch's decision on the monthly snow-line test** (done 2026-10-19; not adopted by its rules).
+  If it is not adopted:
+  - the thermal reruns (C) on the standard mass balance;
+  - with the 360-day thermal year fixed;
+  - with the zone limits at 3000–3800 m.
 - **The firn model** (`glogemflow_icetemp/firn_model/firn_change.pro`, Beer et al. 2026), driven
   by the GLAMOS distributed mass balances, on our 9 Swiss calibration glaciers. Its firn extent and
   thickness by band and year are compared with the thermal firn mask and the meltwater depth.
