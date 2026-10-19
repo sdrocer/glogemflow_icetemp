@@ -24,6 +24,10 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
                      test, diagnostic; FIRN_OBS_DIR)     FRHLO  FRHLo + the thermal firn mask from the same
             FRHLD    FRHL + the firn density follows the ledger (3b-ii)    FRHLOD  FRHLO + the same
   --firn-age N: years a ledger layer stays firn (default 20; other values go into the tag as _ageN)
+  --mb-refreezing full: the mass balance with GloGEM's full refreezing model (tag _mbfull); pair it with a
+            --calibration-dir made with the same scheme
+            FRSHS, FRHLOS, FRSHLO, FRSHLOS: S (snow refreezing on ice) and W (station lapse rates) with today's
+            firn and with the observed firn (plan of 19 Oct evening)
   --no-deepen: borehole bands run to the band's ice thickness (the bed the product shows); in the tag
   --exclude-ids: glaciers left out of the run (e.g. the sealed 01161)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
@@ -80,6 +84,11 @@ VARIANTS['FRHLo'] = dict(VARIANTS['FRHL'], firn_obs_dir=FIRN_OBS_DIR)
 VARIANTS['FRHLO'] = dict(VARIANTS['FRHLo'], firn_obs_mask='y')
 VARIANTS['FRHLD'] = dict(VARIANTS['FRHL'], firn_column='ledger')
 VARIANTS['FRHLOD'] = dict(VARIANTS['FRHLO'], firn_column='ledger')
+# the missing heat (plan of 19 Oct evening): S = snow refreezing on ice, W = station lapse rates
+VARIANTS['FRSHS'] = dict(VARIANTS['FRSH'], snow_refreeze='y')
+VARIANTS['FRHLOS'] = dict(VARIANTS['FRHLO'], snow_refreeze='y')
+VARIANTS['FRSHLO'] = dict(VARIANTS['FRHLO'], thermal_lapse='stations')
+VARIANTS['FRSHLOS'] = dict(VARIANTS['FRSHLO'], snow_refreeze='y')
 
 
 class SubsetPipeline(CalibrationPipeline):
@@ -104,6 +113,7 @@ def main():
     ap.add_argument('--fadv', type=float, default=None)
     ap.add_argument('--no-deepen', action='store_true')
     ap.add_argument('--firn-age', type=int, default=20)
+    ap.add_argument('--mb-refreezing', default='parametrised', choices=['parametrised', 'full'])
     ap.add_argument('--exclude-ids', default='', help='comma-separated RGI7 ids left out')
     ap.add_argument('--calibration-dir', default=None,
                     help='mass-balance calibration to use instead of the configured one (all its .dat files)')
@@ -117,7 +127,8 @@ def main():
             theta[k] = v
     run_tag = (f'{args.run_tag}_{args.variant}_r{theta[0]:.2f}_i{theta[1]:.3f}_a{theta[2]:.2f}'
                if custom else args.run_tag) + ('_nodeep' if args.no_deepen else '') + \
-              (f'_age{args.firn_age}' if args.firn_age != 20 else '')
+              (f'_age{args.firn_age}' if args.firn_age != 20 else '') + \
+              ('_mbfull' if args.mb_refreezing == 'full' else '')
 
     base = CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
     cfg = CalibrationConfig(
@@ -129,6 +140,7 @@ def main():
         catchment=args.catchment, **VARIANTS[args.variant],
         **(dict(deepen_to_obs='n') if args.no_deepen else {}),
         **(dict(firn_age=args.firn_age) if args.firn_age != 20 else {}),
+        **(dict(mb_refreezing='full') if args.mb_refreezing == 'full' else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )

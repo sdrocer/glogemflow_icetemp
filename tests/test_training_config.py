@@ -55,3 +55,12 @@ def test_firn_switches_reach_the_config(tmp_path):
     r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', firn_age=30,
                      firn_obs_dir='/x/firnobs', firn_obs_mask='y', firn_column='ledger')
     assert read(r) == ('30', '/x/firnobs', 'y', 'ledger')
+
+
+def test_mass_balance_refreezing_reaches_the_config(tmp_path):
+    def read(r):
+        text = r.write_training_config().read_text()
+        return tuple(re.search(rf"^{k}\s*=\s*'(\w)'", text, flags=re.M).group(1)
+                     for k in ('refreezing_parametrised', 'refreezing_full'))
+    assert read(GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments')) == ('y', 'n')
+    assert read(GloGEMRunner(run_dir=tmp_path / 'r2', catchments_dir=tmp_path / 'c2', mb_refreezing='full')) == ('n', 'y')

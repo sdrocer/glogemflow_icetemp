@@ -192,7 +192,8 @@ tran            = [{year_min}, {year_max}]
 calibrate       = 'n'
 read_parameters = 'y'
 
-refreezing_parametrised = 'y'
+refreezing_parametrised = '{rf_param}'   ; mass-balance refreezing: parametrised (default) or
+refreezing_full = '{rf_full}'           ; GloGEM's full model, which also refreezes on ice bands
 glacier_retreat  = '{glacier_retreat}'   ; 'n' = fixed geometry, isolates the thermal module
 use_flow_model   = '{use_flow_model}'  ; 'n' = standalone SIA velocity; 'y' = the coupled flow
                          ; model supplies u_flowmodel, as production runs do;
@@ -384,6 +385,7 @@ class GloGEMRunner:
     firn_obs_dir: str = ''        # perfect-firn test (diagnostic): folder of firnobs_<id>.dat, observed band balances
     firn_obs_mask: str = 'n'      # 'y' = observed bands also take the thermal firn mask from the observations
     firn_column: str = 'fixed'    # 'ledger' = the firn density (conduction, heat capacity) follows the ledger (3b-ii)
+    mb_refreezing: str = 'parametrised'   # mass-balance refreezing: 'full' = GloGEM's full model (also on ice bands)
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -621,6 +623,8 @@ class GloGEMRunner:
             firn_obs_dir=self.firn_obs_dir,
             firn_obs_mask=self.firn_obs_mask,
             firn_column=self.firn_column,
+            rf_param='n' if self.mb_refreezing == 'full' else 'y',
+            rf_full='y' if self.mb_refreezing == 'full' else 'n',
         )
         out_path.write_text(text)
         return out_path
