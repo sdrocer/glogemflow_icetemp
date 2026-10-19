@@ -10,9 +10,13 @@
 > 10–30 m w.e. of firn at Hohsaas, Corvatsch and Alphubel where the observations leave almost none.
 > The ledger is right; its input is not.
 >
-> *Status (2026-10-19, 13:00): check 5 done. The perfect-firn test, the rerun with the agreed
-> amendments and 3b-ii (a firn column that follows the ledger) are built, reviewed and gated; their
-> batch is running. Plan: `plans/2026-10-19_firn_ledger_plan.md`.*
+> *Status (2026-10-19, evening): check 5 and the batch done.*
+> - *The ledger is not adopted.*
+> - *The right firn alone would not fix the zone sites: on the small glaciers it removes meltwater heat
+>   that has been compensating for a missing heat source or a cold bias.*
+> - *3b-ii is harmless but changes nothing measurable.*
+>
+> *Plan: `plans/2026-10-19_firn_ledger_plan.md`.*
 
 ## What we believed
 
@@ -215,10 +219,68 @@ result was looked at; icetemp `45e05e7`):
 - FRH and FRHL without deepening;
 - FRHL with 15- and 30-year ageing.
 
+### The batch's results (2026-10-19, scored 15:40)
+
+All 53 runs finished; the scored set is the pre-registered one (105 entities, 800 points; none dropped).
+Scorer `firn_batch_rule.py` (rules `018592f`, site counting `45e05e7`); outputs `week3/batch_rule/`.
+
+| question | rule | result |
+|---|---|---|
+| 1. the ledger as it is (FRHL against FRH) | ≥ 2 zone sites gained, A's conditions, guard, frozen bed | **not adopted**: 0 sites (1 of Tête Rousse's 8 bands; net band gain +1); all other conditions pass (M1 2.58 → 2.59 °C, guard 0 of 2933, frozen beds 12 of 14) |
+| 2. the perfect-firn test | FRHL-O ≥ 2 of the 4 sites | **"the right firn lines would not fix these sites"**: 1 site (Corvatsch, all 4 bands) |
+| 3. 3b-ii (FRHL + column against FRHL) | adopted unless worse | passes, but changes nothing measurable: M1 2.5862 → 2.5861 °C, no site changes |
+
+Reported:
+- **Zone target D** (against H) is met by no variant; the observed-firn variants reach 1 site.
+- **The ageing** hardly matters: M1 at f_ref 0.85 is 2.14, 2.12 and 2.11 °C for 15, 20 and 30
+  years.
+- **The temperate sites** are unchanged in every F-variant: Breithorn is cold instead of temperate,
+  and Jungfraufirn is temperate where three of its four bands are measured cold.
+
+![The perfect-firn test, site by site](figures/ch10_perfect_firn.svg)
+
+**Why the right firn does not help: it removes heat that was compensating for something else.**
+Site by site (f_ref 0.85, bias model minus measured; `firn/perfect_firn_sites.py`):
+
+| site (measured mean) | FRH | ledger, GloGEM balance | ledger, observed balance | ledger and mask observed |
+|---|---|---|---|---|
+| Corvatsch 3295–3345 m (−1.8 °C) | +1.8 | +1.8 | +0.9 | **−3.4** |
+| Hohsaas 3275–3345 m (−0.1 °C) | −0.3 | −0.3 | −0.8 | **−2.4** |
+| Sex Rouge 2785–2815 m (−0.1 °C) | −1.5 | −1.5 | −1.5 | −2.4 |
+| Tortin 2895 m (−1.1 °C) | −1.8 | −1.9 | −1.7 | −2.3 |
+| Alphubel South 3755–3825 m (−0.5 °C) | −1.4 | −1.8 | −2.0 | −2.1 |
+
+- **The small glaciers lose their meltwater heat with the right firn.** Where GLAMOS leaves no firn
+  (Corvatsch, Hohsaas, Sex Rouge, Tortin), the observed mask makes the bands ice and their meltwater
+  runs off. The sites then come out 2.3–3.4 °C too cold, colder than the measurements by more than
+  the model was warm before.
+- **So today's too-extensive firn has been compensating for a missing heat source, or a cold bias.**
+  Its meltwater heat hid the error. Two known candidates:
+  - the surface forcing, which is about 5 °C too cold in winter at 3300–3600 m (ERA5's lapse rate,
+    week 1, chapter 8);
+  - the refreezing of meltwater in the seasonal snow on ice bands, which the model leaves out
+    (FRHS, chapter 9).
+- **The observed firn thickness alone,** with the model's mask, helps a little (Corvatsch +1.8 →
+  +0.9 °C; zone M1 on the four glaciers 2.23 → 2.13 °C). There the model still calls the band firn,
+  so 1 m of meltwater heat remains.
+- **The glaciers observed only from 2005–2008** (Fiescher, Gorner, Morteratsch) barely change; the
+  observations act there for too few years.
+
+**What it means for the plan of 19 Oct:**
+- **By the rule,** investing in the mass balance's firn lines alone would not fix the zone sites.
+  It would make the small ones too cold.
+- **It does tell us what to fix first:** the heat that the wrong firn has been standing in for.
+  The next test is the right firn together with each candidate: the right firn with a winter-corrected
+  surface forcing, and the right firn with snow refreezing on ice. Each is diagnostic, on the GLAMOS
+  glaciers.
+- **If the right firn plus the missing heat reproduces Corvatsch and Hohsaas,** the firn lines are
+  worth the investment, but only together with that fix.
+
 ## What is next
 
-- **The batch's results:** the perfect-firn verdict (Janosch's question), the ledger's rule and 3b-ii.
-  Then the next decision: invest in the snow and firn lines of the mass balance, or not.
+- **Janosch's decisions** on the three results.
+- **The proposed next test:** the right firn with each candidate for the missing heat (the winter
+  cold bias, snow refreezing on ice), on the GLAMOS glaciers.
 
 ## Sources
 
