@@ -17,6 +17,10 @@ ch09_cprec_bootstrap: c_prec that fits the May-September snow lines best (full-s
 0.4-3.0) and its 5-95 % range from 1000 bootstrap draws over the 20 hydrological years (cprec_bootstrap.py,
 boot_result/cprec_bootstrap.csv; one snowline run per single c_prec, fixed target period); kept if the range
 reaches neither end of the scan.
+ch09_daily_vs_monthly: the daily and the monthly model on the same satellite snow lines (12 glaciers, 2000-2019,
+May-September; scripts/icetemp_analysis/snowline/daily_vs_monthly.py): (a) weighted bias by month, monthly model at its
+standard calibration (fwdB_none_fixed, interpolated between month ends) against the range of the daily runs over
+c_prec 0.4-3.0 (boot/f*); (b) the summer's highest snow line (July-September, mean over the years) per glacier.
 """
 import sys
 from pathlib import Path
@@ -305,9 +309,58 @@ def fig_cprec_bootstrap():
     save(fig, 'ch09_cprec_bootstrap')
 
 
+def fig_daily_vs_monthly():
+    import runpy
+    script = REPO / 'scripts' / 'icetemp_analysis' / 'snowline' / 'daily_vs_monthly.py'
+    argv, sys.argv = sys.argv, [str(script)]   # the script reads its own arguments
+    try:
+        g = runpy.run_path(str(script))
+    finally:
+        sys.argv = argv
+    o, D, t, wb = g['o'], g['D'], g['t'], g['wb']
+    months, lab = [5, 6, 7, 8, 9], ['May', 'Jun', 'Jul', 'Aug', 'Sep']
+    bm, lo, hi = [], [], []
+    for mo in months:
+        s = o[o.month == mo]
+        bm.append(wb(s.mon.values, s.sla_raw_m.values, s.w.values)[0])
+        bd = [wb(s[c].values, s.sla_raw_m.values, s.w.values)[0] for c in D]
+        lo.append(min(bd)); hi.append(max(bd))
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4.8), facecolor=SURFACE, gridspec_kw=dict(width_ratios=[1, 1.15]))
+    style(a1)
+    a1.grid(axis='y', color=GRID, lw=0.6)
+    a1.axhline(0, color=INK2, lw=0.8)
+    a1.fill_between(range(5), lo, hi, color=AFTER, alpha=0.22, lw=0, label='daily, range over c_prec 0.4–3.0')
+    a1.plot(range(5), bm, color=BEFORE, lw=2, marker='o', ms=8, mec=SURFACE, mew=2, label='monthly, standard calibration')
+    a1.annotate(f'+{bm[-1]:.0f} m', (4, bm[-1]), xytext=(-8, 0), textcoords='offset points', ha='right', va='center',
+                color=INK, fontsize=9)
+    a1.set_xticks(range(5), lab)
+    a1.set_ylabel('snow line, model minus image [m]', color=INK)
+    a1.set_title('(a) bias by month', loc='left', color=INK, fontsize=10)
+    a1.legend(fontsize=8, frameon=False, labelcolor=INK, loc='upper left')
+    style(a2)
+    a2.grid(axis='x', color=GRID, lw=0.6)
+    tt = t.sort_values('mon_max')
+    for i, (gid, r) in enumerate(tt.iterrows()):
+        a2.plot([r.day_lo, r.day_hi], [i, i], color=AFTER, alpha=0.45, lw=6, solid_capstyle='round', zorder=2)
+        a2.plot([r.mon_max], [i], marker='o', ms=8, color=BEFORE, mec=SURFACE, mew=2, lw=0, zorder=3)
+    a2.set_yticks(range(len(tt)), [f'{NAMES[gid]}' for gid in tt.index])
+    a2.set_xlabel('highest snow line of the summer [m a.s.l.]', color=INK)
+    a2.set_title("(b) the summer's highest snow line", loc='left', color=INK, fontsize=10)
+    handles = [plt.Line2D([], [], color=AFTER, alpha=0.45, lw=6, label='daily, range over c_prec'),
+               plt.Line2D([], [], marker='o', color=BEFORE, lw=0, ms=7, label='monthly')]
+    a2.legend(handles=handles, fontsize=8, frameon=False, labelcolor=INK, loc='upper left')
+    fig.text(0.01, 0.005, '12 glaciers with Sommer snow lines, hydrological years 2000–2019, May–September, '
+             f'{len(o)} readings weighted by 1/σ.\nMonthly model: interpolated between month ends to each image date. '
+             'Daily runs: c_prec fixed at 0.4, 0.6, ... 3.0, melt fitted to the same geodetic target.',
+             color=INK2, fontsize=8)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    save(fig, 'ch09_daily_vs_monthly')
+
+
 if __name__ == '__main__':
     fig_snowline_definitions()
     fig_rmse_curves()
     fig_error_by_month()
     fig_toff_by_elevation()
     fig_cprec_bootstrap()
+    fig_daily_vs_monthly()

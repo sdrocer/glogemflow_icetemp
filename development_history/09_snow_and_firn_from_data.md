@@ -642,6 +642,107 @@ diagnosis, scratchpad `stepB/`)**
   - The snow lines that matter for the thermal runs are the monthly model's. A c_prec chosen with them
     is the next candidate.
 
+### Daily or monthly snow for the thermal model? (2026-10-16, evening)
+
+**The question (Janosch):** the daily model reproduces the snow lines better. Should the thermal model
+run on the daily GloGEM too?
+
+**The comparison, on the same satellite snow lines.**
+- **Monthly model:** standard calibration (`fwdB_none_fixed`), its snow line interpolated between month
+  ends to each image date.
+- **Daily model:** the bootstrap runs, c_prec fixed at each value 0.4–3.0, melt fitted to the same
+  geodetic target (`boot/f*`).
+- **The sample:** 12 glaciers, hydrological years 2000–2019, May–September, 4015 readings weighted by
+  1/σ.
+- Script: `scripts/icetemp_analysis/snowline/daily_vs_monthly.py`.
+
+![The daily and the monthly model on the same satellite snow lines](figures/ch09_daily_vs_monthly.svg)
+
+| month | bias, monthly | bias, daily (range over c_prec) | wRMSE, monthly | wRMSE, daily |
+|---|---|---|---|---|
+| May | −7 m | −17 to −1 m | 328 m | 328–329 m |
+| June | −83 | −122 to −45 | 254 | 251–279 |
+| July | −62 | −151 to +46 | 243 | 226–286 |
+| August | +53 | −68 to +151 | 264 | 233–278 |
+| **September** | **+238** | **+60 to +104** | **403** | **275–321** |
+
+- **May to August:** the monthly model lies inside the daily model's range, so the two are equally
+  good.
+- **September:** the daily model is better at every c_prec.
+- **The summer's highest snow line is the same in both** (panel b; July–September, mean over the
+  years). This is the line that decides where snow survives and becomes firn.
+  - On average the monthly value sits in the middle of the daily range (0 m difference).
+  - It lies inside the range on 10 of 12 glaciers, and 9 and 15 m above it on the other two.
+  - On the image dates: images 3333 m, monthly 3291 m, daily 3194–3358 m.
+
+**Why the monthly model misses the September snow:**
+
+```
+ snow-line
+ elevation          the summer's highest point: decides where snow survives (firn),
+    ▲               the same in both models
+    │                           ●━━━━━━━━━● monthly: stays high to the end of September
+    │                         ╱   ╲
+    │                       ╱       ╲
+    │                     ╱           ● daily and images: September snowfalls bring it down
+    │                   ╱
+    │   ●━━━━━━━━━━━━●
+    └───┬───────┬───────┬───────┬───────┬───────┬──▶
+       May     Jun     Jul     Aug     Sep     Oct
+```
+
+- **Snow or rain is decided by the month's mean temperature** (threshold 1.5 °C, ±1 °C). A September
+  mean above 2.5 °C makes all of the month's precipitation rain, although on the cold days it snowed.
+  - The melt already uses the spread of the daily temperatures within the month (`variab`); the
+    snowfall does not.
+  - Spreading the snowfall the same way would change the snow share at a monthly mean of +2 °C from
+    25 % to 37–48 %, at +3 °C from 0 to 25–31 %, and at 0 °C from 100 % to 59–77 % (ERA5 spread at
+    Aletsch, Mont Blanc and Monte Rosa, June–September).
+- **Snow that falls and melts again within one month** never shows in a month-end value.
+
+**What daily snow would change in the thermal model:**
+- **The firn line: hardly anything,** because the highest snow line is the same.
+- **The winter snow cover would start a few weeks earlier,** in September instead of October.
+  - That acts through the snow insulation (f_ins).
+  - The boreholes tell f_ins and refreezing (f_ref) apart only weakly (chapter 3), so the effect could
+    hardly be tested.
+- **The daily temperature swings: nothing at 10–20 m.** A daily swing fades to about a third within
+  20 cm of ice; the yearly cycle reaches about 3 m, and monthly steps resolve it.
+
+**What a daily thermal model would cost** (code survey of 16 Oct):
+- **Computing time:**
+  - the thermal model is over 90 % of a calibration run (about 30 minutes for the 23 glaciers);
+  - called daily, it would take 10 to 30 times longer.
+- **The solver itself is ready for daily steps;** everything around it is monthly-only:
+  - the reference forcing and the spin-up;
+  - b_ref, the reference balance that sets the firn mask, the vertical ice flow and the percolation
+    depth;
+  - the snow logbooks and the profile output.
+- **What a daily run does today:** it stops at one of four places, or, if those are avoided, runs
+  silently wrong with b_ref = 0.
+- **The Python pipeline** dates and matches everything in months.
+- **Every calibration** would have to be redone.
+
+**Decision (Janosch, 16 Oct):**
+- **The thermal model stays on the monthly GloGEM.**
+- **Kept for later:**
+  - a daily mass balance feeding a monthly thermal model;
+  - snowfall spread over the month's daily temperatures.
+
+**Consequence for the monthly snow-line test.** It uses only the readings a monthly model can follow:
+the snow line's rise through the summer, up to each year's highest reading. The September readings
+after that point are left out, because no monthly c_prec can fix them (in step B, c_prec moved the
+September bias by only 17 m).
+
+**A side finding: the monthly thermal year has 360 days.**
+- **The cause:** the thermal solver's step (`rf_dt` in `settings.pro`) is a 30-day month in three
+  steps, whatever the month's real length.
+- **The effect:**
+  - heat conduction, ice flow and geothermal heat run 1.4 % short each year, while the meltwater heat
+    is complete;
+  - that acts like raising f_ref by 1.4 %, far less than one step of the f_ref scan.
+- **It is fixed together with the thermal reruns (C).**
+
 ## What was wrong
 
 - **Calibrating to one glacier-wide target cannot fix where snow survives.** The precipitation
@@ -661,9 +762,21 @@ diagnosis, scratchpad `stepB/`)**
   precipitation factor can remove (2026-10-16).
 - **Autumn snow lines pull c_prec down.** After the snowline calibration, October–November
   carry 45 % of the remaining error: the model snows on the lower glacier too early.
+- **The monthly model cannot show the September snowfalls.** It splits snow from rain on the
+  month's mean temperature and reports month-end values, so its September snow line is 238 m too
+  high. The summer's highest snow line, which sets the firn, is as good as the daily model's
+  (2026-10-16).
+- **The monthly thermal year had 360 days** (`rf_dt` counts 30-day months); small, fixed with the
+  thermal reruns.
 
 ## What is next
 
+- **The monthly snow-line test (approved 2026-10-19).**
+  - Fourteen monthly calibrations with c_prec fixed at 0.4–3.0 for the 12 snow-line glaciers.
+  - Each scored on the rise of the snow line up to each year's highest reading.
+  - The bootstrap over years, the re-fit of the 23, the T_off test, and the snow check against
+    Sommer and GLAMOS (`compare_snow.py`).
+  - Then Janosch's decision on adoption.
 - **The firn model** (`glogemflow_icetemp/firn_model/firn_change.pro`, Beer et al. 2026), driven
   by the GLAMOS distributed mass balances, on our 9 Swiss calibration glaciers. Its firn extent and
   thickness by band and year are compared with the thermal firn mask and the meltwater depth.
@@ -724,3 +837,9 @@ diagnosis, scratchpad `stepB/`)**
 | IDL | the programming language of GloGEM |
 | bootstrap | resampling the observation years with replacement, to see how much a result depends on which years were observed |
 | A0–A2, B, C | the steps of the plan of 16 Oct (afternoon): A the recalibration (A0 gate 3, A1 the bootstrap, A2 the monthly re-fit), B the snow check, C the thermal reruns |
+| highest snow line | the highest snow line of a summer (July–September), close to the firn line |
+| interpolated | the monthly model's snow line at an image date, read on the line between the two month-end values |
+| `variab` | GloGEM's pattern of daily temperature deviations within a month; the monthly melt uses it, the snowfall does not |
+| f_ins | the thermal model's snow-insulation factor |
+| b_ref | the reference mass balance per band from the spin-up's average year; sets the thermal firn mask, the vertical ice flow and the percolation depth |
+| `rf_dt` | the length of one thermal solver step: 10 days in monthly runs (a 30-day month in three steps) |
