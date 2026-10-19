@@ -4,10 +4,12 @@ date against the model in the borehole's elevation band, at f_ref 0.85. Runs are
 
 Per band (entity = site x 10 m band): RMSE and bias of the readings below 15 m. Rule for a fix X, read on its run with
 the observed firn and mask (FRHLO + X):
-  passes to stage 2 if every band of Corvatsch and Hohsaas has an RMSE of at most 1 C, and no other band of the 9 GLAMOS
-  glaciers has an RMSE larger than in today's run (FRH, or FRH-C0 for the mass-balance pair) by more than 0.5 C.
-(Amended 2026-10-19 before any stage-1 result was read: the first version compared site means over all bands and
-depths, which can hide errors of opposite sign; Janosch: compare per band, and the curve with depth.)
+  passes to stage 2 if every band of Corvatsch and Hohsaas has an RMSE of at most 1.7 C (the floor: neighbouring holes
+  differ by 1.5-1.9 C, the development glaciers stand at 1.7 C), and no other band of the 9 GLAMOS glaciers has an RMSE
+  larger than in today's run (FRH, or FRH-C0 for the mass-balance pair) by more than 0.5 C.
+(Amended 2026-10-19 before any stage-1 result was read, twice, after Janosch's comments: the first version compared site
+means over all bands and depths, which can hide errors of opposite sign, so it now compares per band and at depth; and
+its 1 C per band, often for a single reading, lay below the floor.)
 Also written: every reading (depth, measured, each run), for the depth profiles.
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/firn/stage1_sites.py OUT_PREFIX \
@@ -26,7 +28,7 @@ from icetemp.calibration.data import DataHandler
 
 G9 = ['01112', '02103', '02596', '01150', '01039', '01309', '02611', '01225', '02216']
 KEY = ('02103', '01112')      # Corvatsch, Hohsaas
-WITHIN, WORSE = 1.0, 0.5
+WITHIN, WORSE = 1.7, 0.5
 
 
 def main():
