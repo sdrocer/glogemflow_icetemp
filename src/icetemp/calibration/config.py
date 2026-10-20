@@ -85,6 +85,7 @@ class CalibrationConfig:
     firn_obs_mask: str = 'n'      # 'y' = observed bands also take the thermal firn mask from the observations
     firn_column: str = 'fixed'    # 'ledger' = the firn density (conduction, heat capacity) follows the ledger (3b-ii)
     mb_refreezing: str = 'parametrised'   # mass-balance refreezing: 'full' = GloGEM's full model (also on ice bands)
+    mb_hist_file: str = ''        # diagnostic: year, precipitation factor, temperature offset (GloGEM mb_hist_file)
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)

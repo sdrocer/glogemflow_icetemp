@@ -236,6 +236,7 @@ firnice_firn_age        = {firn_age}   ; years a layer stays firn in the 'firn' 
 firnice_firn_obs_dir    = '{firn_obs_dir}'   ; perfect-firn test (diagnostic): observed band balances
 firnice_firn_obs_mask   = '{firn_obs_mask}'   ; 'y' = observed bands also take the firn mask from them
 firnice_firn_column     = '{firn_column}'   ; 'ledger' = the firn density follows the ledger (3b-ii)
+mb_hist_file            = '{mb_hist_file}'   ; diagnostic: precipitation factor, temperature offset per year ('' = off)
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -386,6 +387,7 @@ class GloGEMRunner:
     firn_obs_mask: str = 'n'      # 'y' = observed bands also take the thermal firn mask from the observations
     firn_column: str = 'fixed'    # 'ledger' = the firn density (conduction, heat capacity) follows the ledger (3b-ii)
     mb_refreezing: str = 'parametrised'   # mass-balance refreezing: 'full' = GloGEM's full model (also on ice bands)
+    mb_hist_file: str = ''        # diagnostic: file of year, precipitation factor, temperature offset (GloGEM mb_hist_file)
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -623,6 +625,7 @@ class GloGEMRunner:
             firn_obs_dir=self.firn_obs_dir,
             firn_obs_mask=self.firn_obs_mask,
             firn_column=self.firn_column,
+            mb_hist_file=self.mb_hist_file,
             rf_param='n' if self.mb_refreezing == 'full' else 'y',
             rf_full='y' if self.mb_refreezing == 'full' else 'n',
         )

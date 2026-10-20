@@ -115,6 +115,7 @@ def main():
     ap.add_argument('--no-deepen', action='store_true')
     ap.add_argument('--firn-age', type=int, default=20)
     ap.add_argument('--mb-refreezing', default='parametrised', choices=['parametrised', 'full'])
+    ap.add_argument('--mb-hist-file', default='', help='diagnostic: GloGEM mb_hist_file (adds _mbhist to the tag)')
     ap.add_argument('--exclude-ids', default='', help='comma-separated RGI7 ids left out')
     ap.add_argument('--calibration-dir', default=None,
                     help='mass-balance calibration to use instead of the configured one (all its .dat files)')
@@ -129,7 +130,7 @@ def main():
     run_tag = (f'{args.run_tag}_{args.variant}_r{theta[0]:.2f}_i{theta[1]:.3f}_a{theta[2]:.2f}'
                if custom else args.run_tag) + ('_nodeep' if args.no_deepen else '') + \
               (f'_age{args.firn_age}' if args.firn_age != 20 else '') + \
-              ('_mbfull' if args.mb_refreezing == 'full' else '')
+              ('_mbfull' if args.mb_refreezing == 'full' else '') + ('_mbhist' if args.mb_hist_file else '')
 
     base = CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
     cfg = CalibrationConfig(
@@ -142,6 +143,7 @@ def main():
         **(dict(deepen_to_obs='n') if args.no_deepen else {}),
         **(dict(firn_age=args.firn_age) if args.firn_age != 20 else {}),
         **(dict(mb_refreezing='full') if args.mb_refreezing == 'full' else {}),
+        **(dict(mb_hist_file=args.mb_hist_file) if args.mb_hist_file else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )

@@ -38,6 +38,13 @@ def test_firn_ledger_reaches_the_config(tmp_path):
     assert settings(r.write_training_config())[0]['firnice_perm_limit'] == 'firn'
 
 
+def test_mb_hist_file_reaches_the_config(tmp_path):
+    hist = lambda r: re.findall(r"^mb_hist_file\s*=\s*'([^']*)'", r.write_training_config().read_text(), flags=re.M)
+    assert hist(GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments')) == ['']
+    assert hist(GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments',
+                             mb_hist_file='/x/h.dat')) == ['/x/h.dat']
+
+
 def test_snow_refreeze_reaches_the_config(tmp_path):
     r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments')
     assert settings(r.write_training_config())[0]['firnice_snow_refreeze'] == 'n'
