@@ -1,6 +1,8 @@
 """The generated GloGEM training config: the thermal forcing switches, defaults = before 2026-10-12."""
 import re
 
+import pytest
+
 from icetemp.calibration.runner import GloGEMRunner
 
 
@@ -71,3 +73,23 @@ def test_mass_balance_refreezing_reaches_the_config(tmp_path):
                      for k in ('refreezing_parametrised', 'refreezing_full'))
     assert read(GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments')) == ('y', 'n')
     assert read(GloGEMRunner(run_dir=tmp_path / 'r2', catchments_dir=tmp_path / 'c2', mb_refreezing='full')) == ('n', 'y')
+
+
+def test_catchment_file_is_never_changed(tmp_path):
+    from types import SimpleNamespace
+    r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', catchment='T')
+    gl = [SimpleNamespace(glacier_id=g) for g in ('00002', '00001')]
+    path, n = r.write_catchment_file(gl)
+    assert n == 2 and path.read_text().split() == ['RGI-ID', 'RGI70-11.00001', 'RGI70-11.00002']
+    r.write_catchment_file(gl[::-1])                      # same glaciers: fine
+    with pytest.raises(RuntimeError):
+        r.write_catchment_file(gl + [SimpleNamespace(glacier_id='01161')])
+
+
+def test_design_matrix_runs_only_its_indices(tmp_path, monkeypatch):
+    import numpy as np
+    r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments')
+    seen = []
+    monkeypatch.setattr(r, 'run_design_point', lambda ids, theta, tag, **k: seen.append(tag) or False)
+    out = r.run_design_matrix([], np.zeros((7, 3)), indices=range(1, 7, 3))
+    assert seen == ['design_0001', 'design_0004'] and sorted(out) == seen

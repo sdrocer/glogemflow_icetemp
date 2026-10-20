@@ -54,6 +54,16 @@ thin 2003 column could explain the warm tongues and Tête Rousse.
   - Run: FRHS on the whole set, so the climate points stay as in stage 2. Read per band at depth against
     FRHS, mainly the Grenz/Gorner tongue and Tête Rousse.
   - This is an upper bound: all the thinning comes off at once, and the colder past surface is left out.
+- **Update (20 Oct, evening; Janosch's decisions after 1a):**
+  - **1a done.** The model ice is half as thick as drilled (median 0.50 at 36 holes that reach the bed), but
+    the shortfall does not line up with the warm sites (rank correlation 0.07).
+  - **1b skipped.**
+  - **New 1c:** the model's mass balance before 2000 is 0.5–1 m w.e./a too positive (Aletsch 1972–2003:
+    +0.2 modelled against −14.4 observed). Test 1c:
+    - first find whether too much snow or too little melt causes it (MB-only run of the 8 long GLAMOS
+      series);
+    - then a thermal-only test in which the thermal model's mass-balance input before 2000 is pulled
+      towards the observations, read per band at depth against FRHS.
 - **What it decides:** only how much the fixed geometry matters. The proper fix is a thermal model in a
   dynamic hindcast from 1940, a project of its own. It is not part of this plan (decision 2).
 

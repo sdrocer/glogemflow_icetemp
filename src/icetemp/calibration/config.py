@@ -72,6 +72,8 @@ class CalibrationConfig:
     write_velocity: str = 'n'   # dump the applied velocity field for train/apply checks
     # catchment file name (catchments/RGI11_<catchment>.dat, shared by every run that uses it)
     catchment: str = 'CentralEurope_bayescal'
+    exclude_ids: list = None      # RGI7 glacier ids left out of the campaign (e.g. ['01161'], sealed)
+    run_timeout: int = 7200       # s per training run (the FRHS runs take 20-36 min)
     # thermal forcing switches passed to GloGEM (runner.GloGEMRunner); defaults = before 2026-10-12
     forcing_toff: str = 'y'     # 'n' = thermal energy inputs without the mass-balance t_offset
     hl1980: str = 'n'           # 'y' = Herron & Langway (1980) close-off depth as published

@@ -45,7 +45,8 @@ class CalibrationPipeline:
         self.writer = None
 
     def _calibration_glaciers(self):
-        return [g for g in self.data_handler.calibration_glaciers if g.glacier_id]
+        out = set(self.config.exclude_ids or ())
+        return [g for g in self.data_handler.calibration_glaciers if g.glacier_id and g.glacier_id not in out]
 
     # -- 01_build_design ------------------------------------------------------------------
     def load_data(self):
@@ -77,7 +78,7 @@ class CalibrationPipeline:
         return self.design
 
     # -- 02_run_training --------------------------------------------------------------------
-    def write_training_inputs(self):
+    def write_training_inputs(self, run_dir=None):
         """Writes the catchment file, glenglat elevation lookup, and training config -- does
         NOT touch config.pro and does NOT run IDL. See runner.GloGEMRunner's module
         docstring: training runs launch via the GLOGEM_CONFIG env var, never config.pro, so
@@ -88,7 +89,7 @@ class CalibrationPipeline:
         regardless of catchment_selection, the opposite of the fast/targeted path needed
         here. See runner.GloGEMRunner.write_catchment_file / TRAINING_CONFIG_TEMPLATE.
         """
-        runner_kwargs = dict(run_dir=self.config.training_dir, remote_host=self.config.remote_host,
+        runner_kwargs = dict(run_dir=run_dir or self.config.training_dir, remote_host=self.config.remote_host,
                              thermal_spinup=self.config.thermal_spinup,
                              implicit=self.config.implicit,
                              spinup_min_cycles=self.config.spinup_min_cycles,
@@ -126,15 +127,17 @@ class CalibrationPipeline:
         print(f'wrote training config (launched via GLOGEM_CONFIG, never config.pro) -> {config_path}')
         return config_path, catchment_path
 
-    def run_training(self, idl_bin='idl', timeout=1800):
-        """Actually launches IDL at every design point. Assumes config.pro is already
-        pointed at the training config (write_training_inputs printed the exact command)."""
+    def run_training(self, idl_bin='idl', timeout=None, indices=None):
+        """Actually launches IDL at every design point (or at `indices` only, for one of several
+        parallel workers). Assumes config.pro is already pointed at the training config
+        (write_training_inputs printed the exact command)."""
         if self.runner is None:
             self.write_training_inputs()
         if self.design is None:
             self.load_design()
         results = self.runner.run_design_matrix(
-            self._calibration_glaciers(), self.design, idl_bin=idl_bin, timeout=timeout,
+            self._calibration_glaciers(), self.design, idl_bin=idl_bin,
+            timeout=timeout or self.config.run_timeout, indices=indices,
         )
         n_ok = sum(1 for r in results.values() if r['ok'])
         print(f'training runs: {n_ok}/{len(results)} completed')
@@ -142,9 +145,15 @@ class CalibrationPipeline:
 
     # -- 03_fit_emulator ----------------------------------------------------------------
     def fit_emulator(self, training_results):
-        training_output = [training_results[f'design_{i:04d}']['output']
-                            for i in range(len(self.design))
-                            if training_results[f'design_{i:04d}']['ok']]
+        ok = [i for i in range(len(self.design))
+              if training_results.get(f'design_{i:04d}', {}).get('ok')]
+        if len(ok) < len(self.design):
+            print(f'WARNING: {len(self.design) - len(ok)} of {len(self.design)} design points failed; '
+                  f'the emulator is fit on the other {len(ok)}')
+        if len(ok) < 0.9 * len(self.design):
+            raise RuntimeError('more than 10 % of the design points failed')
+        training_output = [training_results[f'design_{i:04d}']['output'] for i in ok]
+        design = self.design[ok]
         # Exclude any held-fixed parameter's (constant) column from the GP -- see
         # Emulator.active_params for why a constant column is fatal and why jitter is not an
         # acceptable workaround.
@@ -157,11 +166,11 @@ class CalibrationPipeline:
         if fixed:
             print(f'emulator trained on {[PARAM_NAMES[i] for i in active]} '
                   f'(holding {sorted(fixed)} fixed -- excluded from the GP)')
-        self.emulator.fit(self.design, training_output)
+        self.emulator.fit(design, training_output)
         print(f'emulator fit: p={self.emulator.p} SVD components, '
               f'explained variance={self.emulator.explained_variance_ratio()[self.emulator.p-1]:.4f}')
 
-        self.emulator.calibrate_variance(self.design, training_output)
+        self.emulator.calibrate_variance(design, training_output)
         print(f'emulator variance inflation: {self.emulator.variance_inflation_:.3f}x '
               f'(LOO-CV standardized-residual std={self.emulator.loo_z_std_:.3f}, target 1.0 -- '
               f'see Emulator.calibrate_variance docstring)')

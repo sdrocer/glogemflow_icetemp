@@ -481,6 +481,10 @@ class GloGEMRunner:
         """
         ids = sorted({g.glacier_id for g in glaciers if g.glacier_id})
         lines = ['RGI-ID'] + [f'RGI70-{self.rgi_region_code}.{gid}' for gid in ids]
+        old = self.catchment_file_path
+        if old.exists() and old.read_text().split() != lines:
+            # other runs share this file, and the climate point follows the batch: never change it
+            raise RuntimeError(f'{old} lists other glaciers than this run; use another catchment name')
         self.catchments_dir.mkdir(parents=True, exist_ok=True)
         # written atomically: runs started in parallel may read the file while another writes it
         tmp = self.catchment_file_path.with_name(f'.{self.catchment_file_path.name}.{os.getpid()}')
@@ -878,7 +882,7 @@ class GloGEMRunner:
                 tar.extractall(tmp, filter='data')
             return self.parse_training_output(glaciers, firnice_dir=tmp)
 
-    def run_design_matrix(self, glaciers, design_points, idl_bin='idl', timeout=1800):
+    def run_design_matrix(self, glaciers, design_points, idl_bin='idl', timeout=1800, indices=None):
         """Sequentially evaluate a full LHS design matrix (one theta per row), skipping
         already-completed points. For real parallel throughput, prefer generating one
         GloGEMRunner + config per tmux/batch worker (mirrors scripts/launch_batches.sh) rather
@@ -890,7 +894,8 @@ class GloGEMRunner:
 
         glacier_ids = [g.glacier_id for g in glaciers if g.glacier_id]
         results = {}
-        for i, theta in enumerate(design_points):
+        for i in (range(len(design_points)) if indices is None else indices):
+            theta = design_points[i]
             tag = f'design_{i:04d}'
             out_path = self.run_dir / f'{tag}.output.pkl'
             was_done = self._done_path(tag).exists()

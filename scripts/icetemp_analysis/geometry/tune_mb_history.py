@@ -1,12 +1,13 @@
 """Test 1c, part 2 (plan of 20 Oct): the mass-balance history correction for the thermal test. Per period (1942-1971 =
 the thermal spin-up's reference period, 1972-1985, 1986-1999; none from 2000, the calibration period), one
-precipitation factor matched to the observed winter balance and one temperature offset matched to the remaining annual
-balance, on the 5 western GLAMOS glaciers observed since before 1972 (Aletsch, Allalin, Hohlaub, Schwarzberg; Gietro
+precipitation factor for October-April matched to the observed winter balance and one temperature offset matched to
+the remaining annual balance, on the 5 western GLAMOS glaciers observed since before 1972 (Aletsch, Allalin, Hohlaub, Schwarzberg; Gietro
 for the annual balance only). Mass-balance runs of the 8 long series (GloGEM branch mb-history-diagnostic,
 switch mb_hist_file), iterated; writes the file the thermal runs read.
 
 Usage: python scripts/icetemp_analysis/geometry/tune_mb_history.py [N_ITER]
 """
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -26,7 +27,7 @@ SENS = -0.6        # m w.e. a-1 per K, first guess of the annual balance's tempe
 
 def write_file(path, P, dT, note):
     with open(path, 'w') as f:
-        f.write(f'# mass-balance history correction, test 1c of 2026-10-20 ({note}): year  precipitation factor  dT [C]\n')
+        f.write(f'# mass-balance history correction, test 1c of 2026-10-20 ({note}): year  Oct-Apr precipitation factor  dT [C]\n')
         for y in range(1941, 2026):
             k = next((i for i, (a, b) in enumerate(PERIODS) if a <= y <= b), 0 if y == 1941 else None)
             f.write(f'{y} {P[k] if k is not None else 1.0:.4f} {dT[k] if k is not None else 0.0:.4f}\n')
@@ -34,13 +35,21 @@ def write_file(path, P, dT, note):
 
 def run(tag, hist):
     d = G / 'mbh_tune' / tag
-    (d / 'monthly/CentralEurope/calibration').mkdir(parents=True, exist_ok=True)
+    if d.exists():
+        shutil.rmtree(d)
+    (d / 'monthly/CentralEurope/calibration').mkdir(parents=True)
     for f in (BASE / 'monthly/CentralEurope/calibration').glob('*.dat'):
         (d / 'monthly/CentralEurope/calibration' / f.name).write_bytes(f.read_bytes())
-    cfg = (BASE / 'config.pro').read_text().replace(f"dirres = '{BASE}/'", f"dirres = '{d}/'")
+    base_cfg = (BASE / 'config.pro').read_text()
+    if f"dirres = '{BASE}/'" not in base_cfg:
+        raise SystemExit(f'no dirres line for {BASE} in its config')
+    cfg = base_cfg.replace(f"dirres = '{BASE}/'", f"dirres = '{d}/'")
     (d / 'config.pro').write_text(cfg + f"mb_hist_file = '{hist}'\n")
     subprocess.run(f"cd {TREE} && GLOGEM_CONFIG={d}/config.pro bash -c \"echo '.r glogem' | nice -n 5 idl\" > {d}/idl.log 2>&1",
                    shell=True, check=True)
+    log = (d / 'idl.log').read_text()
+    if 'Execution halted' in log or '[mb history correction]' not in log:
+        raise SystemExit(f'{tag}: IDL halted or the correction was not read, see {d}/idl.log')
     return d / 'monthly/CentralEurope/PAST/PAST_original'
 
 
