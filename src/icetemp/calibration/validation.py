@@ -83,7 +83,7 @@ def predict_profile(depths, is_firn, T_maat, dT_firn_band, theta):
     ])
 
 
-def predict_profile_emulator(emulator, glacier_name, theta, depths, atol=0.51):
+def predict_profile_emulator(emulator, glacier_name, theta, depths, atol=0.51, points=None):
     """Predict T(z) via the REAL IDL forward model, through its emulator -- the same function
     KO's theta is actually fit against.
 
@@ -94,6 +94,11 @@ def predict_profile_emulator(emulator, glacier_name, theta, depths, atol=0.51):
     """
     mean, _ = emulator.predict(np.atleast_2d(np.asarray(theta, dtype=float)))
     mean = mean[0]
+    if points is not None:
+        # by observation point, so several holes or years at one depth keep their own row
+        row_of = {p: k for k, ((g, d), p) in enumerate(zip(emulator.x_index_used(), emulator.x_points_used()))
+                  if g == glacier_name and d != BASAL}
+        return np.array([mean[row_of[p]] if p in row_of else np.nan for p in points])
     rows = [(float(d), k) for k, (g, d) in enumerate(emulator.x_index_used())
             if g == glacier_name and d != BASAL]
     if not rows:
@@ -169,7 +174,7 @@ class Validator:
         if emu is None or len(d) == 0:
             return d, T, f, np.zeros(len(d), dtype=bool)
         probe = predict_profile_emulator(emu, glacier.glacier_name,
-                                          np.asarray([0.5, 1.0, 1.0]), d)
+                                          np.asarray([0.5, 1.0, 1.0]), d, points=np.arange(len(d)))
         m = np.isfinite(probe)
         return d[m], T[m], f[m], m
 
@@ -318,7 +323,7 @@ class Validator:
             if len(depths) == 0:
                 continue
             # real-model view: uncapped, restricted to depths the emulator can predict
-            depths_r, T_obs_r, _is_firn_r, _ = self._emulable_view(g)
+            depths_r, T_obs_r, _is_firn_r, m_r = self._emulable_view(g)
             # uncapped view: the ground truth, over every observation actually made
             depths_u, T_obs_u, _ = self._held_out_view(g, None)
 
@@ -397,7 +402,8 @@ class Validator:
                 # changing what the headline number means.
                 if emu is not None:
                     theta_emu = as_emulator_theta(method, theta)
-                    T_real = predict_profile_emulator(emu, g.glacier_name, theta_emu, depths_r)
+                    T_real = predict_profile_emulator(emu, g.glacier_name, theta_emu, depths_r,
+                                                      points=np.flatnonzero(m_r))
                     row[f'rmse_real_{method}'] = rmse(T_real, T_obs_r)
                     if valid_r.any() and np.isfinite(T_real[valid_r]).any():
                         vr = valid_r & np.isfinite(T_real)
@@ -427,7 +433,7 @@ class Validator:
         each method's theta and its distance to the training design."""
         cal = self.calibrator
         emu = cal.emulator
-        x_used = emu.x_index_used()
+        x_used, x_points = emu.x_index_used(), emu.x_points_used()
         prior = cal.priors.as_dict()
         theta_prior = cal._expand_theta([prior[n].mean() for n in cal._free_param_names()])
         excluded = cal.fit_exclude or frozenset()
@@ -449,13 +455,14 @@ class Validator:
                 fold[f'{m}_nn_dist'] = nn
                 fold[f'{m}_in_design'] = None if max_dist is None else bool(nn <= max_dist)
             n_points = 0
-            for row, (gname, depth) in enumerate(x_used):
+            for row, ((gname, depth), k) in enumerate(zip(x_used, x_points)):
                 g = held.get(gname)
                 if g is None or depth == BASAL:
                     continue
-                k = int(np.argmin(np.abs(g.depths - depth)))
-                rec = dict(system=system, entity=gname, glacier_id=g.glacier_id, depth=float(depth),
+                rec = dict(system=system, entity=gname, glacier_id=g.glacier_id, depth=float(depth), point=int(k),
                            obs=float(g.T_obs[k]), excluded=(gname, depth) in excluded)
+                if getattr(g, 'point_hole', None) is not None:
+                    rec.update(hole=str(g.point_hole[k]), year=int(g.point_year[k]))
                 rec.update({f'pred_{m}': float(p[row]) for m, p in preds.items()})
                 points.append(rec)
                 n_points += 1

@@ -230,6 +230,7 @@ class BayesianCalibrator:
         # needed downstream, for the IDL-facing residual file (see writeback.py).
         self._glacier_by_name = {g.glacier_name: g for g in self.glaciers}
         self._x_used = self.emulator.x_index_used()
+        self._x_points_used = self.emulator.x_points_used()
         # group x_index_used rows by glacier_name, preserving each row's position in the
         # emulator's output vector (needed to slice mean/var predictions per glacier). Track
         # filtering happens HERE, by skipping rows rather than pre-slicing self._x_used --
@@ -282,9 +283,14 @@ class BayesianCalibrator:
             depths_used = [self._x_used[r][1] for r in rows]
             is_basal = np.array([d == BASAL for d in depths_used])
             idx = np.array([
-                np.argmax(g.depths) if b else np.argmin(np.abs(g.depths - d))
-                for d, b in zip(depths_used, is_basal)
+                np.argmax(g.depths) if b else self._x_points_used[r]
+                for r, b in zip(rows, is_basal)
             ])
+            pt = ~is_basal
+            if pt.any() and not np.array_equal(g.depths[idx[pt]],
+                                               np.array([d for d, b in zip(depths_used, is_basal) if not b])):
+                raise ValueError(f'{gname}: the emulator was built on other observation points '
+                                 '(another pooling?) than these glaciers')
             self._obs_idx[gname] = idx
             self._weights[gname] = g.weights[idx]
             sigma2 = g.sigma[idx] ** 2

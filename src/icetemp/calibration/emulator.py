@@ -195,7 +195,13 @@ class Emulator:
         at all, e.g. failed runs)."""
         m = len(training_output)
         F = np.full((self.n_x, m), np.nan)
+        points = self.x_points()
+        obs_depths = {}
+        for gname, depth in self.x_index:
+            if depth != BASAL:
+                obs_depths.setdefault(gname, []).append(depth)
         for j, run in enumerate(training_output):
+            obs_format = {}
             for i, (gname, depth) in enumerate(self.x_index):
                 entry = run.get(gname)
                 if entry is None:
@@ -203,6 +209,9 @@ class Emulator:
                 depths, T_values = entry
                 depths = np.asarray(depths, dtype=float)
                 T_values = np.asarray(T_values, dtype=float)
+                if gname not in obs_format:
+                    od = np.asarray(obs_depths.get(gname, []), dtype=float)
+                    obs_format[gname] = len(depths) >= len(od) and np.array_equal(depths[:len(od)], od)
                 if depth == BASAL:
                     valid = np.flatnonzero(~np.isnan(T_values))
                     if valid.size == 0:
@@ -213,7 +222,10 @@ class Emulator:
                         continue  # Track-1 already covers this glacier's deepest observation
                     F[i, j] = T_values[deepest_k]
                 else:
-                    k = np.argmin(np.abs(depths - depth))
+                    # output at the observation points (runner.match_model_to_obs): point by point,
+                    # so several holes or years at one depth each keep their own value; any other
+                    # grid: the nearest node
+                    k = points[i] if obs_format[gname] else np.argmin(np.abs(depths - depth))
                     if abs(depths[k] - depth) <= self._local_tolerance(depths, k):
                         F[i, j] = T_values[k]
         return F
@@ -361,6 +373,21 @@ class Emulator:
 
     def x_index_used(self):
         return [xi for xi, keep in zip(self.x_index, self._row_mask) if keep]
+
+    def x_points(self):
+        """Per x_index row, the position of its observation point in the glacier's depths (None for
+        BASAL rows); derived from x_index, so emulators saved before this method still work."""
+        count, out = {}, []
+        for gname, depth in self.x_index:
+            if depth == BASAL:
+                out.append(None)
+                continue
+            out.append(count.get(gname, 0))
+            count[gname] = out[-1] + 1
+        return out
+
+    def x_points_used(self):
+        return [p for p, keep in zip(self.x_points(), self._row_mask) if keep]
 
     def explained_variance_ratio(self):
         return np.cumsum(self.singular_values_ ** 2) / np.sum(self.singular_values_ ** 2)
