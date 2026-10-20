@@ -10,7 +10,8 @@
 > 10–30 m w.e. of firn at Hohsaas, Corvatsch and Alphubel where the observations leave almost none.
 > The ledger is right; its input is not.
 >
-> *Status (2026-10-19, evening): check 5 and the batch done.*
+> *Status (2026-10-19, evening; per-band table 20 Oct): check 5 and the batch done; the search for the
+> missing heat continues in chapter 11.*
 > - *The ledger is not adopted.*
 > - *The right firn alone would not fix the zone sites: on the small glaciers it removes meltwater heat
 >   that has been compensating for a missing heat source or a cold bias.*
@@ -237,18 +238,23 @@ Reported:
 - **The temperate sites** are unchanged in every F-variant: Breithorn is cold instead of temperate,
   and Jungfraufirn is temperate where three of its four bands are measured cold.
 
-![The perfect-firn test, site by site](figures/ch10_perfect_firn.svg)
-
 **Why the right firn does not help: it removes heat that was compensating for something else.**
-Site by site (f_ref 0.85, bias model minus measured; `firn/perfect_firn_sites.py`):
+Band by band, readings below 15 m (f_ref 0.85; RMSE in °C, bias in brackets, model minus measured;
+`firn/stage1_sites.py`, `week3/batch_rule/perfect_firn_bands.csv`). *A first version of this table gave
+site means; Janosch rejected those (19 Oct): averages over bands and depths hide errors of opposite sign,
+so every comparison is now per band at depth.*
 
-| site (measured mean) | FRH | ledger, GloGEM balance | ledger, observed balance | ledger and mask observed |
+| band (readings) | FRH | ledger, GloGEM balance | ledger, observed balance | ledger and mask observed |
 |---|---|---|---|---|
-| Corvatsch 3295–3345 m (−1.8 °C) | +1.8 | +1.8 | +0.9 | **−3.4** |
-| Hohsaas 3275–3345 m (−0.1 °C) | −0.3 | −0.3 | −0.8 | **−2.4** |
-| Sex Rouge 2785–2815 m (−0.1 °C) | −1.5 | −1.5 | −1.5 | −2.4 |
-| Tortin 2895 m (−1.1 °C) | −1.8 | −1.9 | −1.7 | −2.3 |
-| Alphubel South 3755–3825 m (−0.5 °C) | −1.4 | −1.8 | −2.0 | −2.1 |
+| Corvatsch 3295, 3315 (1 each) | 1.1, 0.8 (warm) | 1.1, 0.8 | **0.2, 0.1** | 4.0, 4.3 (cold) |
+| Corvatsch 3325, 3345 (1 each) | 2.7, 2.5 (warm) | 2.7, 2.5 | 1.7, 1.6 | 2.5, 2.7 (cold) |
+| Hohsaas 3275–3345, 5 bands (8) | 0.0–0.9 | 0.0–0.9 | 0.6–1.3 (cold) | **1.7–3.2 (cold)** |
+| Sex Rouge 2785, 2815 (1, 5) | 2.4, 1.3 (cold) | 2.4, 1.4 | 2.5, 1.3 | 2.4, 2.4 (cold) |
+| Tortin 2895 (1) | 1.8 (cold) | 1.9 | 1.7 | 2.3 (cold) |
+| Alphubel South 3755, 3785 (2, 1) | 3.5, 4.7 (cold) | 3.5, 4.8 | 3.5, 4.7 | 3.8, 4.1 (cold) |
+| Alphubel South 3805, 3825 (10, 5) | 1.2, 1.4 (cold) | 1.6, 1.4 | 1.9, 1.6 | 2.0, 1.8 (cold) |
+
+The depth profiles of these bands, with the right firn, are in chapter 11 (figure *Measured and modelled at depth*).
 
 - **The small glaciers lose their meltwater heat with the right firn.** Where GLAMOS leaves no firn
   (Corvatsch, Hohsaas, Sex Rouge, Tortin), the observed mask makes the bands ice and their meltwater
@@ -260,9 +266,9 @@ Site by site (f_ref 0.85, bias model minus measured; `firn/perfect_firn_sites.py
     week 1, chapter 8);
   - the refreezing of meltwater in the seasonal snow on ice bands, which the model leaves out
     (FRHS, chapter 9).
-- **The observed firn thickness alone,** with the model's mask, helps a little (Corvatsch +1.8 →
-  +0.9 °C; zone M1 on the four glaciers 2.23 → 2.13 °C). There the model still calls the band firn,
-  so 1 m of meltwater heat remains.
+- **The observed firn thickness alone,** with the model's mask, helps at Corvatsch (the lower two
+  bands come within 0.2 °C, the upper two within 1.7 °C; zone M1 on the four glaciers 2.23 → 2.13 °C).
+  There the model still calls the band firn, so some meltwater heat remains.
 - **The glaciers observed only from 2005–2008** (Fiescher, Gorner, Morteratsch) barely change; the
   observations act there for too few years.
 
@@ -278,9 +284,9 @@ Site by site (f_ref 0.85, bias model minus measured; `firn/perfect_firn_sites.py
 
 ## What is next
 
-- **Janosch's decisions** on the three results.
-- **The proposed next test:** the right firn with each candidate for the missing heat (the winter
-  cold bias, snow refreezing on ice), on the GLAMOS glaciers.
+- **Done (chapter 11):** the right firn with each candidate for the missing heat. Snow refreezing on
+  ice (S) is the heat; with S the right firn passes every condition of stage 2, and the ledger on the
+  model's own balance still adds nothing.
 
 ## Sources
 

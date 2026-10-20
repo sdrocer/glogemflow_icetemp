@@ -10,8 +10,8 @@ pooling before 20 Oct. A change X against its base Y is adopted if
       temperate beds called frozen).
 Sites as in firn_batch_rule.site_changes (a site gains when more than half of its bands gain robustly and none loses).
 Pairs decided: FRHS against FRH (S); FRHLS against FRHS (the ledger, with S). Reported: FRHLOS against FRHLO and
-against FRH (the right firn with S), zone target D (net zone sites against H), and per band at depth on the 9 GLAMOS
-glaciers (RMSE and bias of the out-of-sample model, every point written for the depth profiles).
+against FRH (the right firn with S), zone target D (net zone sites against H), and per band at depth (RMSE and bias
+of the out-of-sample model per band, every point written for the depth profiles).
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/firn/stage2_rule.py [out_dir]
            [--pool hole_year|entity] [--tag s2]
@@ -103,15 +103,16 @@ def main():
     res['target_D'] = {v: fbr.site_changes(obs_cls, R['H']['cls'], R[v]['cls'], R['H']['znames'])[0]
                        for v in VARS if v != 'H'}
 
-    # per band at depth, 9 GLAMOS glaciers, out-of-sample model of each variant
+    # per band at depth, every scored band, out-of-sample model of each variant
     Q = P.copy()
     for v in VARS:
         Q[v] = ft.lomo(P, {fr: ft.col(v, fr) for fr in ft.FREFS})[0]
-    Q = Q[Q.rgi.isin(fbr.GLAMOS9)][['entity', 'rgi', 'massif', 'band', 'depth', 'obs'] + list(VARS)]
+    Q = Q[['entity', 'rgi', 'massif', 'band', 'depth', 'obs'] + list(VARS)].assign(glamos9=Q.rgi.isin(fbr.GLAMOS9))
     Q.to_csv(f'{pre}_points.csv', index=False, float_format='%.3f')
     rows = []
     for e, d in Q.groupby('entity', sort=False):
-        r = dict(band=e, rgi=d.rgi.iloc[0], n=len(d), depth_lo=d.depth.min(), depth_hi=d.depth.max(), obs=d.obs.mean())
+        r = dict(band=e, rgi=d.rgi.iloc[0], elev=d.band.iloc[0], glamos9=d.glamos9.iloc[0], n=len(d),
+                 depth_lo=d.depth.min(), depth_hi=d.depth.max(), obs=d.obs.mean())
         for v in VARS:
             err = d[v] - d.obs
             r[f'rmse_{v}'], r[f'bias_{v}'] = float(np.sqrt((err ** 2).mean())), float(err.mean())
