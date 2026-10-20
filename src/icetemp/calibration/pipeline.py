@@ -17,7 +17,7 @@ import pandas as pd
 
 from . import adoption
 from .config import CalibrationConfig
-from .data import DataHandler, fit_exclusions
+from .data import DataHandler, fit_exclusions, site_keys
 from .priors import Priors, PARAM_NAMES
 from .design import DesignSampler
 from .runner import GloGEMRunner
@@ -179,7 +179,10 @@ class CalibrationPipeline:
                       fit_exclude=fit_exclusions(glaciers, self.config.fit_exclusions),
                       emulator_error=self.config.emulator_error,
                       s_model_variance=self.config.s_model_variance,
-                      s_model_length_m=self.config.s_model_length_m)
+                      s_model_length_m=self.config.s_model_length_m,
+                      s_hole_variance=self.config.s_hole_variance,
+                      s_hole_year_variance=self.config.s_hole_year_variance,
+                      s_site_variance=self.config.s_site_variance, site_of=site_keys(glaciers))
         kwargs.update(overrides)
         return BayesianCalibrator(**kwargs)
 

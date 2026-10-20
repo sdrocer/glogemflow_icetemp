@@ -276,6 +276,21 @@ def _pool_by_depth_bin(depths, T_obs, labels, bin_width=DEPTH_BIN_WIDTH, months=
     return out + ([months_out[k] for k in order],)
 
 
+SITE_TABLE = Path(__file__).with_name('borehole_sites.csv')
+
+
+def site_keys(glaciers, table=SITE_TABLE):
+    """entity name -> site: the name before '@', except where the checked table (base_name, band range) says
+    otherwise (a site split by a large elevation gap, two names for one site)."""
+    t = pd.read_csv(table) if table is not None else pd.DataFrame(columns=['base_name', 'band_lo', 'band_hi', 'site'])
+    out = {}
+    for g in glaciers:
+        base = g.glacier_name.split('@')[0]
+        m = t[(t.base_name == base) & (t.band_lo <= g.elevation_band) & (g.elevation_band < t.band_hi)]
+        out[g.glacier_name] = m.site.iloc[0] if len(m) else base
+    return out
+
+
 def _pool_by_hole_year(depths, T_obs, labels, months, holes, years, bin_width=DEPTH_BIN_WIDTH):
     """_pool_by_depth_bin within each borehole and calendar year, so that holes and decades are
     not averaged together; a continuous logger still collapses to one point per depth bin and
@@ -693,7 +708,19 @@ class DataHandler:
                     raw_depths, raw_T_obs, raw_label, raw_months,
                     gdf['borehole_id'].to_numpy(dtype=str), gdf['_yr'].to_numpy(dtype=int))
             weights = np.array([_depth_weight(d) for d in depths])
-            sigma = np.full(len(depths), sigma_bh)
+            if point_hole is None:
+                sigma = np.full(len(depths), sigma_bh)
+            else:
+                # each point its own hole's uncertainty, inflated for holes with estimated profiles only
+                sig_of = {}
+                for hole, hg in gdf.groupby('borehole_id'):
+                    s_h = hg['temperature_uncertainty'].iloc[0]
+                    s_h = self.default_sigma if pd.isna(s_h) else float(s_h)
+                    states = set(hg['equilibrium'])
+                    if 'true' not in states and 'estimated' in states:
+                        s_h *= self.estimated_sigma_inflation
+                    sig_of[str(hole)] = s_h
+                sigma = np.array([sig_of[str(h)] for h in point_hole])
 
             if by_position is not None:
                 glacier_id = key[2] or None

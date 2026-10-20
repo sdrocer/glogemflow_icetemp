@@ -49,6 +49,8 @@ from .priors import PARAM_NAMES
 
 # RGI7 ids of the seven test glaciers of Steps 0-5a (CentralEurope)
 STEP5A_GLACIER_IDS = ('00773', '00777', '01112', '01225', '01230', '02103', '03116')
+# the entity target (T1) has no borehole or site terms
+NO_SHARED_TERMS = dict(s_hole_variance=0.0, s_hole_year_variance=0.0, s_site_variance=0.0)
 
 
 def as_surrogate_theta(method, theta):
@@ -212,7 +214,9 @@ class Validator:
                       emulator_error=c.emulator_error,
                       fixed_params=c.fixed_params, s_model_variance=c.s_model_variance,
                       s_model_length_m=c.s_model_length_m, use_elevation=c.use_elevation,
-                      use_emulator_factor=c.use_emulator_factor)
+                      use_emulator_factor=c.use_emulator_factor, s_hole_variance=c.s_hole_variance,
+                      s_hole_year_variance=c.s_hole_year_variance, s_site_variance=c.s_site_variance,
+                      site_of=c.site_of)
         kwargs.update(overrides)
         return c.__class__(**kwargs)
 
@@ -443,8 +447,8 @@ class Validator:
             held = {g.glacier_name: g for g in self.glaciers if self._base[g.glacier_name] == system}
             train = [g for g in self.glaciers if self._base[g.glacier_name] != system]
             thetas = {'ko': self._fit_theta(self._fold_calibrator(train), mode),
-                      't1': self._fit_theta(self._fold_calibrator(train, target='entity',
-                                                                  offset_in_fit=False), mode),
+                      't1': self._fit_theta(self._fold_calibrator(train, target='entity', offset_in_fit=False,
+                                                                  **NO_SHARED_TERMS), mode),
                       'prior': theta_prior}
             fold = dict(system=system, n_entities=len(held))
             preds = {}

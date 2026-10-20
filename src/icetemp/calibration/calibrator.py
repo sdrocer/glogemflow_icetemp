@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .residual_covariance import model_covariance
 from .emulator import BASAL
 from .priors import PARAM_NAMES
 
@@ -151,6 +152,12 @@ class BayesianCalibrator:
     # data.fit_exclusions
     emulator_error: str = 'varying'   # 'varying': E(theta) in Sigma; 'mean': emulator mean only (E = 0)
     fixed_params: dict = None   # e.g. {'advection_scale': 1.0}; None/{} = calibrate all three.
+    # shared errors of the depth target besides the band's (residual_covariance.py): per borehole, per
+    # borehole and year, per site [degC^2]; 0 = none (before 2026-10-20); site_of: entity name -> site
+    s_hole_variance: float = 0.0
+    s_hole_year_variance: float = 0.0
+    s_site_variance: float = 0.0
+    site_of: dict = None
     # Parameters named here are HELD FIXED and excluded from the search space; the rest are
     # calibrated.
     #
@@ -201,6 +208,8 @@ class BayesianCalibrator:
                                        or not self.use_emulator_factor):
             raise ValueError("target='depth' needs track='depth', use_emulator_factor=True and "
                              "offset_in_fit=False")
+        if self.target != 'depth' and max(self.s_hole_variance, self.s_hole_year_variance, self.s_site_variance) > 0:
+            raise ValueError("the borehole and site terms belong to target='depth'")
         unknown = set(self.fixed_params or {}) - set(self._FULL_NAMES)
         if unknown:
             raise ValueError(f'fixed_params {sorted(unknown)} are not in {self._FULL_NAMES}')
@@ -325,7 +334,7 @@ class BayesianCalibrator:
         self._rows_ok = False
         if self.track == 'basal':
             return
-        emu_idx, ent_idx, depth, sig2, obs = [], [], [], [], []
+        emu_idx, ent_idx, depth, sig2, obs, hole, year, site = [], [], [], [], [], [], [], []
         for k, gname in enumerate(self._calib_glacier_names):
             g = self._glacier_by_name[gname]
             rows = self._rows_by_glacier[gname]
@@ -338,8 +347,13 @@ class BayesianCalibrator:
             depth.extend(float(d) for d in depths_used)
             sig2.extend(self._sigma_obs2[gname])
             obs.extend(g.T_obs[idx])
+            ph, py = getattr(g, 'point_hole', None), getattr(g, 'point_year', None)
+            hole.extend([None] * len(rows) if ph is None else [str(ph[i]) for i in idx])
+            year.extend([None] * len(rows) if py is None else [int(py[i]) for i in idx])
+            site.extend([(self.site_of or {}).get(gname, gname.split('@')[0])] * len(rows))
         if not emu_idx:
             return
+        self._row_hole, self._row_year, self._row_site = hole, year, site
 
         self._row_emu_idx = np.asarray(emu_idx, dtype=int)
         self._row_entity = np.asarray(ent_idx, dtype=int)
@@ -358,13 +372,11 @@ class BayesianCalibrator:
         self._rows_ok = True
 
     def _row_model_covariance(self):
-        """S_model: within-entity exponential covariance in DEPTH LAG, zero across entities."""
-        if self.s_model_variance <= 0:
-            return np.zeros((len(self._row_depth),) * 2)
-        d = self._row_depth
-        same = self._row_entity[:, None] == self._row_entity[None, :]
-        return np.where(same, self.s_model_variance
-                         * np.exp(-np.abs(d[:, None] - d[None, :]) / self.s_model_length_m), 0.0)
+        """S_model: within-entity exponential covariance in DEPTH LAG, plus the borehole, borehole-year and
+        site terms (residual_covariance.model_covariance)."""
+        return model_covariance(self._row_entity, self._row_depth, self.s_model_variance, self.s_model_length_m,
+                                hole=self._row_hole, year=self._row_year, site=self._row_site,
+                                sh2=self.s_hole_variance, sy2=self.s_hole_year_variance, ss2=self.s_site_variance)
 
     # ── residuals at a given theta ──────────────────────────────────────────────────────
     def compute_glacier_residuals(self, theta):
@@ -459,13 +471,27 @@ class BayesianCalibrator:
         if np.any(np.diff(self._row_entity) < 0):
             raise RuntimeError('depth rows are not grouped by entity')
         blocks, logdet = [], 0.0
-        for k in range(len(self._calib_glacier_names)):
-            i = np.flatnonzero(self._row_entity == k)
-            C = np.linalg.cholesky(B[np.ix_(i, i)])
-            blocks.append(solve_triangular(C, np.eye(len(i)), lower=True))
-            logdet += 2.0 * float(np.sum(np.log(np.diag(C))))
+        if self.s_site_variance > 0:
+            # the site term couples a site's entities: one block per site, rows taken in site order and
+            # the factor's columns put back in row order
+            keys = {s: k for k, s in enumerate(dict.fromkeys(self._row_site))}
+            group = np.array([keys[s] for s in self._row_site])
+            perm = np.argsort(group, kind='stable')
+            for k in range(len(keys)):
+                i = perm[group[perm] == k]
+                C = np.linalg.cholesky(B[np.ix_(i, i)])
+                blocks.append(solve_triangular(C, np.eye(len(i)), lower=True))
+                logdet += 2.0 * float(np.sum(np.log(np.diag(C))))
+            W = block_diag(blocks, format='csr')
+            self._B_inv_chol = W[:, np.argsort(perm)].tocsr()
+        else:
+            for k in range(len(self._calib_glacier_names)):
+                i = np.flatnonzero(self._row_entity == k)
+                C = np.linalg.cholesky(B[np.ix_(i, i)])
+                blocks.append(solve_triangular(C, np.eye(len(i)), lower=True))
+                logdet += 2.0 * float(np.sum(np.log(np.diag(C))))
+            self._B_inv_chol = block_diag(blocks, format='csr')
         self._Sigma_base = B
-        self._B_inv_chol = block_diag(blocks, format='csr')
         self._B_logdet = logdet
 
     # ── KO log-posterior ─────────────────────────────────────────────────────────────

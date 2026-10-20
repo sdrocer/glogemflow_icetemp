@@ -103,3 +103,18 @@ def test_pool_within_hole_year(mini, tmp_path):
     assert sorted(h.obs_months[at15[2]][0]) == [201008, 201009]
     with pytest.raises(ValueError):
         mini(pool_within='site')
+
+
+def test_hole_year_sigma_per_hole(mini, tmp_path):
+    """With one point per hole and year each point takes its own hole's uncertainty; hole 2 (only 'estimated'
+    profiles) is inflated, hole 1 is not."""
+    g = tmp_path / 'glenglat'
+    bh = pd.read_csv(g / 'borehole.csv')
+    bh.loc[bh.id == 2, 'temperature_uncertainty'] = 0.3
+    bh.to_csv(g / 'borehole.csv', index=False)
+    e = {x.glacier_name: x for x in mini(pool_within='hole_year').calibration_glaciers}['G@3005~00001']
+    s = dict(zip(e.point_hole, e.sigma))
+    assert s['1'] == pytest.approx(0.1)
+    assert s['2'] == pytest.approx(0.3 * data.ESTIMATED_SIGMA_INFLATION)
+    pooled = {x.glacier_name: x for x in mini().calibration_glaciers}['G@3005~00001']
+    assert np.all(pooled.sigma == pooled.sigma[0])

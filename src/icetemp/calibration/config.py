@@ -102,6 +102,11 @@ class CalibrationConfig:
     # [3.3, 4.2], theta-independent within-entity floor 2.25-3.81).
     s_model_variance: float = 3.5
     s_model_length_m: float = 15.0
+    # shared errors besides the band's (target 'depth', pool_within 'hole_year'): per borehole, per borehole and
+    # year, per site [degC^2]; 0 = none (before 2026-10-20). Sites: calibration/borehole_sites.csv
+    s_hole_variance: float = 0.0
+    s_hole_year_variance: float = 0.0
+    s_site_variance: float = 0.0
 
     # -- calibration target (Step 5, chosen 2026-10-12) ------------------------------------
     # 'depth': one misfit per 1 m depth bin, the per-entity offset estimated after the fit (T2);
