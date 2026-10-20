@@ -86,3 +86,38 @@ def test_other_pooling_is_refused(duplicates):
     other = SimpleNamespace(**{**vars(g), 'depths': np.array([5.0, 6.0, 12.0, 13.0, 20.0])})
     with pytest.raises(ValueError):
         BayesianCalibrator(emulator=emu, glaciers=[other], priors=Priors(), track='depth', target='depth')
+
+
+def test_dated_glaciers_need_output_at_their_points(duplicates):
+    g, theta, outputs, emu = duplicates
+    dated = SimpleNamespace(**{**vars(g), 'obs_months': [None] * len(g.depths)})
+    e2 = Emulator(glaciers=[dated], explained_variance=0.9999)
+    grid = [{g.glacier_name: (np.array([1.0, 5.0, 10.0, 15.0, 20.0, 30.0]), np.zeros(6))}]
+    with pytest.raises(ValueError):
+        e2.assemble_matrix(grid)
+    np.testing.assert_array_equal(e2.assemble_matrix(outputs[:1])[:5, 0], outputs[0][g.glacier_name][1][:5])
+
+
+def test_deepest_point_below_the_last_node_is_kept():
+    g = SimpleNamespace(glacier_name='F@2815', glacier_id='00010', depths=np.array([20.0, 34.88]),
+                        obs_months=[None, None])
+    emu = Emulator(glaciers=[g], explained_variance=0.9999)
+    F = emu.assemble_matrix([{g.glacier_name: (np.array([20.0, 34.88, 34.0]), np.array([-1.0, -0.5, -0.5]))}])
+    np.testing.assert_array_equal(F[:2, 0], [-1.0, -0.5])
+
+
+def test_guard_sees_extra_and_swapped_points(duplicates):
+    g, _, _, emu = duplicates
+    extra = SimpleNamespace(**{**vars(g), 'depths': np.append(g.depths, 20.0), 'T_obs': np.append(g.T_obs, -1.0),
+                               'weights': np.ones(6), 'sigma': np.full(6, 0.3),
+                               'point_hole': np.append(g.point_hole, '2'), 'point_year': np.append(g.point_year, 2010)})
+    swapped = SimpleNamespace(**{**vars(g), 'point_hole': g.point_hole[[1, 0, 2, 3, 4]],
+                                 'point_year': g.point_year[[1, 0, 2, 3, 4]]})
+    for other in (extra, swapped):
+        with pytest.raises(ValueError):
+            BayesianCalibrator(emulator=emu, glaciers=[other], priors=Priors(), track='depth', target='depth')
+    import copy
+    stale = copy.copy(emu)
+    stale._x_meta = None
+    with pytest.raises(ValueError):
+        BayesianCalibrator(emulator=stale, glaciers=[g], priors=Priors(), track='depth', target='depth')

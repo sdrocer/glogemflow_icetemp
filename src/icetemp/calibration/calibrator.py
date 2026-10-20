@@ -295,11 +295,17 @@ class BayesianCalibrator:
                 np.argmax(g.depths) if b else self._x_points_used[r]
                 for r, b in zip(rows, is_basal)
             ])
-            pt = ~is_basal
-            if pt.any() and not np.array_equal(g.depths[idx[pt]],
-                                               np.array([d for d, b in zip(depths_used, is_basal) if not b])):
+            emu_depths = [d for n, d in self.emulator.x_index if n == gname and d != BASAL]
+            if not np.array_equal(np.asarray(emu_depths, dtype=float), np.asarray(g.depths, dtype=float)):
                 raise ValueError(f'{gname}: the emulator was built on other observation points '
                                  '(another pooling?) than these glaciers')
+            if getattr(g, 'point_hole', None) is not None:
+                meta = getattr(self.emulator, '_x_meta', None)
+                if meta is None:
+                    raise ValueError('the emulator predates per-point matching; refit it on these glaciers')
+                emu_meta = [m for (n, d), m in zip(self.emulator.x_index, meta) if n == gname and d != BASAL]
+                if emu_meta != [(str(h), int(y)) for h, y in zip(g.point_hole, g.point_year)]:
+                    raise ValueError(f'{gname}: the emulator holds other holes or years than these glaciers')
             self._obs_idx[gname] = idx
             self._weights[gname] = g.weights[idx]
             sigma2 = g.sigma[idx] ** 2
@@ -472,12 +478,17 @@ class BayesianCalibrator:
             raise RuntimeError('depth rows are not grouped by entity')
         blocks, logdet = [], 0.0
         if self.s_site_variance > 0:
-            # the site term couples a site's entities: one block per site, rows taken in site order and
-            # the factor's columns put back in row order
             keys = {s: k for k, s in enumerate(dict.fromkeys(self._row_site))}
             group = np.array([keys[s] for s in self._row_site])
+        else:
+            group = self._row_entity
+        if np.any(B[group[:, None] != group[None, :]] != 0):
+            raise RuntimeError('the error model couples rows of different blocks')
+        if self.s_site_variance > 0:
+            # the site term couples a site's entities: one block per site, rows taken in site order and
+            # the factor's columns put back in row order
             perm = np.argsort(group, kind='stable')
-            for k in range(len(keys)):
+            for k in range(group.max() + 1):
                 i = perm[group[perm] == k]
                 C = np.linalg.cholesky(B[np.ix_(i, i)])
                 blocks.append(solve_triangular(C, np.eye(len(i)), lower=True))

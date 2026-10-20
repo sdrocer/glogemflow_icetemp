@@ -16,7 +16,7 @@ def model_covariance(entity, depth, s2, ell, hole=None, year=None, site=None, sh
     if s2 > 0:
         C += np.where(entity[:, None] == entity[None, :], s2 * np.exp(-np.abs(d[:, None] - d[None, :]) / ell), 0.0)
     if sh2 > 0 or sy2 > 0:
-        if hole is None or year is None or any(h is None for h in hole):
+        if hole is None or year is None or any(h is None for h in hole) or (sy2 > 0 and any(y is None for y in year)):
             raise ValueError('borehole terms need every point\'s hole and year (pool_within="hole_year")')
         h = np.asarray(hole, dtype=object)
         same = h[:, None] == h[None, :]

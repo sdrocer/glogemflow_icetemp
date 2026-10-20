@@ -99,3 +99,16 @@ def test_site_table():
     assert s['Grenzgletscher@2605'] != s['Grenzgletscher@4455~01225']
     assert s['Taconnaz Glacier@3415'] == s['Glacier de Taconnaz@3835']
     assert s['Glacier de Tête Rousse@3135'] == 'Glacier de Tête Rousse'
+
+
+def test_a_hole_in_two_bands_is_refused():
+    """The factorisation needs every shared term inside one block: a hole split across two entities must stop."""
+    rng = np.random.default_rng(3)
+    gl = [entity('P@3005', ['1', '1'], [1990, 1990], [5, 12], rng), entity('P@3015', ['1', '1'], [1990, 1990],
+                                                                            [6, 13], rng)]
+    theta = DesignSampler(Priors(), seed=6).sample(16)
+    outputs = [{g.glacier_name: (g.depths, -5 + t[0] * np.exp(-g.depths / 10) + 0.3 * t[1] - 0.1 * t[2])
+                for g in gl} for t in theta]
+    emu = Emulator(glaciers=gl, explained_variance=0.9999).fit(theta, outputs)
+    with pytest.raises(RuntimeError):
+        calibrator(gl, emu, s_hole_variance=1.0)

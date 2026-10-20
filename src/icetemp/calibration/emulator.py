@@ -142,6 +142,12 @@ class Emulator:
 
     def __post_init__(self):
         self.x_index = _build_x_index(self.glaciers)
+        # (hole, year) of each observation row with pool_within='hole_year', else None
+        self._x_meta = []
+        for g in self.glaciers:
+            ph, py = getattr(g, 'point_hole', None), getattr(g, 'point_year', None)
+            self._x_meta += [None] * len(g.depths) if ph is None else [(str(h), int(y)) for h, y in zip(ph, py)]
+            self._x_meta.append(None)
         self._glacier_max_obs = {
             g.glacier_name: float(g.depths.max()) for g in self.glaciers if len(g.depths)
         }
@@ -196,6 +202,7 @@ class Emulator:
         m = len(training_output)
         F = np.full((self.n_x, m), np.nan)
         points = self.x_points()
+        dated = {g.glacier_name for g in self.glaciers if getattr(g, 'obs_months', None) is not None}
         obs_depths = {}
         for gname, depth in self.x_index:
             if depth != BASAL:
@@ -212,6 +219,9 @@ class Emulator:
                 if gname not in obs_format:
                     od = np.asarray(obs_depths.get(gname, []), dtype=float)
                     obs_format[gname] = len(depths) >= len(od) and np.array_equal(depths[:len(od)], od)
+                    if gname in dated and not obs_format[gname]:
+                        raise ValueError(f'{gname}: the training output is not at its observation points (another '
+                                         'pooling?); rematch the archived profiles (runner.reparse_archived)')
                 if depth == BASAL:
                     valid = np.flatnonzero(~np.isnan(T_values))
                     if valid.size == 0:
@@ -225,9 +235,12 @@ class Emulator:
                     # output at the observation points (runner.match_model_to_obs): point by point,
                     # so several holes or years at one depth each keep their own value; any other
                     # grid: the nearest node
-                    k = points[i] if obs_format[gname] else np.argmin(np.abs(depths - depth))
-                    if abs(depths[k] - depth) <= self._local_tolerance(depths, k):
-                        F[i, j] = T_values[k]
+                    if obs_format[gname]:
+                        F[i, j] = T_values[points[i]]
+                    else:
+                        k = np.argmin(np.abs(depths - depth))
+                        if abs(depths[k] - depth) <= self._local_tolerance(depths, k):
+                            F[i, j] = T_values[k]
         return F
 
     def fit_svd(self, F):

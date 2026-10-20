@@ -711,16 +711,17 @@ class DataHandler:
             if point_hole is None:
                 sigma = np.full(len(depths), sigma_bh)
             else:
-                # each point its own hole's uncertainty, inflated for holes with estimated profiles only
+                # each point its own hole's uncertainty, inflated where that hole's profiles of that year are
+                # estimated only
                 sig_of = {}
-                for hole, hg in gdf.groupby('borehole_id'):
+                for (hole, yr), hg in gdf.groupby(['borehole_id', '_yr']):
                     s_h = hg['temperature_uncertainty'].iloc[0]
                     s_h = self.default_sigma if pd.isna(s_h) else float(s_h)
                     states = set(hg['equilibrium'])
                     if 'true' not in states and 'estimated' in states:
                         s_h *= self.estimated_sigma_inflation
-                    sig_of[str(hole)] = s_h
-                sigma = np.array([sig_of[str(h)] for h in point_hole])
+                    sig_of[(str(hole), int(yr))] = s_h
+                sigma = np.array([sig_of[(str(h), int(y))] for h, y in zip(point_hole, point_year)])
 
             if by_position is not None:
                 glacier_id = key[2] or None
