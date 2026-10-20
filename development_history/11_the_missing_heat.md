@@ -14,8 +14,9 @@
 > summits. B's refreezing model was broken, also on `main`; repaired, it changes neither the mass
 > balance nor the ice temperatures.
 >
-> *Status (2026-10-20, afternoon): stages 1 and 2 done. By the rule S is not adopted (one frozen bed
-> lost); Janosch's decision.*
+> *Status (2026-10-20, afternoon): stages 1 and 2 done. By the rule S was not adopted (one frozen bed
+> lost); **Janosch adopted it**: it is a real physical process, and the remaining errors have other
+> causes. The central thermal variant is now FRHS.*
 >
 > *Plans: `plans/2026-10-19_missing_heat_plan.md`, `plans/2026-10-19_missing_heat_status.md`; the plan of 20 Oct.*
 
@@ -225,13 +226,20 @@ Zone target D (two zone sites more than H) is met by no variant; FRHLO and FRHLO
   firn alone makes things worse (M1 2.84 °C); with S it passes every condition and gains Corvatsch.
 - **The firn ledger on the model's own balance still adds nothing** (FRHLS = FRHS).
 
-**For Janosch:** by the rule S is not adopted, because it loses Tête Rousse's frozen bed. Adopt it
-anyway (the zone gain is large and the loss sits on a band FRH already had 1.9 °C too warm), or keep
-FRH until the warm tongues are understood?
+**Janosch's decision (20 Oct): S is adopted; the central thermal variant is now FRHS.**
+- *"It is a real physical process and the remaining errors stem from other issues and might possibly
+  be resolved through the right calibration. Also if one frozen bed gets flipped this can't be a
+  reason why we neglect the adoption of a new real physical process."*
+- **For the rules from now on:** a missing physical process is adopted when it helps overall; a single
+  band or frozen bed that it worsens, on a band with another known error, is follow-up work, not a
+  veto.
+- **In GloGEM:** S moves alone onto GloGEMflow (branch `snow-refreeze-flow`); the firn ledger stays on
+  its branch, as rules that were not adopted do.
 
 ## What is next
 
-- **Janosch's decision on S** (above).
+- **S onto GloGEMflow:** gate (defaults byte-identical; S as on the ledger branch), then the model-changes
+  page.
 - **The warm tongues and Tête Rousse:** find what makes them too warm before S (the spin-up on the
   2003 geometry is the first candidate).
 - **Step 5, the Bayesian calibration,** with the depth bins per borehole and year and a site-offset
@@ -257,8 +265,8 @@ FRH until the warm tongues are understood?
 | W | the station lapse rates for the thermal surface (milder in winter than ERA5's) |
 | B | GloGEM's full refreezing model in the mass balance (`refreezing_full`), which also refreezes in the snow on ice bands |
 | C0 | the recalibration of the 23 glaciers with the default refreezing, the fair baseline for B |
-| FRH | the central thermal variant: no T_off in the thermal inputs, ERA5's lapse rate, Herron & Langway meltwater |
-| FRHS, FRHLS | FRH with S; FRH with the firn ledger and S |
+| FRH | the central thermal variant until 20 Oct: no T_off in the thermal inputs, ERA5's lapse rate, Herron & Langway meltwater |
+| FRHS, FRHLS | FRH with S, the central thermal variant since 20 Oct; FRH with the firn ledger and S |
 | FRHLO, FRHLOS | the ledger fed GLAMOS's band balances with the observed firn mask ("right firn"), without and with S |
 | f_ref | the share of the meltwater that refreezes and heats the firn or ice |
 | entity, band | a borehole site in one 10 m elevation band (and one outline), the unit the readings are compared in |
