@@ -75,3 +75,31 @@ def test_hole_without_outline_is_reported(mini, tmp_path):
     dh = mini()
     reasons = dict(zip(dh.left_out.borehole_id, dh.left_out.reason))
     assert reasons.get('4') == 'in the data but on no RGI7 outline: not run'
+
+
+def test_pool_within_hole_year(mini, tmp_path):
+    """Hole 1 read again in 2010 (twice, like a logger) and hole 2 at 15 m too: 'entity' pools all of
+    them into one 15 m point; 'hole_year' keeps one point per hole and year."""
+    g = tmp_path / 'glenglat'
+    pr = pd.read_csv(g / 'profile.csv')
+    pr = pd.concat([pr, pd.DataFrame(dict(borehole_id=[1, 1], id=[2, 3], date_min=['2010-08-01', '2010-09-01'],
+                                          date_max=['2010-08-01', '2010-09-01'], equilibrium='true'))])
+    pr.to_csv(g / 'profile.csv', index=False)
+    me = pd.read_csv(g / 'measurement.csv')
+    me = pd.concat([me, pd.DataFrame(dict(borehole_id=[1, 1, 1, 2], profile_id=[2, 2, 3, 1], depth=[15.0, 25.0, 15.2, 15.0],
+                                          temperature=[-1.0, -0.8, -0.6, -1.2]))])
+    me.to_csv(g / 'measurement.csv', index=False)
+    e = {x.glacier_name: x for x in mini().calibration_glaciers}['G@3005~00001']
+    k15 = np.flatnonzero(np.round(e.depths) == 15)
+    assert len(k15) == 1 and e.point_hole is None
+    k = int(k15[0])
+    assert e.T_obs[k] == pytest.approx(np.mean([-2.5, -1.0, -0.6, -1.2]))
+    h = {x.glacier_name: x for x in mini(pool_within='hole_year').calibration_glaciers}['G@3005~00001']
+    at15 = np.flatnonzero(np.round(h.depths) == 15)
+    assert [(h.point_hole[i], h.point_year[i]) for i in at15] == [('1', 2000), ('2', 2000), ('1', 2010)]
+    assert list(h.T_obs[at15]) == pytest.approx([-2.5, -1.2, -0.8])
+    assert list(h.n_readings[at15]) == [1, 1, 2]
+    assert len(h.obs_months) == h.n_obs and np.all(np.diff(h.depths) >= 0)
+    assert sorted(h.obs_months[at15[2]][0]) == [201008, 201009]
+    with pytest.raises(ValueError):
+        mini(pool_within='site')

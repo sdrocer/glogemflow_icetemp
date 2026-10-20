@@ -80,6 +80,12 @@ def run_name(tag, variant, fref, fins=FINS0, fadv=FADV0, nodeep=False):
     return f'{tag}_{variant}_r{fref:.2f}_i{fins:.3f}_a{fadv:.2f}' + ('_nodeep' if nodeep else '') + '_w0'
 
 
+def output_path(run, pool='entity'):
+    """A run's matched model output; pool 'hole_year' = rematched by rescore_hole_year.py."""
+    return BAYESCAL / run / 'training_runs' / ('design_0000.output.pkl' if pool == 'entity'
+                                                else f'design_0000.output_{pool}.pkl')
+
+
 def col(variant, fref, fins=FINS0):
     return f'{variant}@{fref:.2f}' + ('' if fins == FINS0 else f'@{fins:.3f}')
 

@@ -56,6 +56,7 @@ class CalibrationPipeline:
             outline_by_position=self.config.outline_by_position,
             entry_any_below=self.config.entry_any_below,
             fill_missing_covariates=self.config.fill_missing_covariates,
+            pool_within=self.config.pool_within,
         )
         self.data_handler.load()
         self.data_handler.summary()

@@ -109,6 +109,9 @@ class GlacierCalibrationData:
     obs_months: Optional[list] = None
     # [n_obs] 'firn' | 'ice' | 'unknown'; is_firn counts unknown as firn
     firn_label: Optional[np.ndarray] = None
+    # [n_obs] per point, with pool_within='hole_year': its borehole_id and calendar year
+    point_hole: Optional[np.ndarray] = None
+    point_year: Optional[np.ndarray] = None
     n_obs: int = field(init=False)
     has_firn_obs: bool = field(init=False)
     has_ice_obs: bool = field(init=False)
@@ -273,6 +276,24 @@ def _pool_by_depth_bin(depths, T_obs, labels, bin_width=DEPTH_BIN_WIDTH, months=
     return out + ([months_out[k] for k in order],)
 
 
+def _pool_by_hole_year(depths, T_obs, labels, months, holes, years, bin_width=DEPTH_BIN_WIDTH):
+    """_pool_by_depth_bin within each borehole and calendar year, so that holes and decades are
+    not averaged together; a continuous logger still collapses to one point per depth bin and
+    year. Points sorted by depth, then year and hole; returns the outputs of _pool_by_depth_bin
+    plus each point's hole and year."""
+    parts = []
+    for hole, year in sorted(set(zip(holes, years))):
+        sel = np.flatnonzero((holes == hole) & (years == year))
+        out = _pool_by_depth_bin(depths[sel], T_obs[sel], labels[sel], bin_width=bin_width,
+                                 months=[months[r] for r in sel])
+        parts += [(out[0][k], year, hole) + tuple(o[k] for o in out) for k in range(len(out[0]))]
+    parts.sort(key=lambda p: p[:3])
+    depth_out, T_out, firn_out, n_out, label_out, months_out = list(zip(*parts))[3:]
+    return (np.array(depth_out), np.array(T_out), np.array(firn_out, dtype=bool), np.array(n_out, dtype=int),
+            np.array(label_out, dtype=object), list(months_out),
+            np.array([p[2] for p in parts], dtype=object), np.array([p[1] for p in parts], dtype=int))
+
+
 class DataHandler:
     """Load, filter, and structure glenglat borehole data for Tier-3 calibration.
 
@@ -303,6 +324,7 @@ class DataHandler:
         outline_by_position=True,
         entry_any_below=ENTRY_ANY_BELOW,
         fill_missing_covariates=True,
+        pool_within='entity',
     ):
         self.glenglat_dir = Path(glenglat_dir)
         self.derived_csv = Path(derived_csv)
@@ -315,6 +337,11 @@ class DataHandler:
         # ERA5 covariates for holes lacking derived ones in a group that has them; False: those
         # holes' readings are dropped (before 2026-10-13)
         self.fill_missing_covariates = fill_missing_covariates
+        # depth-bin pooling: 'entity' = all holes and dates of an entity in one bin (before
+        # 2026-10-20); 'hole_year' = one bin per borehole and calendar year of the readings
+        if pool_within not in ('entity', 'hole_year'):
+            raise ValueError(f"pool_within must be 'entity' or 'hole_year', not {pool_within!r}")
+        self.pool_within = pool_within
         self.region = region
         self.include_estimated = include_estimated
         self.include_unassessed = include_unassessed
@@ -511,6 +538,7 @@ class DataHandler:
         meas['_ym0'] = ym_of(t0.where(long_range, tm))
         meas['_ym1'] = ym_of(t1.where(long_range, tm))
         meas['_frac'] = tm.dt.day / tm.dt.days_in_month
+        meas['_yr'] = tm.dt.year
         self.ym_lo = ym_lo = (self.run_year_min - 1) * 100 + self.bal_month
         self.ym_hi = ym_hi = self.run_year_max * 100 + (self.bal_month - 1)
         in_window = (meas['_ym0'].notna() & meas['_ym1'].notna()
@@ -519,6 +547,7 @@ class DataHandler:
         meas = meas[in_window].copy()
         meas['_ym0'] = meas['_ym0'].astype(int)
         meas['_ym1'] = meas['_ym1'].astype(int)
+        meas['_yr'] = meas['_yr'].astype(int)
         meas['_ym'] = meas['_ym0'].clip(lower=ym_lo)
         meas = meas.merge(borehole, left_on='borehole_id', right_on='id', how='left',
                            suffixes=('', '_bh'))
@@ -652,11 +681,17 @@ class DataHandler:
             raw_T_obs = gdf['temperature'].to_numpy(dtype=float)
             raw_label = gdf['mass_balance_area'].apply(_classify_firn).to_numpy(dtype=object)
             raw_label = self._resolve_unknown_firn(base_glacier_name, raw_label, gdf)
-            depths, T_obs, is_firn, n_readings, firn_label, obs_months = _pool_by_depth_bin(
-                raw_depths, raw_T_obs, raw_label,
-                months=[_reading_months(a, b, f, self.ym_lo, self.ym_hi)
-                        for a, b, f in zip(gdf['_ym0'], gdf['_ym1'], gdf['_frac'])],
-            )
+            raw_months = [_reading_months(a, b, f, self.ym_lo, self.ym_hi)
+                          for a, b, f in zip(gdf['_ym0'], gdf['_ym1'], gdf['_frac'])]
+            point_hole = point_year = None
+            if self.pool_within == 'entity':
+                depths, T_obs, is_firn, n_readings, firn_label, obs_months = _pool_by_depth_bin(
+                    raw_depths, raw_T_obs, raw_label, months=raw_months)
+            else:
+                (depths, T_obs, is_firn, n_readings, firn_label, obs_months,
+                 point_hole, point_year) = _pool_by_hole_year(
+                    raw_depths, raw_T_obs, raw_label, raw_months,
+                    gdf['borehole_id'].to_numpy(dtype=str), gdf['_yr'].to_numpy(dtype=int))
             weights = np.array([_depth_weight(d) for d in depths])
             sigma = np.full(len(depths), sigma_bh)
 
@@ -689,7 +724,7 @@ class DataHandler:
                 ),
                 depths=depths, T_obs=T_obs, weights=weights, is_firn=is_firn, sigma=sigma,
                 n_readings=n_readings, equilibrium=equilibrium_label, obs_months=obs_months,
-                firn_label=firn_label,
+                firn_label=firn_label, point_hole=point_hole, point_year=point_year,
             ))
 
         self.left_out = self._left_out_table(set(measurement['borehole_id']), eq_ok)

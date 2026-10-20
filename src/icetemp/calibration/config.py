@@ -30,6 +30,7 @@ class CalibrationConfig:
     outline_by_position: bool = True       # each hole on the RGI7 outline containing it
     entry_any_below: float = 15.0          # entities need a reading at 10-30 m or below this depth
     fill_missing_covariates: bool = True   # ERA5 covariates per hole instead of dropping its readings
+    pool_within: str = 'entity'            # 'hole_year': depth bins pooled per borehole and year only
 
     # -- MB-calibration source (see runner.GloGEMRunner.copy_calibration_data) -------------
     # None = GloGEMRunner's own defaults (the narrow CentralEurope_glenglat_calib source,

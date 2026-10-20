@@ -89,6 +89,7 @@ VARIANTS['FRSHS'] = dict(VARIANTS['FRSH'], snow_refreeze='y')
 VARIANTS['FRHLOS'] = dict(VARIANTS['FRHLO'], snow_refreeze='y')
 VARIANTS['FRSHLO'] = dict(VARIANTS['FRHLO'], thermal_lapse='stations')
 VARIANTS['FRSHLOS'] = dict(VARIANTS['FRSHLO'], snow_refreeze='y')
+VARIANTS['FRHLS'] = dict(VARIANTS['FRHL'], snow_refreeze='y')   # stage 2: the ledger on the model's own firn, with S
 
 
 class SubsetPipeline(CalibrationPipeline):
