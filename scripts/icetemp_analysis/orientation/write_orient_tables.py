@@ -8,8 +8,9 @@ revised 21 Oct 2026, step 1b), F at the borehole bands for air temperature anoma
 
 Albedo 0.80, T_tip 1 C (orientation_eb.py). psi0 per band and strength: June-September melt of flat open ground equals
 the band's degree-day thermal melt (FRHS, 1981-2020, at least 30 mm); it is kept when the hourly air temperature is
-shifted by dT. F = June-September melt of the hole's plane over that of flat open ground, mean over the holes of the
-outline's band (both sites where two share one). Bands without holes keep F = 1 in GloGEM.
+shifted by dT. F = June-September melt of the hole's plane over that of flat open ground, mean over the holes scored
+on one model band of the outline (the band GloGEM writes their profile at, band_model of band_forcing.csv; also where
+two sites share it, or a hole lies above or below the glacier's bands). Bands without holes keep F = 1 in GloGEM.
 
 Inputs: the orientation investigation (week3/orientation_investigation/): evidence/band_forcing.csv,
 evidence/hole_sun.csv, data/calibration_holes_components.npz (horizons), MeteoSwiss Jungfraujoch daily data.
@@ -41,10 +42,6 @@ STRENGTHS = {'C': dict(c=10.0, spells=False), 'W': dict(c=20.0, spells=False), '
 ALB, TTIP, DMIN = 0.80, 1.0, 30.0
 
 
-def band_of(entity):
-    return int(entity.split('@')[1].split('~')[0])
-
-
 def factors():
     w = oe.read_station(INPUTS['jungfraujoch'])
     sig, dif, fd_st = oe.sky_weights(w)
@@ -56,6 +53,7 @@ def factors():
     f = F[(F.year >= oe.Y0) & (F.year <= oe.Y1)]
     nyr = f.groupby('entity').year.nunique()
     dd_m = (f.groupby(['entity', 'month']).melt_dd.sum().unstack() * 1000.0).div(nyr, axis=0)
+    band_model = F.groupby('entity').band_model.first()
     rows = []
     for e, s in H.groupby('entity'):
         Tm = oe.band_T(F, e)
@@ -75,7 +73,7 @@ def factors():
                 for hole, Ss, Sf in geo:
                     m_s = oe.jjas(oe.monthly_melt(Th, Ss, p0, o['c'], ALB, TTIP))
                     m_f = oe.jjas(oe.monthly_melt(Th, Sf, p0, o['c'], ALB, TTIP))
-                    rows.append(dict(entity=e, rgi=s.rgi.iloc[0], band=band_of(e), hole=hole, strength=name, dT=dT,
+                    rows.append(dict(entity=e, rgi=s.rgi.iloc[0], band=int(band_model[e]), hole=hole, strength=name, dT=dT,
                                      psi0=p0, dd_jjas=oe.jjas(dd), melt_slope=m_s, melt_flat=m_f,
                                      F=m_s / max(m_f, 1e-9)))
         print(e, {n: round(float(np.mean([r['F'] for r in rows if r['entity'] == e and r['strength'] == n
