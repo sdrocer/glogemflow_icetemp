@@ -866,6 +866,34 @@ class GloGEMRunner:
             out[g.glacier_name] = (np.asarray(depth_cols, dtype=float), T_avg)
         return out
 
+    @staticmethod
+    def merge_part_outputs(outputs_by_part, glaciers, part_of_hole):
+        """One output from the three orientation part runs (gentle, north, south; Step 5 plan step 1c): each
+        observation point takes the value of the run of its hole's part; the last element (the deepest resolved
+        node) comes from the part of the hole of the deepest point. outputs_by_part: part -> output dict of
+        parse_training_output; part_of_hole: borehole id (str) -> part. Needs points pooled per hole and year
+        (g.point_hole); an entity is None if a part it needs is None. Raises if the parts' depth grids differ."""
+        out = {}
+        for g in glaciers:
+            name = g.glacier_name
+            outs = {p: o.get(name) for p, o in outputs_by_part.items()}
+            if g.point_hole is None:
+                raise ValueError(f'{name}: merging the part runs needs points pooled per hole and year')
+            parts = [part_of_hole[str(h)] for h in g.point_hole]
+            if any(outs[p] is None for p in set(parts)):
+                out[name] = None
+                continue
+            ref = outs[parts[0]][0]
+            for p, o in outs.items():
+                if o is not None and not np.array_equal(np.asarray(o[0]), np.asarray(ref)):
+                    raise ValueError(f'{name}: depth grids of the part runs differ ({p})')
+            n = len(g.depths)
+            temps = np.array([outs[p][1][k] for k, p in enumerate(parts)] +
+                             [outs[parts[int(np.argmax(g.depths))]][1][n + j] for j in range(len(ref) - n)],
+                             dtype=float)
+            out[name] = (np.asarray(ref, dtype=float), temps)
+        return out
+
     def profile_archive(self, tag):
         return PROFILE_ARCHIVE_DIR / self.run_dir.parent.name / f'{tag}.tar.gz'
 
