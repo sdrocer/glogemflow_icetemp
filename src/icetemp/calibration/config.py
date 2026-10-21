@@ -88,6 +88,8 @@ class CalibrationConfig:
     firn_column: str = 'fixed'    # 'ledger' = the firn density (conduction, heat capacity) follows the ledger (3b-ii)
     mb_refreezing: str = 'parametrised'   # mass-balance refreezing: 'full' = GloGEM's full model (also on ice bands)
     mb_hist_file: str = ''        # diagnostic: year, precipitation factor, temperature offset (GloGEM mb_hist_file)
+    orient: str = 'n'             # 'table' = the thermal melt times the orientation factor of orient_dir
+    orient_dir: str = ''          # folder of orient_<id>.dat: band elevation, F at dT = -3..+3 K
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)

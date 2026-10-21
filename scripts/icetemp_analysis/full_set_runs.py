@@ -30,6 +30,8 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
             firn and with the observed firn (plan of 19 Oct evening)
   --no-deepen: borehole bands run to the band's ice thickness (the bed the product shows); in the tag
   --exclude-ids: glaciers left out of the run (e.g. the sealed 01161)
+  --orient-dir DIR --orient-tag X: the thermal melt times the orientation factor of the tables in DIR
+            (GloGEM firnice_orient = 'table'; tag _oX)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
   --data-rules old: the borehole data rules before 2026-10-13, to compare with earlier runs.
@@ -117,11 +119,15 @@ def main():
     ap.add_argument('--mb-refreezing', default='parametrised', choices=['parametrised', 'full'])
     ap.add_argument('--mb-hist-file', default='', help='diagnostic: GloGEM mb_hist_file (adds _mbhist to the tag)')
     ap.add_argument('--exclude-ids', default='', help='comma-separated RGI7 ids left out')
+    ap.add_argument('--orient-dir', default='', help="folder of orient_<id>.dat (firnice_orient = 'table')")
+    ap.add_argument('--orient-tag', default='', help='name of the orientation tables in the run tag (_oX)')
     ap.add_argument('--calibration-dir', default=None,
                     help='mass-balance calibration to use instead of the configured one (all its .dat files)')
     ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
                     help="'old': the borehole data rules before 2026-10-13 (regression gates)")
     args = ap.parse_args()
+    if bool(args.orient_dir) != bool(args.orient_tag):
+        raise SystemExit('--orient-dir and --orient-tag go together')
     theta = THETAS[args.worker].copy()
     custom = any(v is not None for v in (args.fref, args.fins, args.fadv))
     for k, v in enumerate((args.fref, args.fins, args.fadv)):
@@ -130,7 +136,8 @@ def main():
     run_tag = (f'{args.run_tag}_{args.variant}_r{theta[0]:.2f}_i{theta[1]:.3f}_a{theta[2]:.2f}'
                if custom else args.run_tag) + ('_nodeep' if args.no_deepen else '') + \
               (f'_age{args.firn_age}' if args.firn_age != 20 else '') + \
-              ('_mbfull' if args.mb_refreezing == 'full' else '') + ('_mbhist' if args.mb_hist_file else '')
+              ('_mbfull' if args.mb_refreezing == 'full' else '') + ('_mbhist' if args.mb_hist_file else '') + \
+              (f'_o{args.orient_tag}' if args.orient_tag else '')
 
     base = CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
     cfg = CalibrationConfig(
@@ -144,6 +151,7 @@ def main():
         **(dict(firn_age=args.firn_age) if args.firn_age != 20 else {}),
         **(dict(mb_refreezing='full') if args.mb_refreezing == 'full' else {}),
         **(dict(mb_hist_file=args.mb_hist_file) if args.mb_hist_file else {}),
+        **(dict(orient='table', orient_dir=args.orient_dir) if args.orient_dir else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )

@@ -108,7 +108,8 @@ class CalibrationPipeline:
                              snow_refreeze=self.config.snow_refreeze,
                              firn_age=self.config.firn_age, firn_obs_dir=self.config.firn_obs_dir,
                              firn_obs_mask=self.config.firn_obs_mask, firn_column=self.config.firn_column,
-                             mb_refreezing=self.config.mb_refreezing, mb_hist_file=self.config.mb_hist_file)
+                             mb_refreezing=self.config.mb_refreezing, mb_hist_file=self.config.mb_hist_file,
+                             orient=self.config.orient, orient_dir=self.config.orient_dir)
         if self.config.calibration_source_dir is not None:
             runner_kwargs['calibration_source_dir'] = self.config.calibration_source_dir
         if self.config.calibration_source_files is not None:
