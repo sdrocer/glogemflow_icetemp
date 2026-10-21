@@ -25,6 +25,13 @@ approved (the in-sample best f_ref of Mont Blanc and of Monte Rosa within 0.2; T
 and Monte Rosa does not cool by more than 0.2 C); Taconnaz Glacier 3685-3785 m; regime classes; frozen beds; the
 time test; every band at depth.
 
+Changes after the max-effort review of 21 Oct, made before any run was read: the within-site measures ((1), the
+interval, the within-site RMS, the pairs) leave out entities whose own F differs by more than 0.1 from the F applied
+to their model band (write_orient_tables.py applied.csv: Glacier de Taconnaz@4295, both Mont Blanc summit holes),
+so the Taconnaz 4285/4295 pair drops; sunny and shaded are told by the applied F; a pair counts only if the model
+moves at least 0.2 C closer or farther (thermistor precision), else it is a tie; the two Colle Gnifetti pairs
+(01225 against 01230, different climate cells and the 30 mm floor) are flagged.
+
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/orientation/orient_rule.py [OUT_DIR]
            [--stand-in]    (--stand-in: every variant read from the stage-2 FRHS runs, a test of the scorer only)
 """
@@ -64,6 +71,9 @@ PAIRS = [('Grenzgletscher@4405', 'Grenzgletscher@4335'),
          ('Grenzgletscher@4465~01225', 'Grenzgletscher@4465~01230'), ('Grenzgletscher@4445~01225', 'Grenzgletscher@4445~01230'),
          ('Jungfraufirn@3535', 'Jungfraufirn@3635')]
 GROUP_C = ('Taconnaz Glacier@3685', 'Taconnaz Glacier@3785')
+PAIR_MIN = 0.2
+FLAGGED_PAIRS = {('Grenzgletscher@4465~01225', 'Grenzgletscher@4465~01230'),
+                 ('Grenzgletscher@4445~01225', 'Grenzgletscher@4445~01230')}
 WEBB = np.array([-np.sqrt(1.5), -1.0, -np.sqrt(0.5), np.sqrt(0.5), 1.0, np.sqrt(1.5)])
 
 
@@ -160,7 +170,8 @@ def pairs(bb0, bb1, Fe):
         d0, d1 = t0['mod'][sun] - t0['mod'][sha], t1['mod'][sun] - t1['mod'][sha]
         e0, e1 = abs(d0 - dm), abs(d1 - dm)
         out.append(dict(sunny=sun, shaded=sha, site=t0.site[sun], dT_meas=dm, dT_FRHS=d0, dT_V=d1,
-                        helps=1.0 if e1 < e0 else 0.0 if e1 > e0 else 0.5))
+                        helps=1.0 if e1 < e0 - PAIR_MIN else 0.0 if e1 > e0 + PAIR_MIN else 0.5,
+                        flagged=(a, b) in FLAGGED_PAIRS))
     T = pd.DataFrame(out)
     votes = T.groupby('site').helps.mean()
     return T, dict(sites_help=int((votes > .5).sum()), sites_hurt=int((votes < .5).sum()),
@@ -183,7 +194,7 @@ def lomo_measures(P, E, obs_cls, v, grid):
 
 
 def within_measures(P, v, grid, B):
-    high = (P.band >= HIGH).to_numpy()
+    high = ((P.band >= HIGH) & ~P.entity.isin(EXCLUDED)).to_numpy()
     out_gen = ~P.site.isin(GENERATING_SITES).to_numpy()
     f_all, bb = band_bias(P, v, grid, high)
     f_wo, bb_wo = band_bias(P, v, grid, high & out_gen)
@@ -234,10 +245,11 @@ def frozen_beds(E, runs_by, chosen):
 
 
 SUN = None
+EXCLUDED = ()
 
 
 def main():
-    global SUN
+    global SUN, EXCLUDED
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('out_dir', nargs='?', default=str(W3 / 'orient_stage1'))
     ap.add_argument('--stand-in', action='store_true')
@@ -273,10 +285,12 @@ def main():
     SUN = B[['entity', 'ratio_jja']]
     if SUN.set_index('entity').ratio_jja.reindex(P[P.band >= HIGH].entity.unique()).isna().any():
         raise SystemExit('a high band has no sunshine ratio')
-    F0 = {}
-    for v in ('C', 'W', 'S'):
-        R = pd.read_csv(TABLES / 'factors.csv')
-        F0[v] = R[(R.strength == v) & (R.dT == 0.0)].groupby('entity').F.mean().to_dict()
+    A = pd.read_csv(TABLES / 'applied.csv', dtype={'rgi': str})
+    if set(A.entity) != set(P.entity):
+        raise SystemExit('applied.csv and the scored entities differ')
+    EXCLUDED = tuple(A[A.exclude_within_site].entity)
+    F0 = {v: dict(zip(A.entity, A[f'F_band_{v}'])) for v in ('C', 'W', 'S')}
+    F_own = dict(zip(A.entity, A.F_C))
 
     obs_cls = ft.entity_classes(P, 'obs', E)
     zone = P.band.between(*ft.ZONE)
@@ -288,7 +302,8 @@ def main():
         print(v, {k: L[v][k] for k in ('M1', 'zone_M1', 'above_M1', 'strict_M1')},
               {k: Wm[v][k] for k in ('f_common', 'slope', 'slope_wo', 'within_rmse')}, flush=True)
 
-    res = dict(counts=counts, stand_in=a.stand_in, zone=ft.ZONE, grid=GRID, rule='B', variants={})
+    res = dict(counts=counts, stand_in=a.stand_in, zone=ft.ZONE, grid=GRID, rule='B', variants={},
+               excluded_within_site=list(EXCLUDED))
     PT = []
     for v in VARS:
         r = dict(lomo={k: L[v][k] for k in ('chosen', 'M1', 'zone_M1', 'above_M1', 'strict_M1')},
@@ -328,7 +343,7 @@ def main():
     rows = []
     for e, d in Q.groupby('entity', sort=False):
         rr = dict(band=e, site=d.site.iloc[0], rgi=d.rgi.iloc[0], elev=d.band.iloc[0], n=len(d), obs=d.obs.mean(),
-                  F_C=F0['C'].get(e, 1.0))
+                  F_C=F0['C'][e], F_C_own=F_own[e], excluded_within_site=e in EXCLUDED)
         for v in VARS:
             err = d[v] - d.obs
             rr[f'rmse_{v}'], rr[f'bias_{v}'] = float(np.sqrt((err ** 2).mean())), float(err.mean())

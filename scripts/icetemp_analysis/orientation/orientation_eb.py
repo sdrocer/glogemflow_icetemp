@@ -63,6 +63,8 @@ def read_station(path):
     out['year'], out['month'] = out.index.year, out.index.month
     for c in ('G', 'SD', 'R'):
         out[c] = out[c].fillna(out.groupby('doy')[c].transform('mean'))
+    if out['T'].isna().any():
+        raise ValueError(f'{path}: {int(out["T"].isna().sum())} days without air temperature after filling')
     out['T_anom'] = out['T'] - out.groupby(['year', 'month'])['T'].transform('mean')
     return out
 

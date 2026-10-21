@@ -4,7 +4,7 @@
 ; Run from the GloGEM tree under test:
 ;   GLOGEM_CONFIG=<a training config> HARNESS_DIR=<folder with orient_99999.dat> HARNESS_OUT=<file> \
 ;     idl -e ".r <path>/orient_harness.pro"
-; Output: line 1 'tref' then nb x 12 reference temperatures; 'F' then nb x 7 factors; 'months' then per month
+; Output: line 1 'tref' then nb x 12 reference temperatures; 'F' then nb x nd factors; 'months' then per month
 ; and band: month, band, air temperature of the thermal melt, melt without and with the factor, and whether the
 ; mass-balance state changed.
 
@@ -33,12 +33,12 @@ firnice_orient = 'table' & firnice_orient_dir = getenv('HARNESS_DIR')
 printf, 2, 'tref'
 for j = 0, nb-1 do printf, 2, forient_tref[j, *], format='(12(f22.15))'
 printf, 2, 'F'
-for j = 0, nb-1 do printf, 2, forient[j, *], format='(7(f22.15))'
+for j = 0, nb-1 do printf, 2, forient[j, *], format='(' + strtrim(n_elements(forient_dt), 2) + '(f22.15))'
 printf, 2, 'months'
 t_offset = 1.3d & pc = 0.08d
 for m = 1, 12 do begin
-  ; air temperature of each band from 4.5 K below to 4.5 K above its 1981-2020 mean of this month
-  tg = forient_tref[*, m - 1] + (-4.5d + 9d * dindgen(nb) / (nb - 1)) + t_offset
+  ; air temperature of each band from 5.5 K below to 7.5 K above its 1981-2020 mean of this month
+  tg = forient_tref[*, m - 1] + (-5.5d + 13d * dindgen(nb) / (nb - 1)) + t_offset
   psg = dblarr(nb) & mel = psg & snowmel = mel & icemel = mel
   @procedures/processing/accumulation.pro
   @procedures/processing/meltmodel.pro

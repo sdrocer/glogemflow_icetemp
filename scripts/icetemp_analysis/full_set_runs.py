@@ -31,7 +31,8 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
   --no-deepen: borehole bands run to the band's ice thickness (the bed the product shows); in the tag
   --exclude-ids: glaciers left out of the run (e.g. the sealed 01161)
   --orient-dir DIR --orient-tag X: the thermal melt times the orientation factor of the tables in DIR
-            (GloGEM firnice_orient = 'table'; tag _oX)
+            (GloGEM firnice_orient = 'table'; tag _oX); the tables are copied into the run folder (orient_tables/,
+            with orient_tables.sha256) and the run reads the copy
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
   --data-rules old: the borehole data rules before 2026-10-13, to compare with earlier runs.
@@ -47,9 +48,12 @@ ICETEMP_GLOGEM_DIR=<tree> runs another GloGEM tree (a worktree under test); prov
 Run from the repo root: PYTHONPATH=src python scripts/icetemp_analysis/full_set_runs.py 0 --variant F
 """
 import argparse
+import hashlib
+import shutil
 import subprocess
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from pathlib import Path
 
 import dill
 import numpy as np
@@ -92,6 +96,26 @@ VARIANTS['FRHLOS'] = dict(VARIANTS['FRHLO'], snow_refreeze='y')
 VARIANTS['FRSHLO'] = dict(VARIANTS['FRHLO'], thermal_lapse='stations')
 VARIANTS['FRSHLOS'] = dict(VARIANTS['FRSHLO'], snow_refreeze='y')
 VARIANTS['FRHLS'] = dict(VARIANTS['FRHL'], snow_refreeze='y')   # stage 2: the ledger on the model's own firn, with S
+
+
+def snapshot_tables(src, run_dir):
+    """Copy the orientation tables into the run folder (or check an earlier copy) and write their sha256."""
+    files = sorted(src.glob('orient_*.dat'))
+    if not files:
+        raise SystemExit(f'no orientation tables in {src}')
+    dst = run_dir / 'orient_tables'
+    dst.mkdir(parents=True, exist_ok=True)
+    lines = []
+    for f in files:
+        t = dst / f.name
+        if t.exists() and t.read_bytes() != f.read_bytes():
+            raise SystemExit(f'{t} differs from {f}; use another run tag')
+        shutil.copyfile(f, t)
+        lines.append(f'{hashlib.sha256(f.read_bytes()).hexdigest()}  {f.name}\n')
+    if sorted(p.name for p in dst.glob('orient_*.dat')) != [f.name for f in files]:
+        raise SystemExit(f'{dst} holds other tables than {src}')
+    (run_dir / 'orient_tables.sha256').write_text(f'# copied from {src}\n' + ''.join(lines))
+    return dst
 
 
 class SubsetPipeline(CalibrationPipeline):
@@ -155,6 +179,8 @@ def main():
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )
+    if args.orient_dir:
+        cfg = replace(cfg, orient_dir=str(snapshot_tables(Path(args.orient_dir), cfg.output_path)))
     old_cfg = cfg.output_path / 'config.yaml'
     if old_cfg.exists() and old_cfg.read_text() != yaml.safe_dump(asdict(cfg), sort_keys=False):
         raise SystemExit(f'{cfg.output_path} exists with other settings; use another run tag')

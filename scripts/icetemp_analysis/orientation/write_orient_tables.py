@@ -1,5 +1,5 @@
 """Orientation factor tables for GloGEM (firnice_orient = 'table'): Stage 1 of the orientation test (Step 5 plan,
-revised 21 Oct 2026, step 1b), F at the borehole bands for air temperature anomalies dT = -3..+3 K, three strengths:
+revised 21 Oct 2026, step 1b), F at the borehole bands for air temperature anomalies dT = -4..+6 K, three strengths:
 
   C  central:  c 10 W m-2 K-1, Jungfraujoch's daily direct beam spread over the day
   W  weaker:   c 20 (more of the melt energy follows the air temperature)
@@ -8,15 +8,20 @@ revised 21 Oct 2026, step 1b), F at the borehole bands for air temperature anoma
 
 Albedo 0.80, T_tip 1 C (orientation_eb.py). psi0 per band and strength: June-September melt of flat open ground equals
 the band's degree-day thermal melt (FRHS, 1981-2020, at least 30 mm); it is kept when the hourly air temperature is
-shifted by dT. F = June-September melt of the hole's plane over that of flat open ground, mean over the holes scored
-on one model band of the outline (the band GloGEM writes their profile at, band_model of band_forcing.csv; also where
-two sites share it, or a hole lies above or below the glacier's bands). Bands without holes keep F = 1 in GloGEM.
+shifted by dT. F of a borehole band (entity) = June-September melt of the hole's plane over that of flat open ground,
+mean over its holes. A model band (the band GloGEM writes the profile at, band_model of band_forcing.csv) takes the
+mean of its entities weighted by their scored points (below 15 m, pooled per hole and year); where two entities share
+one band, entities whose own F differs from the band's by more than 0.1 (central strength) are listed in
+applied.csv and left out of the within-site measures (orient_rule.py; review of 21 Oct). Every glacier of the run
+gets a file (no data line: F = 1); bands without holes keep F = 1.
 
-Inputs: the orientation investigation (week3/orientation_investigation/): evidence/band_forcing.csv,
+Inputs: week3/orient_glaciers.txt (the glacier ids of the run: CentralEurope_fair without 01161) and the orientation
+investigation (week3/orientation_investigation/): evidence/band_forcing.csv, evidence/points.csv,
 evidence/hole_sun.csv, data/calibration_holes_components.npz (horizons), MeteoSwiss Jungfraujoch daily data.
 Check: F reproduces the investigation's designer/revise_F.csv, revise_F_dT.csv and revise_sens.csv.
-Writes OUT/<C|W|S|one>/orient_<id>.dat, OUT/factors.csv (per hole) and OUT/tables.json; tables that exist with
-other numbers are not overwritten.
+Writes OUT/<C|W|S|one>/orient_<id>.dat, OUT/factors.csv (per hole), OUT/applied.csv (per entity: its own F, the F
+of its model band, excluded from the within-site measures) and OUT/tables.json; files that exist with other numbers
+are not overwritten.
 
 Usage: PYTHONPATH=src python scripts/icetemp_analysis/orientation/write_orient_tables.py [OUT]
 """
@@ -36,8 +41,11 @@ W3 = Path('/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week3')
 ORI = W3 / 'orientation_investigation'
 INPUTS = dict(band_forcing=ORI / 'evidence/band_forcing.csv', holes=ORI / 'evidence/hole_sun.csv',
               horizons=ORI / 'data/calibration_holes_components.npz',
-              jungfraujoch=ORI / 'downloads/meteoswiss_daily/ogd-smn_jun_d_historical.csv')
-DTS = (-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0)
+              jungfraujoch=ORI / 'downloads/meteoswiss_daily/ogd-smn_jun_d_historical.csv',
+              points=ORI / 'evidence/points.csv',
+              glaciers=W3 / 'orient_glaciers.txt')
+DTS = (-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
+SPREAD = 0.1
 STRENGTHS = {'C': dict(c=10.0, spells=False), 'W': dict(c=20.0, spells=False), 'S': dict(c=10.0, spells=True)}
 ALB, TTIP, DMIN = 0.80, 1.0, 30.0
 
@@ -100,9 +108,29 @@ def check(R):
 def table_text(rgi, B, name):
     head = (f'# orientation factor F of the thermal melt, glacier {rgi}, strength {name} '
             f'(write_orient_tables.py, Step 5 plan of 21 Oct 2026, step 1b)\n'
-            f'# band elevation [m]  F at dT = ' + ', '.join(f'{d:+.0f}' for d in DTS) + ' K\n')
+            f'# band elevation [m], then F at each dT [K] of the dT line\n'
+            'dT ' + ' '.join(f'{d:.1f}' for d in DTS) + '\n')
     lines = [f'{band:d} ' + ' '.join(f'{x:.6f}' for x in vals) + '\n' for band, vals in B]
     return head + ''.join(lines)
+
+
+def applied(R):
+    """F of each model band: its entities' F (hole mean), weighted by their scored points."""
+    n_pts = pd.read_csv(INPUTS['points']).groupby('entity').size()
+    E = R.groupby(['rgi', 'band', 'entity', 'strength', 'dT'], as_index=False).F.mean()
+    E['n'] = E.entity.map(n_pts)
+    if E.n.isna().any():
+        raise SystemExit(f'entities without scored points: {sorted(E[E.n.isna()].entity.unique())}')
+    E['Fn'] = E.F * E.n
+    g = E.groupby(['rgi', 'band', 'strength', 'dT'])
+    band_F = g.Fn.sum() / g.n.sum()
+    E['F_band'] = [band_F[(r.rgi, r.band, r.strength, r.dT)] for r in E.itertuples()]
+    A = E[E.dT == 0.0].pivot_table(index=['entity', 'rgi', 'band', 'n'], columns='strength',
+                                     values=['F', 'F_band']).reset_index()
+    A.columns = [a if not b else f'{a}_{b}' for a, b in A.columns]
+    A['shared'] = A.groupby(['rgi', 'band']).entity.transform('size') > 1
+    A['exclude_within_site'] = (A.F_C - A.F_band_C).abs() > SPREAD
+    return band_F, A
 
 
 def write(path, text):
@@ -118,22 +146,30 @@ def main():
     print('largest difference to the investigation:', diffs, flush=True)
     if max(diffs.values()) > 1e-6:
         raise SystemExit('the factors do not reproduce the investigation')
-    band_F = R.groupby(['rgi', 'band', 'strength', 'dT']).F.mean()
+    band_F, A = applied(R)
+    shared = A[A.shared].sort_values(['rgi', 'band'])
+    print('model bands with two entities (F own / F applied, central):')
+    print(shared[['entity', 'rgi', 'band', 'n', 'F_C', 'F_band_C', 'exclude_within_site']].round(3).to_string(index=False))
+    glaciers = sorted(set(INPUTS['glaciers'].read_text().split()))
+    if not set(R.rgi) <= set(glaciers):
+        raise SystemExit(f'glaciers with holes but not in the run: {sorted(set(R.rgi) - set(glaciers))}')
     for name in list(STRENGTHS) + ['one']:
         (out / name).mkdir(parents=True, exist_ok=True)
-        for rgi in sorted(R.rgi.unique()):
+        for rgi in glaciers:
             bands = sorted(R[R.rgi == rgi].band.unique())
             src = name if name != 'one' else 'C'
             B = [(b, [1.0] * len(DTS) if name == 'one' else [band_F[(rgi, b, src, d)] for d in DTS]) for b in bands]
             write(out / name / f'orient_{rgi}.dat', table_text(rgi, B, name))
     R.to_csv(out / 'factors.csv', index=False, float_format='%.6f')
-    at0 = R[R.dT == 0.0].groupby(['rgi', 'band', 'strength']).F.mean().unstack()
+    A.to_csv(out / 'applied.csv', index=False, float_format='%.6f')
+    at0 = band_F.xs(0.0, level='dT').unstack()
     meta = dict(constants=dict(albedo=ALB, T_tip=TTIP, min_flat_melt_mm=DMIN, dT=DTS,
                                strengths={k: dict(v) for k, v in STRENGTHS.items()}, weather='Jungfraujoch 1981-2020',
                                window='June-September', reference='flat open ground'),
                 inputs={k: dict(path=str(p), sha256=hashlib.sha256(p.read_bytes()).hexdigest())
                         for k, p in INPUTS.items()},
-                n_bands=int(len(at0)), n_holes=int(R.hole.nunique()), n_glaciers=int(R.rgi.nunique()),
+                n_bands=int(len(at0)), n_holes=int(R.hole.nunique()), n_glaciers_with_holes=int(R.rgi.nunique()),
+                n_glaciers=len(glaciers), excluded_within_site=A[A.exclude_within_site].entity.tolist(),
                 check_against_investigation=diffs,
                 F_at_dT0={k: dict(min=float(at0[k].min()), median=float(at0[k].median()), max=float(at0[k].max()))
                           for k in STRENGTHS})
