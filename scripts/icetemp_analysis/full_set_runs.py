@@ -36,6 +36,7 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
   --burial-dir DIR --burial-tag X: perfect-burial diagnostic, the measured accumulation of DIR/burial_<id>.dat
             replaces the thermal model's b_ref there (GloGEM firnice_burial_dir; tag _bX); copied like the tables
   --spinup-dT K: the thermal spin-up's air temperature shifted by K (GloGEM firnice_spinup_dT; tag _sdK)
+  --write-melth: GloGEM also writes every band's thermal melt and air temperature per month (tag _mth)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
   --data-rules old: the borehole data rules before 2026-10-13, to compare with earlier runs.
@@ -152,6 +153,7 @@ def main():
     ap.add_argument('--burial-dir', default='', help='folder of burial_<id>.dat (perfect-burial diagnostic)')
     ap.add_argument('--burial-tag', default='', help='name of the burial set in the run tag (_bX)')
     ap.add_argument('--spinup-dT', type=float, default=0.0, help='K added to the thermal spin-up air temperature')
+    ap.add_argument('--write-melth', action='store_true', help='write every band thermal melt and air temperature')
     ap.add_argument('--calibration-dir', default=None,
                     help='mass-balance calibration to use instead of the configured one (all its .dat files)')
     ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
@@ -171,7 +173,7 @@ def main():
               (f'_age{args.firn_age}' if args.firn_age != 20 else '') + \
               ('_mbfull' if args.mb_refreezing == 'full' else '') + ('_mbhist' if args.mb_hist_file else '') + \
               (f'_o{args.orient_tag}' if args.orient_tag else '') + (f'_b{args.burial_tag}' if args.burial_tag else '') + \
-              (f'_sd{args.spinup_dT:+.1f}' if args.spinup_dT else '')
+              (f'_sd{args.spinup_dT:+.1f}' if args.spinup_dT else '') + ('_mth' if args.write_melth else '')
 
     base = CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
     cfg = CalibrationConfig(
@@ -188,6 +190,7 @@ def main():
         **(dict(orient='table', orient_dir=args.orient_dir) if args.orient_dir else {}),
         **(dict(burial_dir=args.burial_dir) if args.burial_dir else {}),
         **(dict(spinup_dT=args.spinup_dT) if args.spinup_dT else {}),
+        **(dict(write_melth='y') if args.write_melth else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )
