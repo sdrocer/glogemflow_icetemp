@@ -34,6 +34,8 @@ moves at least 0.2 C closer or farther (thermistor precision), else it is a tie;
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/orientation/orient_rule.py [OUT_DIR]
            [--stand-in]    (--stand-in: every variant read from the stage-2 FRHS runs, a test of the scorer only)
+           [--frhs-tag T --tag T2 --suffix S]   (the re-check after the burial test: FRHS from tag T, the
+           orientation runs from tag T2, both with the run-name suffix S, e.g. b1 o2 _bM; same rule)
 """
 import argparse
 import json
@@ -77,11 +79,15 @@ FLAGGED_PAIRS = {('Grenzgletscher@4465~01225', 'Grenzgletscher@4465~01230'),
 WEBB = np.array([-np.sqrt(1.5), -1.0, -np.sqrt(0.5), np.sqrt(0.5), 1.0, np.sqrt(1.5)])
 
 
+NAMES = dict(frhs_tag=TAG, tag=TAG, suffix='')
+
+
 def run_of(v, fr, stand_in=False):
     if stand_in:
         return ft.run_name('s2', 'FRHS', fr)
-    base = ft.run_name(TAG, 'FRHS', fr)
-    return base if v == 'FRHS' else base.replace('_w0', f'_o{v}_w0')
+    if v == 'FRHS':
+        return ft.run_name(NAMES['frhs_tag'], 'FRHS', fr).replace('_w0', f"{NAMES['suffix']}_w0")
+    return ft.run_name(NAMES['tag'], 'FRHS', fr).replace('_w0', f"_o{v}{NAMES['suffix']}_w0")
 
 
 def grid_of(v, stand_in=False):
@@ -254,7 +260,11 @@ def main():
     ap.add_argument('out_dir', nargs='?', default=str(W3 / 'orient_stage1'))
     ap.add_argument('--stand-in', action='store_true')
     ap.add_argument('--boot', type=int, default=9999)
+    ap.add_argument('--frhs-tag', default=TAG)
+    ap.add_argument('--tag', default=TAG)
+    ap.add_argument('--suffix', default='')
     a = ap.parse_args()
+    NAMES.update(frhs_tag=a.frhs_tag, tag=a.tag, suffix=a.suffix)
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -302,7 +312,7 @@ def main():
         print(v, {k: L[v][k] for k in ('M1', 'zone_M1', 'above_M1', 'strict_M1')},
               {k: Wm[v][k] for k in ('f_common', 'slope', 'slope_wo', 'within_rmse')}, flush=True)
 
-    res = dict(counts=counts, stand_in=a.stand_in, zone=ft.ZONE, grid=GRID, rule='B', variants={},
+    res = dict(counts=counts, stand_in=a.stand_in, zone=ft.ZONE, grid=GRID, rule='B', variants={}, runs=dict(NAMES),
                excluded_within_site=list(EXCLUDED))
     PT = []
     for v in VARS:

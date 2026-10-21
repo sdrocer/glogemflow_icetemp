@@ -33,6 +33,8 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
   --orient-dir DIR --orient-tag X: the thermal melt times the orientation factor of the tables in DIR
             (GloGEM firnice_orient = 'table'; tag _oX); the tables are copied into the run folder (orient_tables/,
             with orient_tables.sha256) and the run reads the copy
+  --burial-dir DIR --burial-tag X: perfect-burial diagnostic, the measured accumulation of DIR/burial_<id>.dat
+            replaces the thermal model's b_ref there (GloGEM firnice_burial_dir; tag _bX); copied like the tables
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
   --data-rules old: the borehole data rules before 2026-10-13, to compare with earlier runs.
@@ -98,12 +100,13 @@ VARIANTS['FRSHLOS'] = dict(VARIANTS['FRSHLO'], snow_refreeze='y')
 VARIANTS['FRHLS'] = dict(VARIANTS['FRHL'], snow_refreeze='y')   # stage 2: the ledger on the model's own firn, with S
 
 
-def snapshot_tables(src, run_dir):
-    """Copy the orientation tables into the run folder (or check an earlier copy) and write their sha256."""
-    files = sorted(src.glob('orient_*.dat'))
+def snapshot_tables(src, run_dir, kind='orient'):
+    """Copy the orientation (or burial) tables into the run folder (or check an earlier copy) and write their
+    sha256."""
+    files = sorted(src.glob(f'{kind}_*.dat'))
     if not files:
-        raise SystemExit(f'no orientation tables in {src}')
-    dst = run_dir / 'orient_tables'
+        raise SystemExit(f'no {kind} tables in {src}')
+    dst = run_dir / f'{kind}_tables'
     dst.mkdir(parents=True, exist_ok=True)
     lines = []
     for f in files:
@@ -112,9 +115,9 @@ def snapshot_tables(src, run_dir):
             raise SystemExit(f'{t} differs from {f}; use another run tag')
         shutil.copyfile(f, t)
         lines.append(f'{hashlib.sha256(f.read_bytes()).hexdigest()}  {f.name}\n')
-    if sorted(p.name for p in dst.glob('orient_*.dat')) != [f.name for f in files]:
+    if sorted(p.name for p in dst.glob(f'{kind}_*.dat')) != [f.name for f in files]:
         raise SystemExit(f'{dst} holds other tables than {src}')
-    (run_dir / 'orient_tables.sha256').write_text(f'# copied from {src}\n' + ''.join(lines))
+    (run_dir / f'{kind}_tables.sha256').write_text(f'# copied from {src}\n' + ''.join(lines))
     return dst
 
 
@@ -145,6 +148,8 @@ def main():
     ap.add_argument('--exclude-ids', default='', help='comma-separated RGI7 ids left out')
     ap.add_argument('--orient-dir', default='', help="folder of orient_<id>.dat (firnice_orient = 'table')")
     ap.add_argument('--orient-tag', default='', help='name of the orientation tables in the run tag (_oX)')
+    ap.add_argument('--burial-dir', default='', help='folder of burial_<id>.dat (perfect-burial diagnostic)')
+    ap.add_argument('--burial-tag', default='', help='name of the burial set in the run tag (_bX)')
     ap.add_argument('--calibration-dir', default=None,
                     help='mass-balance calibration to use instead of the configured one (all its .dat files)')
     ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
@@ -152,6 +157,8 @@ def main():
     args = ap.parse_args()
     if bool(args.orient_dir) != bool(args.orient_tag):
         raise SystemExit('--orient-dir and --orient-tag go together')
+    if bool(args.burial_dir) != bool(args.burial_tag):
+        raise SystemExit('--burial-dir and --burial-tag go together')
     theta = THETAS[args.worker].copy()
     custom = any(v is not None for v in (args.fref, args.fins, args.fadv))
     for k, v in enumerate((args.fref, args.fins, args.fadv)):
@@ -161,7 +168,7 @@ def main():
                if custom else args.run_tag) + ('_nodeep' if args.no_deepen else '') + \
               (f'_age{args.firn_age}' if args.firn_age != 20 else '') + \
               ('_mbfull' if args.mb_refreezing == 'full' else '') + ('_mbhist' if args.mb_hist_file else '') + \
-              (f'_o{args.orient_tag}' if args.orient_tag else '')
+              (f'_o{args.orient_tag}' if args.orient_tag else '') + (f'_b{args.burial_tag}' if args.burial_tag else '')
 
     base = CalibrationConfig.from_yaml('config/bayescal_centraleurope_25glaciers.yaml')
     cfg = CalibrationConfig(
@@ -176,11 +183,14 @@ def main():
         **(dict(mb_refreezing='full') if args.mb_refreezing == 'full' else {}),
         **(dict(mb_hist_file=args.mb_hist_file) if args.mb_hist_file else {}),
         **(dict(orient='table', orient_dir=args.orient_dir) if args.orient_dir else {}),
+        **(dict(burial_dir=args.burial_dir) if args.burial_dir else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )
     if args.orient_dir:
         cfg = replace(cfg, orient_dir=str(snapshot_tables(Path(args.orient_dir), cfg.output_path)))
+    if args.burial_dir:
+        cfg = replace(cfg, burial_dir=str(snapshot_tables(Path(args.burial_dir), cfg.output_path, 'burial')))
     old_cfg = cfg.output_path / 'config.yaml'
     if old_cfg.exists() and old_cfg.read_text() != yaml.safe_dump(asdict(cfg), sort_keys=False):
         raise SystemExit(f'{cfg.output_path} exists with other settings; use another run tag')
