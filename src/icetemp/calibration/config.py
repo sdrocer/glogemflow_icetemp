@@ -91,6 +91,7 @@ class CalibrationConfig:
     orient: str = 'n'             # 'table' = the thermal melt times the orientation factor of orient_dir
     orient_dir: str = ''          # folder of orient_<id>.dat: band elevation, F at each dT of its dT line
     burial_dir: str = ''          # perfect-burial diagnostic: folder of burial_<id>.dat (band, accumulation m w.e./yr)
+    spinup_dT: float = 0.0        # K added to the thermal spin-up's air temperature (diagnostic)
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)

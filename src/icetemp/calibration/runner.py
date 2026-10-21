@@ -240,6 +240,7 @@ mb_hist_file            = '{mb_hist_file}'   ; diagnostic: precipitation factor,
 firnice_orient          = '{orient}'   ; 'table' = the thermal melt times the orientation factor
 firnice_orient_dir      = '{orient_dir}'   ; folder of orient_<id>.dat
 firnice_burial_dir      = '{burial_dir}'   ; perfect-burial diagnostic: folder of burial_<id>.dat ('' = off)
+firnice_spinup_dT       = {spinup_dT}d   ; K added to the thermal spin-up's air temperature (diagnostic)
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -394,6 +395,7 @@ class GloGEMRunner:
     orient: str = 'n'             # 'table' = the thermal melt times the orientation factor of orient_dir
     orient_dir: str = ''          # folder of orient_<id>.dat: band elevation, F at each dT of its dT line
     burial_dir: str = ''          # perfect-burial diagnostic: folder of burial_<id>.dat (band, accumulation m w.e./yr)
+    spinup_dT: float = 0.0        # K added to the thermal spin-up's air temperature (diagnostic)
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -639,6 +641,7 @@ class GloGEMRunner:
             orient=self.orient,
             orient_dir=self.orient_dir,
             burial_dir=self.burial_dir,
+            spinup_dT=repr(float(self.spinup_dT)),
             rf_param='n' if self.mb_refreezing == 'full' else 'y',
             rf_full='y' if self.mb_refreezing == 'full' else 'n',
         )
