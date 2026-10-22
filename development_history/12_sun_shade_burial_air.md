@@ -184,6 +184,11 @@ more; gentle parts stay near 1. On the Gorner complex 60 % of the band area face
 
 ### What the build gives
 
+> *Provisional (22 Oct, morning). These are the numbers of the first build (tag `o3`). A max-effort review found
+> that at the high sites many holes got another factor than intended: pixels joined bands by the EU-DEM height,
+> 8–28 m below GloGEM's; holes took the part of a single 25 m pixel instead of their week-1 plane; empty parts took
+> the band mean. The corrected build (tag `o4`, icetemp `23effe4`) is running and replaces this section.*
+
 Scored like Stage 1 (out of sample, below 15 m; each point from the run of its hole's part). This is reported, not a
 gate: orientation was adopted on 21 Oct.
 
