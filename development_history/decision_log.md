@@ -28,6 +28,8 @@ Kept since 13 Oct 2026 (the fair-test pre-registration); earlier changes are des
 | 21 Oct | **Orientation kept in the model**, as three parts per band (gentle, north, south), three runs per glacier | Janosch | yes (rule B) | **no**: rule B failed twice; kept because it is physical and the map must show north against south faces. The paper claims the overall gain and only a weak within-site confirmation | ch. 12 |
 | 21 Oct | The ERA5 air (about 2 °C too cold at all high stations, mostly in winter) and the missing snow-surface cooling stay as known limitations; no correction, no sensitivity run; the coupled fix is future work | Janosch | no | — | ch. 12 |
 | 21 Oct | Tête Rousse: the drilled-thickness run dropped (the columns already reach the drilled depth); the colder spin-up tested instead, no effect, reported | Janosch | no rule; diagnostic | — | ch. 12 |
+| 22 Oct | **The air reopened:** after the product search (ERA5's own free air +0.6 °C in winter at the high stations, today's air −5.2 °C), the free air is tested in the thermal model, with and without Gilbert's snow-surface cooling; mass balance unchanged. Replaces the 21 Oct "no correction, no sensitivity run" | Janosch | — | — | ch. 13 |
+| 22 Oct | Free-air rule: FAG (free air + surface 0.95 × air − 1.4) is adopted if, against o4, the error on left-out massifs is not worse by more than 0.2 °C overall, above 3800 m and in the zone, regime classes lose at most one site net, and frozen beds (found minus false) drop by at most one; FA and FAS (−3.4, the measured skin) reported. −1.4 chosen because Gilbert's own firn model needed +2 K on the skin | Janosch | yes (icetemp `c66b30f`, before any `fa1` run) | — | ch. 13 |
 
 ## Not yet decided (Step 5)
 
