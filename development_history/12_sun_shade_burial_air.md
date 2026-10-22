@@ -19,9 +19,10 @@
 > The build with three parts per band, corrected after a max-effort review, lowers the error on left-out massifs to
 > 1.86 °C (above 3800 m from 3.04 to 1.87 °C) and removes the sun-and-shade pattern inside sites; all seven massifs
 > choose f_ref 0.85. The zone, the frozen beds and the massif split stay unchanged. West faces get about 12 % more
-> meltwater heat than east faces, so five parts (adding east and west) are being tested.
+> meltwater heat than east faces, but five parts (adding east and west) are worse at the boreholes (2.13 °C), so
+> three parts stay.
 >
-> *Status (22 Oct, afternoon): the corrected three-part build is scored (below); the five-part runs are running. Plans: `plans/2026-10-20_step5_plan.md`
+> *Status (22 Oct, afternoon): the corrected three-part build and the five-part test are scored (below). Plans: `plans/2026-10-20_step5_plan.md`
 > (step 1b, revised 21 Oct, and the new step 1c). Decisions: `decision_log.md`.*
 
 ## What we believed
@@ -246,13 +247,34 @@ A hole facing 260° counted as south, one facing 280° as north. A check without
   0.19 → 0.14, south 0.12 → 0.07, west 0.12 → 0.10; north worse, 0.12 → 0.16 (the narrower north sector holds the
   steepest faces). Weighted by readings the gain vanishes (0.073 → 0.075): most readings lie on gentle slopes.
 
-*Running (22 Oct, from 13:31): the 40 runs with five parts (tag `o5`), merged and scored like the three-part build.*
+**The 40 runs with five parts** (tag `o5`; the eight north runs first stopped on F = 0 for fully shaded north
+parts, now written as 0.000001), merged and scored like the three-part build:
+
+| measure | three parts (corrected) | five parts |
+|---|---|---|
+| error on left-out massifs, all bands | **1.86 °C** | 2.13 |
+| above 3800 m | **1.87** | 2.33 |
+| zone 3000–3800 m | 2.52 | 2.51 |
+| without Taconnaz and Lys | **1.26** | 1.66 (worse than FRHS, 1.36) |
+| shade error inside sites | +0.16 | +0.13 |
+| scatter of a site's bands | **1.72** | 1.79 |
+| f_ref chosen in the 7 left-out-massif fits | 0.85 in all | 1.0, the upper limit, in five |
+| cold bands right (zone) | 63 of 81 (5 of 18) | 62 (4) |
+| bands better / worse by more than 0.2 °C than with three parts | — | 13 / 26 |
+
+- **Five parts are worse at the boreholes**, at Bossons (2.01 → 2.52 °C), Fieschergletscher (1.60 → 2.59),
+  Morteratsch (0.62 → 2.03), Lys and Taconnaz; only Jungfraufirn improves (0.84 → 0.43, 5 points).
+- **Why:** the narrower 90° sectors concentrate the steepest, most shaded faces in the north part (F down to 0), while
+  the north-facing drill sites are gentler; their north holes get far too little heat, and f_ref rises to its limit to
+  make up for it, which overheats the rest. The thinner sectors also leave more parts of a band without pixels (4460
+  of 12,895 band-parts filled from a neighbouring band, against fewer with three parts).
+- **So the east–west difference is real** (west faces 12 % more meltwater heat), **but a finer compass split does not
+  help a band model at the boreholes.** Three parts stay (pending Janosch's decision).
 
 ## What is still open
 
 - **Step 5 on the three parts:** every design run becomes three runs (a batch of 40 about 4 h instead of 1.3 h); the
   pipeline merges them per hole before the emulator (`merge_part_outputs`).
-- **Three or five parts:** decided on the five-part runs (above).
 - **The region-wide factors** for the map (all 4079 glaciers; about 3–4 h of computing plus one GloGEM run).
 - **The meltwater switch near 0 °C** (Taconnaz, Tête Rousse) and the massif split: after v1.0.
 
