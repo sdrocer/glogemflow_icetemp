@@ -11,9 +11,12 @@ Rule: FAG is adopted if all three hold (tolerances at thermistor precision; site
 bed can veto):
   1. the error on left-out massifs (M1) is not worse than BASE by more than 0.2 C;
   2. the same above 3800 m and in the zone 3005-3795 m;
-  3. regime classes (cold / polythermal / temperate): net site change against BASE >= -1
-     (firn_batch_rule.site_changes); measured frozen beds: found minus temperate-called-frozen not lower than
-     BASE's by more than 1.
+  3. regime classes (cold / polythermal / temperate): net site change against BASE >= -1, sites from the site table
+     (data.site_keys), a site gaining when more than half its bands gain robustly and none loses (and the mirror for
+     a loss), as firn_batch_rule.site_changes; measured frozen beds: found minus temperate-called-frozen not lower
+     than BASE's by more than 1.
+     Amended 22 Oct after the review, before any fa1 run: sites from the site table instead of the name before '@'
+     (which made Grenzgletscher one group of 33 bands and Taconnaz two sites).
 Reported, not gated: FA and FAS; the f_ref chosen in the folds (and how often it is the upper end, 1.0); the best
 f_ref per massif (rule 1a); strict M1 (Taconnaz and Lys out); every band at depth; the one band below its grid cell
 (Grenzgletscher@2015, the free air too warm in winter cold pools).
@@ -52,6 +55,23 @@ TONGUE = 'Grenzgletscher@2015'
 
 def base_name(v, fr, cfg):
     return ft.run_name(cfg['base_tag'] if v == 'BASE' else cfg['tag'], 'FRHS', fr)[:-3] + SUFFIX[v]
+
+
+def site_changes(obs_cls, a_cls, b_cls, names, sites):
+    """firn_batch_rule.site_changes with the sites of the site table: (net site gain, table per site)."""
+    per = {}
+    for n in names:
+        ok_a = [a_cls[n][t] == obs_cls[n][t] for t in ft.TOLS]
+        ok_b = [b_cls[n][t] == obs_cls[n][t] for t in ft.TOLS]
+        d = per.setdefault(sites[n], dict(bands=0, gain=0, loss=0))
+        d['bands'] += 1
+        d['gain'] += int(all(ok_b) and not any(ok_a))
+        d['loss'] += int(all(ok_a) and not any(ok_b))
+    for d in per.values():
+        d['site'] = 'gain' if d['gain'] > d['bands'] / 2 and d['loss'] == 0 else \
+            'loss' if d['loss'] > d['bands'] / 2 and d['gain'] == 0 else 'none'
+    net = sum(d['site'] == 'gain' for d in per.values()) - sum(d['site'] == 'loss' for d in per.values())
+    return net, per
 
 
 def frozen_beds(E, v, chosen, part_of_hole, cfg):
@@ -109,8 +129,12 @@ def main():
             counts={c: f'{x} of {n}' for c, (x, n) in ft.class_counts(obs_cls, L[v]['cls'], names).items()},
             frozen_beds=fb)
         if v != 'BASE':
-            res['variants'][v]['net_sites'] = fbr.site_changes(obs_cls, L['BASE']['cls'], L[v]['cls'], names)[0]
-            res['variants'][v]['net_zone_sites'] = fbr.site_changes(obs_cls, L['BASE']['cls'], L[v]['cls'], znames)[0]
+            net, per = site_changes(obs_cls, L['BASE']['cls'], L[v]['cls'], names, sites)
+            res['variants'][v].update(net_sites=net, sites=per,
+                                      net_zone_sites=site_changes(obs_cls, L['BASE']['cls'], L[v]['cls'], znames,
+                                                                  sites)[0],
+                                      net_sites_by_name=fbr.site_changes(obs_cls, L['BASE']['cls'], L[v]['cls'],
+                                                                         names)[0])
 
     Q = P[['entity', 'site', 'rgi', 'massif', 'band', 'depth', 'obs']].copy()
     for v in variants:

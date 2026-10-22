@@ -59,7 +59,8 @@ def check_surface(run, dt):
                       and len(ln.split()) == len(cols)], float)
         js, je = cols.index('T_sfc'), cols.index('elev')
         bands, d = read_band_table(f.parent / f'firnice_tairth_{gid}.dat')
-        last = d[-1, 2:]
+        # rows are hydrological year x calendar month: the run's last month is September of the last label
+        last = d[(d[:, 0] == d[:, 0].max()) & (d[:, 1] == BAL_MONTH - 1)][0, 2:]
         surf = v[:, js]
         elev = v[:, je]
         k = np.array([int(np.argmin(np.abs(bands - e))) for e in elev])
