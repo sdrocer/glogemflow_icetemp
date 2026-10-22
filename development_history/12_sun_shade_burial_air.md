@@ -16,11 +16,12 @@
 > station, equally at both massifs; it partly cancels a second error, the missing cooling of the snow surface. Both
 > stay known limitations of v1.0.
 >
-> The build with three parts per band lowers the error on left-out massifs to 1.96 °C and nearly removes the
-> sun-and-shade pattern inside sites, but its gain sits mostly at Lys, Taconnaz and Bossons, it leaves the zone and the
-> massif split unchanged, and it pushes f_ref to the top of its range.
+> The build with three parts per band, corrected after a max-effort review, lowers the error on left-out massifs to
+> 1.86 °C (above 3800 m from 3.04 to 1.87 °C) and removes the sun-and-shade pattern inside sites; all seven massifs
+> choose f_ref 0.85. The zone, the frozen beds and the massif split stay unchanged. West faces get about 12 % more
+> meltwater heat than east faces, so five parts (adding east and west) are being tested.
 >
-> *Status (22 Oct): the build of the three parts is run and scored (below). Plans: `plans/2026-10-20_step5_plan.md`
+> *Status (22 Oct, afternoon): the corrected three-part build is scored (below); the five-part runs are running. Plans: `plans/2026-10-20_step5_plan.md`
 > (step 1b, revised 21 Oct, and the new step 1c). Decisions: `decision_log.md`.*
 
 ## What we believed
@@ -184,64 +185,74 @@ more; gentle parts stay near 1. On the Gorner complex 60 % of the band area face
 
 ### What the build gives
 
-> *Provisional (22 Oct, morning). These are the numbers of the first build (tag `o3`). A max-effort review found
-> that at the high sites many holes got another factor than intended: pixels joined bands by the EU-DEM height,
-> 8–28 m below GloGEM's; holes took the part of a single 25 m pixel instead of their week-1 plane; empty parts took
-> the band mean. The corrected build (tag `o4`, icetemp `23effe4`) is running and replaces this section.*
+**First build and the review.** The first build (tag `o3`) gave 1.96 °C. A max-effort review (22 Oct) then found that
+at the high sites many holes got another factor than intended:
+- pixels joined the bands by their EU-DEM height, which lies 8–28 m below GloGEM's own DEM there, so they landed one
+  to three bands too low and the holes' own parts were often empty (Col du Dôme got 0.50 instead of about 1.0);
+- holes took the part of the single 25 m pixel they sit in, not their week-1 plane (75 m), as the plan says;
+- empty parts took the band mean, 0.13–0.15 too low for gentle and south parts.
 
-Scored like Stage 1 (out of sample, below 15 m; each point from the run of its hole's part). This is reported, not a
-gate: orientation was adopted on 21 Oct.
+The corrected build (tag `o4`, icetemp `23effe4`): pixel heights shifted onto GloGEM's DEM cell by cell, hole parts
+from the week-1 planes, empty parts from the nearest band's same part; factors, the 24 part runs, merge and scores
+redone. Scored like Stage 1 (out of sample, below 15 m, each point from the run of its hole's part); reported, not a
+gate, since orientation was adopted on 21 Oct.
 
 ![The error on left-out massifs in every test](figures/ch12_results.svg)
 
-| measure | FRHS | Stage 1 (factor at the borehole bands) | **the build (three parts)** |
-|---|---|---|---|
-| error on left-out massifs, all bands | 2.51 °C | 2.28 | **1.96** |
-| above 3800 m | 3.04 | 2.73 | **2.12** |
-| zone 3000–3800 m | 2.51 | 2.51 | 2.51 |
-| without Taconnaz and Lys (also left out of the choice) | 1.36 | **1.19** | 1.34 |
-| shade error inside sites (°C per +0.1 sunshine) | −1.28 | −0.90 | **−0.25** |
-| same, without Taconnaz and Lys | −1.03 | −0.92 | **−0.23** |
-| scatter of a site's bands about the site mean | 1.63 | 1.63 | 1.72 |
-| cold / polythermal / temperate bands right | 61 / 9 / 2 | 61 / 9 / 2 | 62 / 9 / 2 |
-| in the zone: cold bands right | 4 of 18 | 4 of 18 | 5 of 18 |
-| frozen beds found (temperate called frozen) | 11 of 14 (1) | 11 of 14 (1) | 11 of 14 (1) |
-| best f_ref Mont Blanc / Monte Rosa | 0.17 / 1.0 | 0.17 / 1.0 | 0.23 / 1.0 |
-| f_ref chosen in the 7 left-out-massif fits | 0.55–1.0 | 0.70–1.0 | 0.85, and **1.0 in six** |
+| measure | FRHS | Stage 1 (factor at the borehole bands) | first build | **corrected build** |
+|---|---|---|---|---|
+| error on left-out massifs, all bands | 2.51 °C | 2.28 | 1.96 | **1.86** |
+| above 3800 m | 3.04 | 2.73 | 2.12 | **1.87** |
+| zone 3000–3800 m | 2.51 | 2.51 | 2.51 | 2.52 |
+| without Taconnaz and Lys (also left out of the choice) | 1.36 | **1.19** | 1.34 | 1.26 |
+| shade error inside sites (°C per +0.1 sunshine) | −1.28 | −0.90 | −0.25 | +0.16 |
+| same, without Taconnaz and Lys | −1.03 | −0.92 | −0.23 | +0.26 |
+| scatter of a site's bands about the site mean | 1.63 | 1.63 | 1.72 | 1.72 |
+| cold / polythermal / temperate bands right | 61 / 9 / 2 | 61 / 9 / 2 | 62 / 9 / 2 | **63** / 9 / 2 |
+| in the zone: cold bands right | 4 of 18 | 4 of 18 | 5 of 18 | 5 of 18 |
+| frozen beds found (temperate called frozen) | 11 of 14 (1) | 11 of 14 (1) | 11 of 14 (1) | 11 of 14 (1) |
+| best f_ref Mont Blanc / Monte Rosa | 0.17 / 1.0 | 0.17 / 1.0 | 0.23 / 1.0 | 0.23 / 1.0 |
+| f_ref chosen in the 7 left-out-massif fits | 0.55–1.0 | 0.70–1.0 | 1.0 in six | **0.85 in all seven** |
 
-- *The shade errors in this table use all entities. Without the three entities Stage 1 left out of the within-site
-  measures (the figure below) they are −1.37, −0.98 and −0.30.*
-- **With the parts, the sun-and-shade pattern inside sites nearly disappears,** also without Taconnaz and Lys
-  (−1.03 → −0.23). Each hole now sees the factor of its own side of the band, not a factor shared by the whole band.
-  The build would meet both conditions of rule B, though the rule was written for Stage 1 and the build was not
-  pre-registered against it.
-- **The overall error falls to 1.96 °C,** but the gain sits again where the sun-and-shade contrast is largest: Lys
-  69 %, Taconnaz 21 %, Bossons 10 %. Without Taconnaz and Lys the build is barely better than FRHS (1.34 against
-  1.36) and worse than Stage 1 (1.19), whose factors were the holes' own.
-- **37 bands improve by more than 0.2 °C, 11 get worse.** The largest loss is Colle Gnifetti at 4455 m (43 points),
-  now 1.6 °C too warm, because the higher f_ref chosen for Monte Rosa also heats the gentle saddle. Fieschergletscher
-  gets worse (1.56 → 2.02 °C).
-- **The scatter inside sites grows a little** (1.63 → 1.72 °C): the sign of the tilt is right, the sizes per band
-  are not.
-- **f_ref is pushed to the top of its range.** Six of the seven left-out-massif fits choose 1.0, the upper limit.
-  Most holes lie on north-facing or gentle parts with F below 1, so the calibration asks for more meltwater heat to
-  make up for it. In Step 5 the prior's upper limit of 1.0 may therefore bind; f_ref above 1 would mean more heat
-  than the meltwater can carry, which only makes sense for f_ref as an "effective" parameter that also stands in for
-  the too-cold air and the missing surface cooling.
-- **Still unchanged:** the zone, the frozen beds, Taconnaz 3685–3785 m and the massif split (0.23 against 1.0).
+*Shade errors with all entities; without the three entities Stage 1 left out of the within-site measures: −1.37,
+−0.98, −0.30 and +0.10 (figure below).*
+
+- **The sun-and-shade pattern inside sites is gone,** also without Taconnaz and Lys; it now slightly overshoots
+  (+0.16). Each hole sees the factor of its own side of the band.
+- **The error on left-out massifs falls from 2.51 to 1.86 °C, above 3800 m from 3.04 to 1.87 °C.** Without Taconnaz
+  and Lys the build beats FRHS (1.26 against 1.36), though not Stage 1 (1.19), whose factors were the holes' own.
+- **All seven left-out-massif fits choose f_ref 0.85.** The first build had pushed f_ref to its upper limit; that was
+  a consequence of its defects, not of the parts.
+- **Unchanged:** the zone, the frozen beds, Taconnaz 3685–3785 m and the massif split (0.23 against 1.0).
+- **The scatter inside sites grows a little** (1.63 → 1.72 °C), and the north part of a band is on average steeper
+  (28°) than the north-facing drill sites (17°): a part's factor is an area mean that a single drill site need not
+  match.
 
 ![The shade error inside sites in every test](figures/ch12_shade_slope.svg)
 
-*The shade error inside sites: within one borehole site, how much warmer than measured the model is per step of
-less summer sunshine (dots; lines: 90 % ranges over sites). Stage 1 and the re-check flatten the tilt by about a
-third, short of the half rule B asked for; the build with three parts nearly removes it.*
+*The shade error inside sites (dots; lines: 90 % ranges over sites), without the three entities Stage 1 left out.
+Stage 1 and the re-check flatten the tilt by about a third, short of the half rule B asked for; the corrected build
+removes it.*
 
+### Five parts instead of three
+
+The three-part split cuts at 270°, right through west, the most common direction of the boreholes: 399 of the 1135
+scored points lie on west-facing slopes (8 sites), against 119 north, 62 south and 12 east, and 543 on gentle ones.
+A hole facing 260° counted as south, one facing 280° as north. A check without model runs (22 Oct,
+`parts_scheme_compare.py`) with five parts (gentle; north, east, south, west as 90° sectors):
+- **West really differs from east:** in the same band west faces get a median 12 % more meltwater heat (5–95 %: −3 to
+  +49 %), as afternoon sun on warmer air should give. West lies between north and south, east between north and west.
+- **The holes' part factors come closer to their own** (correlation 0.81 → 0.83, mean gap 0.116 → 0.108): east
+  0.19 → 0.14, south 0.12 → 0.07, west 0.12 → 0.10; north worse, 0.12 → 0.16 (the narrower north sector holds the
+  steepest faces). Weighted by readings the gain vanishes (0.073 → 0.075): most readings lie on gentle slopes.
+
+*Running (22 Oct, from 13:31): the 40 runs with five parts (tag `o5`), merged and scored like the three-part build.*
 
 ## What is still open
 
 - **Step 5 on the three parts:** every design run becomes three runs (a batch of 40 about 4 h instead of 1.3 h); the
   pipeline merges them per hole before the emulator (`merge_part_outputs`).
-- **The upper limit of f_ref** in Step 5 (today 1.0), which the build presses against.
+- **Three or five parts:** decided on the five-part runs (above).
 - **The region-wide factors** for the map (all 4079 glaciers; about 3–4 h of computing plus one GloGEM run).
 - **The meltwater switch near 0 °C** (Taconnaz, Tête Rousse) and the massif split: after v1.0.
 

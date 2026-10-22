@@ -10,7 +10,7 @@ ch12_burial: the thermal model's burial rate (b_ref) against the measured long-t
 ch12_air_bias: the model's air temperature minus the station's, by month, at the high stations of Monte Rosa, Mont
   Blanc and the Bernese Alps / Engadin (week3/airtemp_check/tables/bias_by_station.csv, full overlap).
 ch12_parts: the part factors F (central, dT 0) by elevation on the Gorner complex (01225) and Fieschergletscher
-  (02611), with each part's share of the band (week3/orient_parts/parts.csv).
+  (02611), with each part's share of the band (week3/orient_parts_v2/parts.csv).
 ch12_results: the error on left-out massifs overall, in the zone and above 3800 m for FRHS, Stage 1, the measured
   burial, burial with orientation, and the build.
 """
@@ -55,7 +55,7 @@ def load(path):
 
 def shade_slope():
     s1, rc = load(W3 / 'orient_stage1/orient_stage1.json'), load(W3 / 'orient_recheck/orient_stage1.json')
-    cp = load(W3 / 'orient_parts_score/parts_score.json')
+    cp = load(W3 / 'orient_parts_score_v2/parts_score.json')
     rows = [('FRHS', s1['FRHS']['within']), ('Stage 1, central', s1['C']['within']),
             ('Stage 1, weaker', s1['W']['within']), ('Stage 1, stronger', s1['S']['within']),
             ('measured burial', rc['FRHS']['within']), ('burial + orientation', rc['C']['within']),
@@ -129,7 +129,7 @@ def air_bias():
 
 
 def parts():
-    R = pd.read_csv(W3 / 'orient_parts/parts.csv', dtype={'rgi': str})
+    R = pd.read_csv(W3 / 'orient_parts_v2/parts.csv', dtype={'rgi': str})
     fig, axes = plt.subplots(1, 2, figsize=(8.2, 4.4), sharey=False, facecolor=SURFACE)
     for ax, (gid, name) in zip(axes, (('01225', 'Gorner complex (01225)'), ('02611', 'Fieschergletscher (02611)'))):
         style(ax)
@@ -148,7 +148,7 @@ def parts():
 
 def results():
     s1, rc = load(W3 / 'orient_stage1/orient_stage1.json'), load(W3 / 'orient_recheck/orient_stage1.json')
-    cp = load(W3 / 'orient_parts_score/parts_score.json')
+    cp = load(W3 / 'orient_parts_score_v2/parts_score.json')
     rows = [('FRHS', s1['FRHS']['lomo']), ('Stage 1', s1['C']['lomo']), ('measured burial', rc['FRHS']['lomo']),
             ('burial + orientation', rc['C']['lomo']), ('the build', cp['CP']['lomo'])]
     keys = (('M1', 'all bands'), ('zone_M1', 'zone 3000-3800 m'), ('above_M1', 'above 3800 m'))
@@ -175,6 +175,6 @@ if __name__ == '__main__':
     burial()
     air_bias()
     parts()
-    if (W3 / 'orient_parts_score/parts_score.json').exists():
+    if (W3 / 'orient_parts_score_v2/parts_score.json').exists():
         shade_slope()
         results()
