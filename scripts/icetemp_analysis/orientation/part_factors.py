@@ -228,6 +228,7 @@ def one_glacier(args):
     sig_j = sig.reshape(oe.NY, 365)[:, JJAS_DAYS, None]
     dif_j = dif.reshape(oe.NY, 365)[:, JJAS_DAYS, None]
     rows, tables = [], {p: [] for p in PARTS}
+    pix = []
     for b in bands_g:
         Th = oe.Forcing(inp[b]['Tm'], w, sig, dif).Th[:, JJAS_DAYS, :]
         beam, fdif, fdir = sun.beam(b)
@@ -244,6 +245,12 @@ def one_glacier(args):
             for k, dT in enumerate(DTS):
                 melt[i:i + CHUNK, k] = eb_jjas(Th[None] + dT, S, p0)
         F_band = melt.mean(axis=0) / flat if len(sel) else np.full(len(DTS), np.nan)
+        if SCHEME.get('pixels') and len(sel):
+            Fp = melt / flat[None, :]
+            pix.append(pd.DataFrame({'rgi': gid, 'band': b, 'lon': px['lon'][sel], 'lat': px['lat'][sel],
+                                     'z': px['z'][sel], 'z_band': px['z_band'][sel],
+                                     'slope': np.degrees(px['slope'][sel]), 'aspect': np.degrees(px['aspect'][sel]),
+                                     'svf': svf[sel], **{f'F{dT:+.0f}': Fp[:, k] for k, dT in enumerate(DTS)}}))
         for p in PARTS:
             q = part[sel] == p
             F = melt[q].mean(axis=0) / flat if q.any() else np.full(len(DTS), np.nan)
@@ -274,6 +281,10 @@ def one_glacier(args):
     R = R.drop(columns=bcols)
     print(f'{gid}: {len(px["z"])} pixels, {len(bands_g)} bands, parts G/N/S '
           f'{(part == "G").mean():.2f}/{(part == "N").mean():.2f}/{(part == "S").mean():.2f}', flush=True)
+    if SCHEME.get('pixels'):
+        P = pd.concat(pix, ignore_index=True) if pix else pd.DataFrame()
+        SCHEME['pix_dir'].mkdir(parents=True, exist_ok=True)
+        P.to_csv(SCHEME['pix_dir'] / f'pixels_{gid}.csv.gz', index=False, float_format='%.5f')
     return R
 
 
@@ -295,7 +306,9 @@ def main():
     ap.add_argument('--workers', type=int, default=12)
     ap.add_argument('--scheme', default='GNS', choices=sorted(SCHEMES))
     ap.add_argument('--tables-only', action='store_true', help='write the tables again from OUT/parts.csv')
+    ap.add_argument('--pixels', action='store_true', help='also write every pixel\'s factor (OUT/pixels/pixels_<id>.csv.gz)')
     a = ap.parse_args()
+    SCHEME['pixels'], SCHEME['pix_dir'] = a.pixels, Path(a.out) / 'pixels'
     global PARTS
     SCHEME['name'], PARTS = a.scheme, SCHEMES[a.scheme]
     run, out = Path(a.run_dir), Path(a.out)
