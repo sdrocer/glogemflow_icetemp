@@ -202,9 +202,14 @@ FA and FAS are reported. The scorer's dry run on o4 reproduces o4's own scores e
 **Named before the results, so they are not read into them afterwards:**
 - **A third way the free air acts.** Besides the surface and the melt, it raises the Herron–Langway temperature by
   about 2–2.5 K. The firn then turns to ice shallower, and meltwater stops shallower.
-- **The orientation tables stay those of o4.** They were matched to the 2 m air's summer melt; the free air is
-  0.2–1.4 K colder in June–August. Keeping them makes the test differ from o4 in the air alone; the price is a small
-  inconsistency in the factors, reported, not rebuilt.
+- **The orientation tables stay those of o4.** Each band's energy balance was matched to its June–September thermal
+  melt under the 2 m air.
+  - Under the free air (gate run `fag2`, 1981–2020, 2971 bands) that melt is 9 % smaller: 10–16 % between 3000 and
+    4800 m, the summer air being 0.4 K colder.
+  - Keeping the tables makes the test differ from o4 in the air alone; the price is factors anchored to slightly too
+    much melt. Reported, not rebuilt.
+  - **If the free air is adopted:** one melt-logging run on the free air, `part_factors.py` on it (about 40 min),
+    then the part runs.
 
 ## What the test gives
 
