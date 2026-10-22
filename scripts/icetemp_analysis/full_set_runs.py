@@ -36,6 +36,10 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
   --burial-dir DIR --burial-tag X: perfect-burial diagnostic, the measured accumulation of DIR/burial_<id>.dat
             replaces the thermal model's b_ref there (GloGEM firnice_burial_dir; tag _bX); copied like the tables
   --spinup-dT K: the thermal spin-up's air temperature shifted by K (GloGEM firnice_spinup_dT; tag _sdK)
+  --freeair FILE: the thermal model's air from the free-air table FILE (GloGEM firnice_thermal_air = 'freeair';
+            tag _fa); FILE's sha256 goes to freeair_file.sha256 in the run folder
+  --surface-cool DT: thermal surface min(0, 0.95 * air + DT) (GloGEM firnice_surface_cool = 'gilbert'; tag _gcDT)
+            The _fa and _gc tags come before _o, so merge_part_runs.py takes them as part of the base.
   --write-melth: GloGEM also writes every band's thermal melt and air temperature per month (tag _mth)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
@@ -123,6 +127,23 @@ def snapshot_tables(src, run_dir, kind='orient'):
     return dst
 
 
+def record_freeair(src, run_dir):
+    """Write the free-air table's sha256 into the run folder (the table is too large to copy); a folder that
+    names another table stops the script."""
+    if not src.is_file():
+        raise SystemExit(f'no free-air table {src}')
+    h = hashlib.sha256()
+    with open(src, 'rb') as f:
+        for block in iter(lambda: f.read(1 << 24), b''):
+            h.update(block)
+    line = f'{h.hexdigest()}  {src}\n'
+    out = run_dir / 'freeair_file.sha256'
+    if out.exists() and out.read_text() != line:
+        raise SystemExit(f'{out} names another free-air table; use another run tag')
+    run_dir.mkdir(parents=True, exist_ok=True)
+    out.write_text(line)
+
+
 class SubsetPipeline(CalibrationPipeline):
     ids = None
     exclude = set()
@@ -154,6 +175,8 @@ def main():
     ap.add_argument('--burial-tag', default='', help='name of the burial set in the run tag (_bX)')
     ap.add_argument('--spinup-dT', type=float, default=0.0, help='K added to the thermal spin-up air temperature')
     ap.add_argument('--write-melth', action='store_true', help='write every band thermal melt and air temperature')
+    ap.add_argument('--freeair', default='', help="free-air table: the thermal model's air (firnice_thermal_air)")
+    ap.add_argument('--surface-cool', type=float, default=None, help='thermal surface min(0, 0.95 air + DT)')
     ap.add_argument('--calibration-dir', default=None,
                     help='mass-balance calibration to use instead of the configured one (all its .dat files)')
     ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
@@ -172,6 +195,8 @@ def main():
                if custom else args.run_tag) + ('_nodeep' if args.no_deepen else '') + \
               (f'_age{args.firn_age}' if args.firn_age != 20 else '') + \
               ('_mbfull' if args.mb_refreezing == 'full' else '') + ('_mbhist' if args.mb_hist_file else '') + \
+              ('_fa' if args.freeair else '') + \
+              (f'_gc{args.surface_cool:+.1f}' if args.surface_cool is not None else '') + \
               (f'_o{args.orient_tag}' if args.orient_tag else '') + (f'_b{args.burial_tag}' if args.burial_tag else '') + \
               (f'_sd{args.spinup_dT:+.1f}' if args.spinup_dT else '') + ('_mth' if args.write_melth else '')
 
@@ -191,6 +216,8 @@ def main():
         **(dict(burial_dir=args.burial_dir) if args.burial_dir else {}),
         **(dict(spinup_dT=args.spinup_dT) if args.spinup_dT else {}),
         **(dict(write_melth='y') if args.write_melth else {}),
+        **(dict(thermal_air='freeair', freeair_file=str(Path(args.freeair).resolve())) if args.freeair else {}),
+        **(dict(surface_cool='gilbert', surface_cool_dt=args.surface_cool) if args.surface_cool is not None else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )
@@ -198,6 +225,8 @@ def main():
         cfg = replace(cfg, orient_dir=str(snapshot_tables(Path(args.orient_dir), cfg.output_path)))
     if args.burial_dir:
         cfg = replace(cfg, burial_dir=str(snapshot_tables(Path(args.burial_dir), cfg.output_path, 'burial')))
+    if args.freeair:
+        record_freeair(Path(cfg.freeair_file), cfg.output_path)
     old_cfg = cfg.output_path / 'config.yaml'
     if old_cfg.exists() and old_cfg.read_text() != yaml.safe_dump(asdict(cfg), sort_keys=False):
         raise SystemExit(f'{cfg.output_path} exists with other settings; use another run tag')

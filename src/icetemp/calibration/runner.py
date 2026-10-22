@@ -242,6 +242,10 @@ firnice_orient_dir      = '{orient_dir}'   ; folder of orient_<id>.dat
 firnice_burial_dir      = '{burial_dir}'   ; perfect-burial diagnostic: folder of burial_<id>.dat ('' = off)
 firnice_spinup_dT       = {spinup_dT}d   ; K added to the thermal spin-up's air temperature (diagnostic)
 firnice_write_melth     = '{write_melth}'   ; 'y' = every band's thermal melt and air temperature per month
+firnice_thermal_air     = '{thermal_air}'   ; 'freeair' = the thermal model's air from ERA5 pressure levels at band height
+firnice_freeair_file    = '{freeair_file}'   ; free-air table (make_freeair_table.py)
+firnice_surface_cool    = '{surface_cool}'   ; 'gilbert' = thermal surface min(0, 0.95 * air + dt), Gilbert et al. 2014
+firnice_surface_cool_dt = {surface_cool_dt}d   ; K: -3.4 the measured skin, -1.4 with the +2 K for penetrating sunlight
 
 ; --- firn/ice temperature module: flat per-glacier override, ONE design point per run ------
 firnice_temperature         = 'y'
@@ -398,6 +402,10 @@ class GloGEMRunner:
     burial_dir: str = ''          # perfect-burial diagnostic: folder of burial_<id>.dat (band, accumulation m w.e./yr)
     spinup_dT: float = 0.0        # K added to the thermal spin-up's air temperature (diagnostic)
     write_melth: str = 'n'        # 'y' = GloGEM writes every band's thermal melt and air temperature per month
+    thermal_air: str = 'era5_2m'  # 'freeair' = the thermal model's air from ERA5 pressure levels at band height
+    freeair_file: str = ''        # free-air table (scripts/icetemp_analysis/freeair/make_freeair_table.py)
+    surface_cool: str = 'n'       # 'gilbert' = thermal surface min(0, 0.95 * air + surface_cool_dt)
+    surface_cool_dt: float = -3.4  # K: -3.4 the measured skin, -1.4 with Gilbert's +2 K for penetrating sunlight
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -645,6 +653,10 @@ class GloGEMRunner:
             burial_dir=self.burial_dir,
             spinup_dT=repr(float(self.spinup_dT)),
             write_melth=self.write_melth,
+            thermal_air=self.thermal_air,
+            freeair_file=self.freeair_file,
+            surface_cool=self.surface_cool,
+            surface_cool_dt=repr(float(self.surface_cool_dt)),
             rf_param='n' if self.mb_refreezing == 'full' else 'y',
             rf_full='y' if self.mb_refreezing == 'full' else 'n',
         )

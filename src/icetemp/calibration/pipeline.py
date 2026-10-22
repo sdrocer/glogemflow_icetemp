@@ -111,7 +111,10 @@ class CalibrationPipeline:
                              mb_refreezing=self.config.mb_refreezing, mb_hist_file=self.config.mb_hist_file,
                              orient=self.config.orient, orient_dir=self.config.orient_dir,
                              burial_dir=self.config.burial_dir, spinup_dT=self.config.spinup_dT,
-                             write_melth=self.config.write_melth)
+                             write_melth=self.config.write_melth,
+                             thermal_air=self.config.thermal_air, freeair_file=self.config.freeair_file,
+                             surface_cool=self.config.surface_cool,
+                             surface_cool_dt=self.config.surface_cool_dt)
         if self.config.calibration_source_dir is not None:
             runner_kwargs['calibration_source_dir'] = self.config.calibration_source_dir
         if self.config.calibration_source_files is not None:

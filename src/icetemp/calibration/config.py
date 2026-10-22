@@ -93,6 +93,10 @@ class CalibrationConfig:
     burial_dir: str = ''          # perfect-burial diagnostic: folder of burial_<id>.dat (band, accumulation m w.e./yr)
     spinup_dT: float = 0.0        # K added to the thermal spin-up's air temperature (diagnostic)
     write_melth: str = 'n'        # 'y' = GloGEM writes every band's thermal melt and air temperature per month
+    thermal_air: str = 'era5_2m'  # 'freeair' = the thermal model's air from ERA5 pressure levels at band height
+    freeair_file: str = ''        # free-air table (scripts/icetemp_analysis/freeair/make_freeair_table.py)
+    surface_cool: str = 'n'       # 'gilbert' = thermal surface min(0, 0.95 * air + surface_cool_dt)
+    surface_cool_dt: float = -3.4  # K: -3.4 the measured skin, -1.4 with Gilbert's +2 K for penetrating sunlight
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)
