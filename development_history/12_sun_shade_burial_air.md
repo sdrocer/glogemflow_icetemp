@@ -22,8 +22,10 @@
 > meltwater heat than east faces, but five parts (adding east and west) are worse at the boreholes (2.13 °C), so
 > three parts stay.
 >
-> *Status (22 Oct, afternoon): the corrected three-part build and the five-part test are scored (below). Plans: `plans/2026-10-20_step5_plan.md`
-> (step 1b, revised 21 Oct, and the new step 1c). Decisions: `decision_log.md`.*
+> *Status (22 Oct, evening): the corrected three-part build and the five-part test are scored (below). A new section
+> explains how the energy balance behind F works for north, south, east and west faces; every pixel's factor is now
+> stored. Plans: `plans/2026-10-20_step5_plan.md` (step 1b, revised 21 Oct, and the new step 1c). Decisions:
+> `decision_log.md`.*
 
 ## What we believed
 
@@ -57,6 +59,8 @@
 - On flat ground the energy balance melts exactly what the model's degree-day melt gives in that band (June to
   September). So F carries only slope and shade, not a new melt level.
 - F is tabled against the month's warmth (−4 to +6 °C): in a warm summer a shaded slope catches up.
+- How the energy balance works, and how it treats north, south, east and west, is set out in detail in the section
+  *How orientation enters the model* below.
 - The investigation (four investigators, a design, two hostile critics, a revision; 20–21 Oct) built the factor and
   predicted from the existing runs that it would remove the shade error inside sites.
 
@@ -158,6 +162,214 @@ Bossons −0.2) and leaves the overall error unchanged.
   coupled fix belongs to later work with a full surface energy balance), the over-burial of high saddles, the
   massif split, and the meltwater switch near 0 °C.
 
+## How orientation enters the model
+
+*Added 22 Oct at Janosch's request: how the energy balance behind F works, and how it treats north, south, east and
+west faces. The numbers come from the model's own code (`part_factors.py`), run for one example band: Aletschgletscher
+(02596) at 3505 m, a typical band of the zone. Its June–September melt is 518 mm, close to the median of 3500–4000 m.*
+
+### The idea
+
+GloGEM's melt knows only the air temperature, so a shaded north face melts as much as a sunny saddle at the same
+height. The orientation factor F asks a small energy-balance model one question: **in the same weather, how much
+more or less does this slope melt than flat open ground?** GloGEM's thermal melt is multiplied by that answer. The
+mass balance never sees F.
+
+### The energy balance, step by step
+
+For every hour of June–September 1981–2020, the model computes the energy balance for each 25 m pixel of the glacier
+and for flat open ground at the band's height:
+
+```
+  energy into the surface    Q  =  (1 − α) · S      +      ψ
+                                   absorbed sun            air term
+                                                           ψ = ψ0             while the air is below 1 °C
+                                                           ψ = ψ0 + c · T     from 1 °C upwards
+  melt in that hour          =  Q × 3600 s ÷ L_f   if Q is positive;   nothing if Q is negative
+```
+
+1. **The sun on the slope, S.** It has three pieces:
+   - **The direct beam.** The model follows the sun's position every 10 minutes (from the glacier's latitude, the date
+     and the hour) through a clear atmosphere: 75 % of the beam gets through at the zenith, and more in the thinner
+     air at height. On a tilted slope the beam is multiplied by the cosine of the angle between the sun and the line
+     standing straight out of the slope. A slope turned towards the sun gets the full beam. One tilted away gets less,
+     and nothing once the sun is behind it.
+   - **The terrain horizon.** The beam counts only while the sun stands above the surrounding ridges in its
+     direction. These horizons cover 72 directions, from the 25 m terrain model (as in week 1).
+   - **The diffuse light from the sky**, times the sky-view factor: the share of the sky the slope sees. This is 1 for
+     open flat ground, 0.93 for an open 30° slope, and less in a deep cirque.
+   - **The weather.** Each day's direct beam is scaled by Jungfraujoch's measured relative sunshine that day, spread
+     evenly over the hours. The diffuse light is whatever remains of the measured global radiation after the direct
+     part. On a sunny day the direction of a slope matters a lot. On an overcast day the light comes from the whole
+     sky, and all slopes get about the same.
+2. **The absorbed share, 1 − α**, with α = 0.80, the albedo of snow and firn: only a fifth of the sunlight warms the
+   surface.
+3. **The air term ψ** (Giesen & Oerlemans 2012) lumps all other energy exchanges together. The main ones are the
+   longwave radiation the snow loses to the sky and the heat the air brings or takes away. Below 1 °C ψ is the
+   constant ψ0; from 1 °C upwards it grows by c = 10 W m⁻² per degree. The hourly air temperature is built from three
+   pieces:
+   - the band's monthly air temperature, as the thermal model sees it;
+   - plus Jungfraujoch's daily anomaly;
+   - plus a daily cycle as wide as Jungfraujoch's daily range, coldest at 03:00 and warmest at 15:00 (solar time).
+4. **ψ0 is matched to our own melt.** ψ0 is the one free number. It is set per band so that flat open ground melts
+   exactly what GloGEM's degree-day melt gives in that band from June to September 1981–2020 (at least 30 mm).
+   - It is a matching constant, not a measured flux. Over the 23 glaciers its median is +50 W m⁻² at 2000–2500 m,
+     −14 at 2500–3000 m, −52 at 3000–3500 m, −95 at 3500–4000 m and −136 at 4000–4500 m.
+   - A negative ψ0 means the sun must first supply that much absorbed energy before anything melts.
+5. **The factor.** F is the melt of the slope divided by the melt of flat open ground, both summed over June–September
+   of all 40 years. For a part of a band (gentle, north, south) it is the mean melt of the part's pixels divided by
+   the flat-ground melt: an area average.
+6. **The table by warmth.** The same calculation is repeated with every hour shifted by −4 to +6 °C, keeping ψ0. This
+   gives 11 values per band and part.
+
+Because ψ0 is matched to GloGEM's melt, flat open ground has F = 1 by construction. **F therefore carries only the
+effect of slope and shade, not a new melt level.** The overall amount of meltwater heat is still set by GloGEM's melt
+and by f_ref.
+
+### One clear July day: north against south, east against west
+
+![The energy balance on a clear July day](figures/ch12_eb_day.svg)
+
+*An average clear July day (Jungfraujoch days with at least 80 % of the possible sunshine) at the example band, for
+flat open ground and for open 30° slopes facing north, east, south and west. Left: the sun each surface absorbs
+(coloured) against the sun needed before melt starts (black, −ψ). Right: the melt per hour, which is the gap
+wherever a curve lies above the black line.*
+
+- **The black line is the bar the sun must clear.**
+  - At night the air is below 1 °C, and the line sits at 96 W m⁻² (−ψ0).
+  - From about 06:00 the air passes 1 °C and the line falls. It is lowest (35 W m⁻²) around 15:00, when the air is
+    warmest (+6 °C).
+  - A surface melts only while its sun is above the line, and it melts by the gap.
+- **North against south: the angle to the sun.**
+  - In July the noon sun stands about 65° high. A 30° north slope is tilted away from it and receives the beam at a
+    flat angle. Over the day it absorbs 22 % less sun than flat ground (4.9 against 6.3 MJ m⁻²).
+  - A 30° south slope is turned towards the sun. In July it absorbs about as much as flat ground (6.2 MJ m⁻²); in June
+    and September, with a lower sun, it absorbs more. Over the whole summer its F is 1.10.
+- **The threshold amplifies the difference.** The north slope absorbs 22 % less sun but melts 39 % less (7.0 against
+  11.5 mm). Its weaker sun stays only a little above the line, so the gap shrinks much more than the sun does. The
+  higher the line (colder air, higher bands), the stronger this amplification.
+- **East against west: the timing of the sun.**
+  - Without a horizon, a 30° east slope and a 30° west slope receive exactly the same sun over the day (5.7 MJ m⁻²
+    each), mirrored about noon.
+  - The east slope gets its sun in the morning, while the air is still cold and the line is high. The west slope gets
+    it in the afternoon, when the air is warmest and the line is lowest.
+  - So the west slope melts 12 % more (11.0 against 9.8 mm). **The whole east–west difference comes from the sun's
+    timing against the daily cycle of the air, through the threshold.** A model that added up the energy over the
+    day and let the negative hours cancel the positive ones would not see it.
+
+### What decides F: steepness, direction and warmth
+
+![The orientation factor against slope and warmth](figures/ch12_eb_factor.svg)
+
+*F of open slopes facing north, east, south and west (left: against slope, in a normal month; middle: 30° slopes,
+against how much warmer or colder the month is than 1981–2020), and of the example band's real parts with three and
+with five parts (right; mean slope and share of the band in brackets).*
+
+- **For north faces, steepness matters as much as direction.**
+  - Facing north, F falls almost evenly with slope: 0.87 at 10°, 0.70 at 20°, 0.51 at 30°, 0.33 at 40° and 0.19 at
+    50°.
+  - Facing south, F rises to 1.12 at 20–25°. It falls again on steeper slopes, because the high summer sun strikes
+    them at a flatter angle.
+  - East and west lie in between, with west above east at every slope (at 30°: 0.94 against 0.83).
+- **Warmth narrows the contrast.** In a month warmer than its 1981–2020 mean, the line drops, more of each slope's sun
+  clears it, and the differences between slopes matter less.
+  - The 30° north slope goes from 0.31 (4 °C colder) through 0.51 to 0.74 (6 °C warmer).
+  - The south slope goes from 1.19 to 1.03.
+  - East changes little in colder months (0.83–0.85) and rises in warmer ones (0.90 at +6 °C), because cold mornings
+    matter less in a warm month. West stays at 0.93–0.94.
+- **Height works like cold.** Higher bands have less degree-day melt, so their ψ0 is more negative and the line sits
+  higher, and the same slope gets a more extreme F. That is why, over the 23 glaciers, the north parts fall with
+  height: their median F is 0.91 at 2500–3000 m, 0.78 at 3000–3500 m, 0.61 at 3500–4000 m and 0.45 at 4000–4500 m.
+  The south parts rise: 0.98, 0.98, 1.04 and 1.18.
+- **Gentle parts sit a little below 1** (median 0.96–0.97). The reference is flat ground with an open horizon, while
+  the gentle part of a real glacier lies in a basin whose ridges cut off the early and late sun.
+
+### From the pixels into GloGEM
+
+```
+  the 25 m pixels of one band              the parts                  GloGEM, every month and band
+  ┌──────────────────────────────┐                                   thermal melt M (degree days, no T_off)
+  │ each pixel: slope, aspect,    │   mean melt of its pixels          │
+  │ horizon, sky view; hourly     │──► ÷ flat-ground melt     ──►      warmth dT = band air − its 1981–2020 mean
+  │ energy balance, 40 summers,   │   = F_G, F_N, F_S                  │          of this calendar month
+  │ dT −4 … +6 °C                 │   (11 values each)                 F = the part's table at dT
+  └──────────────────────────────┘                                    thermal melt = F × M ──► × f_ref ──► heat
+```
+
+- **The tables.** For each part there is one file per glacier (`orient_<id>.dat`: one row per band, F at the 11
+  warmth steps). Each part run reads its own folder (`C_G`, `C_N` or `C_S`).
+- **In GloGEM** (`firnice_thermal_forcing.pro`), every month and band:
+  1. the month's warmth dT is the band's air temperature as the thermal model sees it (ERA5, ERA5's lapse rate, no
+     T_off), minus the band's 1981–2020 mean for this calendar month (`forient_tref`);
+  2. F is read off the table, linearly between the steps and held at −4 and +6 °C;
+  3. the thermal melt becomes F × M. Everything after (f_ref, refreezing, the heat in the firn and ice) is unchanged.
+     The mass balance keeps its own melt.
+- **The table comes from June–September, but GloGEM applies it in every month.** Outside the summer there is little
+  melt at these heights.
+- **In a warm July** (+2 °C), the 30° north slope of the example gets 0.60 instead of 0.51.
+- **In the spin-up** (the 1942–71 climate), dT is mostly negative, so north parts get even less meltwater heat and
+  south parts more. Since 1972 the warming lets north faces catch up.
+
+### Three parts against five
+
+- **Three parts** split the tilted pixels at 90° and 270° (east and west).
+  - The north part holds everything from east through north to west. So north-east and north-west faces count as
+    north, along with the north halves of east and west faces.
+  - The south part holds the rest.
+  - The east–west difference is averaged inside each part.
+- **Five parts** use sectors centred on north, east, south and west, cut at 45°, 135°, 225° and 315°. East and west
+  get their own F, and the north part narrows to the faces between north-west and north-east.
+- **In the example band:**
+
+  | part | three parts: slope, share, F | five parts: slope, share, F |
+  |---|---|---|
+  | gentle (< 10°) | 6°, 22 %, 0.99 | 6°, 22 %, 0.99 |
+  | north | 29°, 28 %, 0.65 | 38°, 10 %, **0.41** |
+  | east | — | 21°, 24 %, 0.85 |
+  | south | 22°, 50 %, 1.04 | 21°, 30 %, 1.07 |
+  | west | — | 26°, 14 %, 0.98 |
+
+- **What five parts add:** west and east faces get their own factor, west above east (0.98 against 0.85 here), as the
+  clear July day predicts.
+- **What goes wrong:** a part's F is the average of its pixels, and most pixels of the high bands are steep, while
+  the drill sites are gentle (north-facing ones: median 17°). On north faces F falls steeply with slope, so a north
+  part's F is set by its steep pixels, below what a gentle north-facing drill site would get.
+  - Five parts make this worse. The narrow north sector drops the north-east and north-west faces, which get more
+    sun. In some bands it is also much steeper (here 29° → 38°, F 0.65 → 0.41).
+  - So a north hole reads a factor made for steeper, more shaded ground than its own, and f_ref rises to make up for
+    it. This is the main reason the five-part runs did worse (above).
+
+![Every pixel's factor against the direction it faces](figures/ch12_pixels.svg)
+
+*Every 25 m pixel between 3300 and 3700 m on the calibration glaciers (dots), with the median F per 15° of direction
+for four slope classes (lines). Solid vertical lines: the three-part boundaries; dashed: the five-part boundaries.
+Provisional: 21 of the 23 glaciers; Gorner (01225) and Aletsch (02596) are still being computed.*
+
+- **F follows the direction smoothly,** lowest facing north to north-east, highest facing south to south-west. The
+  curve is shifted towards the west: at the same slope, west faces lie above east faces (20–35°: 0.92 against 0.85).
+  This is the timing effect of the clear July day, now in the real terrain.
+- **On the north side, steepness separates the pixels:** facing north, F is 0.92 below 10°, 0.79 at 10–20°, 0.65 at
+  20–35° and 0.44 above 35° (medians). On the south side the slope hardly matters (0.98–1.03).
+- **The three-part cuts at east and west fall where F changes fastest.** A pixel facing just north of west (F about
+  0.9) is averaged with the north faces (0.4–0.8).
+
+- **The per-pixel factors** (stored 22 Oct, `week3/orient_pixels`) let us test other splits without new runs. Two
+  candidates:
+  - compass sectors only on moderate slopes, with the steep walls (steeper than about 35°) as a part of their own;
+  - classes by exposure (shaded, middle, sunny, from each pixel's own F) instead of by direction.
+
+### What this energy balance leaves out
+
+- **One weather station for all glaciers.** Jungfraujoch supplies the sunshine, the daily anomalies and the daily
+  cycle of the air everywhere.
+- **The day's sunshine is spread evenly over its hours.** Alpine summer afternoons are often cloudier than mornings,
+  which favours east faces. The 12 % west advantage is therefore probably an upper estimate.
+- **A fixed albedo of 0.80:** no bare ice, and no darker summer firn.
+- **No light reflected from the surrounding slopes**, and no longwave radiation from warm rock walls.
+- **No surface temperature or cold content.** Whenever Q is positive the surface melts at once. The air term depends
+  on air temperature only (no wind, no humidity).
+- **ψ0 is a matching constant per band**, not a measured flux. The warmth table shifts all hours uniformly.
+
 ## The build: three parts per band
 
 ```
@@ -175,9 +387,11 @@ Bossons −0.2) and leaves the overall error unchanged.
   (`firnice_write_melth`, off by default); one FRHS run gave them.
 - **Checks:** the vectorised sun calculation equals the Stage-1 one exactly; fed the holes' own geometry, the code
   reproduces the 187 Stage-1 factor values to 5·10⁻⁷; the logged band climate equals the Stage-1 rebuild.
-- **Holes:** each of the 199 calibration holes takes the part of its EU-DEM pixel (74 north, 64 gentle, 61 south);
-  142 of 170 agree with the week-1 fine-DEM planes, most disagreements at the 10° line.
-- **Runs:** 24 (three parts × 8 f_ref), tag `o3`; the mass-balance files are byte-identical across the three parts.
+- **Holes:** each of the 199 calibration holes takes the part of its week-1 plane (a plane fitted to the finest DEM
+  within 75 m), or of its EU-DEM pixel where it has none (29 shallow holes): 74 gentle, 69 north, 56 south. (The
+  first build used the EU-DEM pixel for all; see below.)
+- **Runs:** 24 (three parts × 8 f_ref), tag `o3`, redone as `o4` after the review; the mass-balance files are
+  byte-identical across the three parts.
 
 ![Part factors by elevation](figures/ch12_parts.svg)
 
@@ -282,10 +496,14 @@ parts, now written as 0.000001), merged and scored like the three-part build:
 
 - Plans: `plans/2026-10-20_step5_plan.md` (step 1b revised and step 1c, 21 Oct).
 - Investigation: `week3/orientation_investigation/` (workflow result, journal, scripts).
-- Runs: `o1` (Stage 1), `b1` (burial), `o2` (re-check), `sd` (spin-up), `mth` (band melt), `o3` (the parts; merged
-  `o3_*_oCP`); scores in `week3/orient_stage1/`, `week3/burial_test/`, `week3/orient_recheck/`,
-  `week3/orient_parts_score/`; the air check in `week3/airtemp_check/`; the burial literature in
-  `week3/burial_research/`.
+- Runs: `o1` (Stage 1), `b1` (burial), `o2` (re-check), `sd` (spin-up), `mth` (band melt), `o3` (the first build;
+  merged `o3_*_oCP`), `o4` (the corrected build; merged `o4_*_oCP`), `o5` (five parts); scores in
+  `week3/orient_stage1/`, `week3/burial_test/`, `week3/orient_recheck/`, `week3/orient_parts_score/` (o3),
+  `week3/orient_parts_score_v2/` (o4), `week3/orient_parts_score_5/` (o5); factors in `week3/orient_parts_v2/` and
+  `week3/orient_parts5/`; every pixel's factor in `week3/orient_pixels/pixels/`; the air check in
+  `week3/airtemp_check/`; the burial literature in `week3/burial_research/`.
+- The energy balance: `scripts/icetemp_analysis/orientation/orientation_eb.py` (physics), `part_factors.py` (pixels
+  and parts); the example-band figures in `figures/make_ch12.py` (`Example`, `eb_day`, `eb_factor`).
 - GloGEM (branch `orientation-factor`, local): `4f84a94`, `1192935` (the switch), `1d6f970` (spin-up shift),
   `2a3d1fd`, `53af4e5` (band melt output); `burial-obs` `abf5cce` (diagnostic); `diag-bref-print` `b1e51e2`
   (throwaway).
@@ -300,6 +518,24 @@ parts, now written as 0.000001), merged and scored like the three-part build:
 | f_ref | the share of meltwater that refreezes and heats; an "effective" parameter |
 | orientation factor F | how much more or less a slope melts than flat ground in the same weather; multiplies the thermal model's meltwater only |
 | part (G, N, S) | the gentle (slope under 10°), north-facing and south-facing share of a 10 m band; each has its own F and its own model run |
+| five parts (G, N, E, S, W) | the gentle share plus four 90° sectors centred on north, east, south and west |
+| energy balance | melt computed from the energy a surface receives (absorbed sun plus the air term), instead of from air temperature alone |
+| semi-empirical | the sun is computed physically, the rest of the exchanges are lumped into one air term with constants from the literature (Giesen & Oerlemans 2012) |
+| S | the sunlight reaching a surface: direct beam plus diffuse light from the sky (W m⁻²) |
+| albedo α | the share of sunlight a surface reflects; 0.80 for snow and firn here |
+| air term ψ | all energy exchanges except the sun, lumped: ψ0 below 1 °C air, ψ0 + c·T above |
+| ψ0 | the air term in air below 1 °C; set per band so that flat ground melts what GloGEM's degree-day melt gives |
+| c | how much the air term grows per degree of air temperature: 10 W m⁻² K⁻¹ |
+| T_tip | the air temperature (1 °C) from which the air term starts to grow |
+| −ψ (the line) | the absorbed sun needed before a surface starts to melt |
+| incidence angle | the angle between the sun's rays and the line standing straight out of a slope; the beam is scaled by its cosine |
+| terrain horizon | the elevation angle of the surrounding ridges in each direction; the sun counts only above it |
+| sky-view factor | the share of the sky a surface sees; scales the diffuse light |
+| relative sunshine | measured hours of sunshine divided by the possible hours that day (Jungfraujoch) |
+| solar time | time by the sun: noon is when the sun is highest |
+| dT (warmth) | how much warmer (+) or colder (−) a month is than the band's 1981–2020 mean for that calendar month |
+| threshold amplification | because melt counts only above the line, a slope with a little less sun melts much less |
+| MJ m⁻² | megajoules per square metre: energy over a day (1 MJ m⁻² melts about 3 mm of water) |
 | shade error inside sites | within one borehole site, how much warmer than measured the model is per step of less summer sunshine |
 | rule B | the adoption rule fixed before Stage 1: shade error at least halved, also without Taconnaz and Lys, and no harm overall |
 | burial (b_ref) | the snow added on top of the firn each year (m water equivalent per year), which carries the firn downward |
