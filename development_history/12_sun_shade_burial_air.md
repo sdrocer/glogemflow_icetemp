@@ -359,10 +359,44 @@ of the corrected build.*
 - **The three-part cuts at east and west fall where F changes fastest.** A pixel facing just north of west (F about
   0.9) is averaged with the north faces (0.4–0.8).
 
-- **The per-pixel factors** (stored 22 Oct, `week3/orient_pixels`) let us test other splits without new runs. Two
-  candidates:
-  - compass sectors only on moderate slopes, with the steep walls (steeper than about 35°) as a part of their own;
-  - classes by exposure (shaded, middle, sunny, from each pixel's own F) instead of by direction.
+### Other splits, tested on the stored pixels (no model runs)
+
+Every pixel's factor is stored (22 Oct, `week3/orient_pixels`), so any split of a band can be scored without new
+runs (`pixel_split_test.py`). **The yardstick is the hole's own factor:**
+- In Stage 1, each hole got an F computed for the plane fitted to the terrain within 75 m of it (week 1), with its own
+  horizon and sky view, through the same energy balance. That is the F the model would use if it knew the exact spot.
+- A split is better when the factor of a hole's part comes closer to that.
+- The yardstick is itself a model estimate, and ignores ice flowing in from above. The winning split still needs runs.
+
+Over the 170 holes with a plane, three parts fit gentle and south holes well. North holes get far too little: a median
+0.54 against their own 0.74. Half the north part's pixels are steeper than 28°, while the north-facing holes sit at
+about 18°.
+
+**The median instead of the mean** (Janosch's question) does not help:
+- the north holes' typical part factor rises a little (0.54 → 0.60), but their average shortfall stays −0.12;
+- the gentle holes get worse (gap 0.101 → 0.119), and the overall gap grows (0.116 → 0.126).
+
+The mean is also the right number for the map: the mean of the pixels' factors is the part's total meltwater divided
+by flat-ground melt, so it keeps the meltwater over the part's area correct.
+
+**Splitting the north faces by steepness.** The north part is divided at 30° or at 35°, both thresholds named before
+the test; the steeper pixels become a fourth part, "steep north walls" (X).
+
+| split | north holes: part factor (own 0.74) | north holes: average shortfall | gap, all holes | gap, weighted by readings | correlation |
+|---|---|---|---|---|---|
+| three parts (today) | 0.54 | −0.12 | 0.116 | 0.073 | 0.81 |
+| north split at 30° | **0.66** | **−0.05** | **0.102** | **0.067** | 0.82 |
+| north split at 35° | 0.65 | −0.07 | 0.107 | 0.068 | 0.81 |
+| five parts | 0.41 (own 0.59) | −0.11 | 0.108 | 0.075 | 0.83 |
+
+- **The split at 30° is the best of all splits tested** on both gaps, and it cuts the north holes' shortfall by
+  more than half. Gentle and south holes are unchanged: their parts are the same as with three parts.
+- **The steep north walls are 17 % of the area of the borehole bands**, but only 3 holes (3 readings) lie in them.
+  Their part matters for the map, where it separates the shaded walls from the gentler north slopes, not for the
+  calibration.
+- **Cost:** four runs per glacier instead of three. The gentle and south runs are identical to the corrected build's
+  and can be reused, so the borehole test needs only the new north and steep-north runs (16 runs).
+- **Not yet tested:** classes by exposure (shaded, middle, sunny, from each pixel's own F) instead of by direction.
 
 ### What this energy balance leaves out
 
