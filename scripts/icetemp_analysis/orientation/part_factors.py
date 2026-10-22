@@ -69,6 +69,7 @@ JJAS_DAYS = slice(151, 273)          # 1 June - 30 September (0-based day of a 3
 DTS = wot.DTS
 C, ALB, TTIP, DMIN = 10.0, wot.ALB, wot.TTIP, wot.DMIN
 CHUNK = 40
+F_FLOOR = 1e-6       # a fully shaded part melts nothing (F = 0); GloGEM's table check wants F > 0
 SCHEME = dict(name='GNS')
 
 
@@ -276,6 +277,16 @@ def one_glacier(args):
     return R
 
 
+def write_tables(R, out, ids, fcols):
+    for p in PARTS:
+        d = out / f'C_{p}'
+        d.mkdir(parents=True, exist_ok=True)
+        for g in ids:
+            B = [(int(round(r['band'])), [max(r[c], F_FLOOR) for c in fcols])
+                 for _, r in R[(R.rgi == g) & (R.part == p)].iterrows()]
+            wot.write(d / f'orient_{g}.dat', wot.table_text(g, B, f'C, part {p}'))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('run_dir')
@@ -283,6 +294,7 @@ def main():
     ap.add_argument('--ids', default=None)
     ap.add_argument('--workers', type=int, default=12)
     ap.add_argument('--scheme', default='GNS', choices=sorted(SCHEMES))
+    ap.add_argument('--tables-only', action='store_true', help='write the tables again from OUT/parts.csv')
     a = ap.parse_args()
     global PARTS
     SCHEME['name'], PARTS = a.scheme, SCHEMES[a.scheme]
@@ -291,16 +303,15 @@ def main():
     zones = pd.read_csv(ZONES, dtype={'glacier_id': str}).set_index('glacier_id').utm_zone.to_dict()
     w = oe.read_station(wot.INPUTS['jungfraujoch'])
     sig, dif, _ = oe.sky_weights(w)
+    fcols = [f'F{dT:+.0f}' for dT in DTS]
+    if a.tables_only:
+        R = pd.read_csv(out / 'parts.csv', dtype={'rgi': str})
+        write_tables(R, out, ids, fcols)
+        return
     jobs = [(g, run, zones.get(g, 32), w, sig, dif) for g in ids]
     with get_context('fork').Pool(a.workers) as pool:
         R = pd.concat(pool.map(one_glacier, jobs), ignore_index=True)
-    fcols = [f'F{dT:+.0f}' for dT in DTS]
-    for p in PARTS:
-        d = out / f'C_{p}'
-        d.mkdir(parents=True, exist_ok=True)
-        for g in ids:
-            B = [(int(round(r['band'])), [r[c] for c in fcols]) for _, r in R[(R.rgi == g) & (R.part == p)].iterrows()]
-            wot.write(d / f'orient_{g}.dat', wot.table_text(g, B, f'C, part {p}'))
+    write_tables(R, out, ids, fcols)
     R.to_csv(out / 'parts.csv', index=False, float_format='%.5f')
     meta = dict(run=str(run), glaciers=ids, scheme=a.scheme, parts=PARTS, gentle_deg=10.0, strength='C', dT=DTS,
                 n_rows=len(R),
