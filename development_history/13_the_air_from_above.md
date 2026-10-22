@@ -15,8 +15,9 @@
 > runs it with and without a snow-surface cooling (Gilbert et al. 2014), because today's too-cold air stands in for
 > the missing cooling. A rule fixed before the runs decides.
 >
-> *Status (22 Oct, afternoon): data, switch and rule done; gate and review running; the 72 test runs start after the
-> five-part orientation runs. Plan: `plans/2026-10-22_freeair_plan.md`. Report: `glogemflow_development/reports/Alpine
+> *Status (22 Oct, afternoon): data, switch and rule done. The review found the free air read a month late (fixed)
+> and the site count of rule 3 wrong (amended before any run). The gate on the fixed switch is running; the 72 test
+> runs start after the five-part orientation runs. Plan: `plans/2026-10-22_freeair_plan.md`. Report: `glogemflow_development/reports/Alpine
 > air temperature beyond ERA5.md`.*
 
 ## What we believed
@@ -178,9 +179,38 @@ free-air run. Against o4 (FRHS with three orientation parts), FAG is adopted if:
 
 FA and FAS are reported. The scorer's dry run on o4 reproduces o4's own scores exactly (1.855 °C).
 
+### The review and the gate
+
+**One reviewer at max effort read the switch before any test run and found two errors:**
+- **The free air was read one month late.** `accumulation.pro` moves the month counter on before the thermal forcing
+  runs, so every month took the next month's free air: up to 11 K off, about +4 °C in April–May and −4 °C in
+  October. The gate check found the same independently: the logged band air missed the table by up to 11.4 K.
+  - Fixed in GloGEM `d783f84`: the month's index is now taken where the mass balance reads its own air.
+- **Rule 3 counted sites by the name before '@'.** That made Grenzgletscher one "site" of 33 bands (tongue and Monte
+  Rosa saddles) and Taconnaz two sites.
+  - Amended before any test run (icetemp `c4ac02c`, decision log): sites now come from the site table, 20 sites.
+
+**The gate:**
+- **Switches off:** all 373 output files and all 123 matched entities are byte-identical to o4.
+- **The surface:** follows min(0, 0.95 × air − 1.4) to the files' rounding (0.0005 °C).
+- **Free air on the fixed commit** (tag `fag2`, `d783f84`): the logged band air equals the table to 0.000005 °C in
+  every month and band.
+- **The mass-balance files are byte-identical** with the switch on: snow in May, snow at the boreholes and the firn
+  line, 69 files, in both free-air runs. `snowclim` differs, as it should: it logs the thermal model's temperatures.
+- **Switches off on the fixed commit:** byte-identical to o4 again.
+
+**Named before the results, so they are not read into them afterwards:**
+- **A third way the free air acts.** Besides the surface and the melt, it raises the Herron–Langway temperature by
+  about 2–2.5 K. The firn then turns to ice shallower, and meltwater stops shallower.
+- **The orientation tables stay those of o4.** They were matched to the 2 m air's summer melt; the free air is
+  0.2–1.4 K colder in June–August. Keeping them makes the test differ from o4 in the air alone; the price is a small
+  inconsistency in the factors, reported, not rebuilt.
+
 ## What the test gives
 
-*Runs pending (tag `fa1`, 72 runs: three variants × three parts × eight f_ref).*
+*Running since 14:54 on 22 Oct (tag `fa1`, 72 runs: three variants × three parts × eight f_ref, GloGEM `d783f84`,
+`week3/chain_freeair.sh`). The baseline stays o4: the five-part build (o5) scored worse (2.13 °C on left-out massifs
+against 1.86) and was not adopted before the runs.*
 
 ## What is still open
 
@@ -202,7 +232,10 @@ FA and FAS are reported. The scorer's dry run on o4 reproduces o4's own scores e
   spin-up checks, cold pools: `week3/freeair/station_checks/`.
 - Data: glogem share `climatedata/reanalysis/monthly/era5_pressure_levels/CentralEurope/` (README); table
   `week3/freeair/freeair_CentralEurope.nc`.
-- GloGEM (branch `freeair-thermal`, local): `df7407a`. icetemp: `c66b30f` (rule, scorer, table, run options).
+- GloGEM (branch `freeair-thermal`, local): `df7407a` (the switch), `d783f84` (this month's free air, after the
+  review). icetemp: `c66b30f` (rule, scorer, table, run options), `c4ac02c` (rule 3 by the site table).
+- Gate: `week3/launch_freeair_gate.sh` (tag `fag`), `launch_freeair_gate2.sh` (`fag2`, fixed switch);
+  `scripts/icetemp_analysis/freeair/freeair_gate_check.py`.
 - Literature: Cao, Gruber & Zhang 2017 (GMD 10, 2905); Fiddes & Gruber 2014 (GMD 7, 387); Gilbert et al. 2014 (TC 8,
   689); Monteiro & Morin 2023 (TC 17, 3617); Scherrer 2020 (ERL 15, 044005); Rudisill et al. 2024 (BAMS).
 
