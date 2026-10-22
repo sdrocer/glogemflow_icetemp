@@ -49,11 +49,27 @@ DEMS = Path('/itet-stor/jabeer/glogem/geometricdata/rgiv7/dem/centraleurope')
 ZONES = W3 / 'orientation_investigation/data/region11_grid_utm_zone.csv'
 FIRNICE = Path('training_runs/monthly/CentralEurope/PAST/firnice_temperature')
 GENTLE = np.radians(10.0)
-PARTS = ('G', 'N', 'S')
+SCHEMES = {'GNS': ('G', 'N', 'S'), 'GNESW': ('G', 'N', 'E', 'S', 'W')}
+PARTS = SCHEMES['GNS']
+
+
+def classify(slope, aspect, scheme='GNS'):
+    """Part of each plane: G below 10 deg; GNS: N 270-90 deg, S 90-270 deg; GNESW: four 90-deg sectors centred on
+    the compass points (N 315-45, E 45-135, S 135-225, W 225-315)."""
+    a = np.asarray(aspect)
+    if scheme == 'GNS':
+        tilted = np.where((a >= np.pi / 2) & (a < 1.5 * np.pi), 'S', 'N')
+    elif scheme == 'GNESW':
+        k = np.floor(np.mod(a + np.pi / 4, 2 * np.pi) / (np.pi / 2)).astype(int)
+        tilted = np.array(['N', 'E', 'S', 'W'])[k]
+    else:
+        raise ValueError(scheme)
+    return np.where(np.asarray(slope) < GENTLE, 'G', tilted)
 JJAS_DAYS = slice(151, 273)          # 1 June - 30 September (0-based day of a 365-day year)
 DTS = wot.DTS
 C, ALB, TTIP, DMIN = 10.0, wot.ALB, wot.TTIP, wot.DMIN
 CHUNK = 40
+SCHEME = dict(name='GNS')
 
 
 def read_grid(f):
@@ -202,8 +218,7 @@ def one_glacier(args):
     inp = band_inputs(run, gid, bands_g)
     px = glacier_pixels(gid, eu, zone)
     band_of = bands_g[np.argmin(np.abs(px['z_band'][:, None] - bands_g[None, :]), axis=1)]
-    part = np.where(px['slope'] < GENTLE, 'G', np.where((px['aspect'] >= np.pi / 2) & (px['aspect'] < 1.5 * np.pi),
-                                                        'S', 'N'))
+    part = classify(px['slope'], px['aspect'], SCHEME['name'])
     hor = np.empty((len(px['z']), 72))
     for i in range(0, len(hor), 800):
         hor[i:i + 800], _ = eu.horizons(px['lon'][i:i + 800], px['lat'][i:i + 800])
@@ -267,7 +282,10 @@ def main():
     ap.add_argument('out', nargs='?', default=str(W3 / 'orient_parts'))
     ap.add_argument('--ids', default=None)
     ap.add_argument('--workers', type=int, default=12)
+    ap.add_argument('--scheme', default='GNS', choices=sorted(SCHEMES))
     a = ap.parse_args()
+    global PARTS
+    SCHEME['name'], PARTS = a.scheme, SCHEMES[a.scheme]
     run, out = Path(a.run_dir), Path(a.out)
     ids = a.ids.split(',') if a.ids else sorted(set((W3 / 'orient_glaciers.txt').read_text().split()))
     zones = pd.read_csv(ZONES, dtype={'glacier_id': str}).set_index('glacier_id').utm_zone.to_dict()
@@ -284,7 +302,8 @@ def main():
             B = [(int(round(r['band'])), [r[c] for c in fcols]) for _, r in R[(R.rgi == g) & (R.part == p)].iterrows()]
             wot.write(d / f'orient_{g}.dat', wot.table_text(g, B, f'C, part {p}'))
     R.to_csv(out / 'parts.csv', index=False, float_format='%.5f')
-    meta = dict(run=str(run), glaciers=ids, gentle_deg=10.0, strength='C', dT=DTS, n_rows=len(R),
+    meta = dict(run=str(run), glaciers=ids, scheme=a.scheme, parts=PARTS, gentle_deg=10.0, strength='C', dT=DTS,
+                n_rows=len(R),
                 flags=R.flag.value_counts().to_dict(),
                 inputs={k: dict(path=str(p), sha256=hashlib.sha256(p.read_bytes()).hexdigest())
                         for k, p in dict(jungfraujoch=wot.INPUTS['jungfraujoch'], zones=ZONES).items()})
