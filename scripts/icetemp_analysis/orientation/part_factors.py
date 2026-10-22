@@ -13,8 +13,9 @@ Pixels: EU-DEM 25 m inside GloGEM's glacier mask (a pixel belongs to the glacier
 cell), slope and aspect from the EU-DEM (aspect to true north), terrain horizons from EU-DEM (72 azimuths, as week
 1), each pixel joined to the nearest glacierised model band by its EU-DEM elevation. Clear-sky radiation hourly for
 June-September, vectorised over pixels, sun positions at the glacier centre and the air mass of the band (the
-physics of orientation_eb.clear_sky_hourly). An empty part takes the band's mean, a band without pixels the nearest
-band's factors (both flagged). The bands, their monthly air temperature and degree-day melt come from a run with
+physics of orientation_eb.clear_sky_hourly). Pixels join the bands by their EU-DEM height shifted onto GloGEM's DEM
+cell by cell (z_band). A part without pixels in a band takes that part of the nearest band that has it; only where a
+glacier has no pixel of that part at all, the band mean (both flagged). The bands, their monthly air temperature and degree-day melt come from a run with
 firnice_write_melth = 'y' (firnice_tairth_<id>.dat, firnice_melth_<id>.dat; glacierised bands from
 firnice_snowclim_<id>.dat).
 
@@ -44,6 +45,7 @@ import write_orient_tables as wot  # noqa: E402
 
 W3 = Path('/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week3')
 MASKS = Path('/itet-stor/jabeer/glogem/geometricdata/rgiv7/glmask/centraleurope')
+DEMS = Path('/itet-stor/jabeer/glogem/geometricdata/rgiv7/dem/centraleurope')
 ZONES = W3 / 'orientation_investigation/data/region11_grid_utm_zone.csv'
 FIRNICE = Path('training_runs/monthly/CentralEurope/PAST/firnice_temperature')
 GENTLE = np.radians(10.0)
@@ -105,8 +107,14 @@ def band_inputs(run, gid, bands_g):
 
 
 def glacier_pixels(gid, eu, zone):
-    """EU-DEM 25 m pixels whose centre falls in a mask cell: lon, lat, z, slope, aspect (rad, from true north)."""
+    """EU-DEM 25 m pixels whose centre falls in a mask cell: lon, lat, z, slope, aspect (rad, from true north), and
+    z_band, the EU-DEM height shifted by its mask cell's offset (mean EU-DEM height of the cell's pixels minus GloGEM's
+    DEM height of the cell), so pixels join GloGEM's bands as GloGEM's own heights do (review of 22 Oct: EU-DEM lies
+    8-28 m below GloGEM's DEM at the high sites)."""
     hd, m = read_grid(MASKS / f'gl_{gid}.grid')
+    hd_z, zg = read_grid(DEMS / f'dem_{gid}.grid')
+    if any(abs(hd[k] - hd_z[k]) > 1e-3 for k in ('ncols', 'nrows', 'xllcorner', 'yllcorner', 'cellsize')):
+        raise SystemExit(f'{gid}: mask and DEM grids differ')
     cs_m, nr, nc = hd['cellsize'], int(hd['nrows']), int(hd['ncols'])
     utm = f'EPSG:326{int(zone)}'
     to_ll = Transformer.from_crs(utm, 'EPSG:4326', always_xy=True)
@@ -133,8 +141,17 @@ def glacier_pixels(gid, eu, zone):
     sel &= np.isfinite(a.ravel()) & np.isfinite(slope.ravel())
     lonc, latc = np.mean(np.asarray(lon)[sel]), np.mean(np.asarray(lat)[sel])
     gam = ec.north_bearing('EPSG:3035', lonc, latc)
-    return dict(lon=np.asarray(lon)[sel], lat=np.asarray(lat)[sel], z=a.ravel()[sel], slope=slope.ravel()[sel],
-                aspect=np.mod(asp_g.ravel()[sel] - gam, 2 * np.pi), latc=latc, lonc=lonc, mask_cell=cs_m)
+    z = a.ravel()[sel]
+    cell = ri[sel] * nc + ci[sel]
+    _, inv = np.unique(cell, return_inverse=True)
+    cell_mean = np.bincount(inv, weights=z) / np.bincount(inv)
+    zc = zg[ri[sel], ci[sel]]
+    if (zc < -1000).any():
+        raise SystemExit(f'{gid}: mask cells without a DEM height')
+    offset = cell_mean[inv] - zc
+    return dict(lon=np.asarray(lon)[sel], lat=np.asarray(lat)[sel], z=z, z_band=z - offset, offset=offset,
+                slope=slope.ravel()[sel], aspect=np.mod(asp_g.ravel()[sel] - gam, 2 * np.pi), latc=latc, lonc=lonc,
+                mask_cell=cs_m)
 
 
 class Sun:
@@ -184,7 +201,7 @@ def one_glacier(args):
     bands_g = glacierised_bands(run, gid)
     inp = band_inputs(run, gid, bands_g)
     px = glacier_pixels(gid, eu, zone)
-    band_of = bands_g[np.argmin(np.abs(px['z'][:, None] - bands_g[None, :]), axis=1)]
+    band_of = bands_g[np.argmin(np.abs(px['z_band'][:, None] - bands_g[None, :]), axis=1)]
     part = np.where(px['slope'] < GENTLE, 'G', np.where((px['aspect'] >= np.pi / 2) & (px['aspect'] < 1.5 * np.pi),
                                                         'S', 'N'))
     hor = np.empty((len(px['z']), 72))
@@ -210,27 +227,35 @@ def one_glacier(args):
             S = sig_j[None] * sdir[:, None] + dif_j[None] * svf[j, None, None, None] * hour_means(fdif)[None, None]
             for k, dT in enumerate(DTS):
                 melt[i:i + CHUNK, k] = eb_jjas(Th[None] + dT, S, p0)
-        F_band = melt.mean(axis=0) / flat if len(sel) else None
+        F_band = melt.mean(axis=0) / flat if len(sel) else np.full(len(DTS), np.nan)
         for p in PARTS:
             q = part[sel] == p
-            if q.any():
-                F, flag = melt[q].mean(axis=0) / flat, ''
-            elif len(sel):
-                F, flag = F_band, 'empty part: band mean'
-            else:
-                F, flag = None, 'no pixels: nearest band'
+            F = melt[q].mean(axis=0) / flat if q.any() else np.full(len(DTS), np.nan)
             rows.append(dict(rgi=gid, band=b, part=p, n_pix=int(q.sum()), share=float(q.mean()) if len(sel) else 0.0,
                              slope=float(np.degrees(px['slope'][sel][q]).mean()) if q.any() else np.nan,
-                             aspect=float(np.degrees(px['aspect'][sel][q]).mean()) if q.any() else np.nan,
-                             psi0=p0, dd_jjas=inp[b]['dd_jjas'], flag=flag,
-                             **{f'F{dT:+.0f}': (np.nan if F is None else float(F[k])) for k, dT in enumerate(DTS)}))
+                             aspect=float(np.degrees(np.angle(np.exp(1j * px['aspect'][sel][q]).mean())) % 360)
+                             if q.any() else np.nan,
+                             psi0=p0, dd_jjas=inp[b]['dd_jjas'], flag='',
+                             **{f'F{dT:+.0f}': float(F[k]) for k, dT in enumerate(DTS)},
+                             **{f'Fband{dT:+.0f}': float(F_band[k]) for k, dT in enumerate(DTS)}))
     R = pd.DataFrame(rows)
     fcols = [f'F{dT:+.0f}' for dT in DTS]
-    have = R.dropna(subset=[fcols[0]])
-    for i in R.index[R[fcols[0]].isna()]:
-        near = have[(have.part == R.at[i, 'part'])]
-        k = (near.band - R.at[i, 'band']).abs().idxmin()
-        R.loc[i, fcols] = near.loc[k, fcols].to_numpy()
+    bcols = [f'Fband{dT:+.0f}' for dT in DTS]
+    real = R[R.n_pix > 0]
+    for i in R.index[R.n_pix == 0]:
+        near = real[real.part == R.at[i, 'part']]
+        if len(near):
+            k = (near.band - R.at[i, 'band']).abs().idxmin()
+            R.loc[i, fcols] = near.loc[k, fcols].to_numpy()
+            R.at[i, 'flag'] = 'no pixels of this part: nearest band with them'
+            R.at[i, 'fill_band'] = near.at[k, 'band']
+        else:
+            withpix = R[R[bcols[0]].notna()]
+            k = (withpix.band - R.at[i, 'band']).abs().idxmin()
+            R.loc[i, fcols] = withpix.loc[k, bcols].to_numpy()
+            R.at[i, 'flag'] = 'no pixels of this part on the glacier: band mean'
+            R.at[i, 'fill_band'] = withpix.at[k, 'band']
+    R = R.drop(columns=bcols)
     print(f'{gid}: {len(px["z"])} pixels, {len(bands_g)} bands, parts G/N/S '
           f'{(part == "G").mean():.2f}/{(part == "N").mean():.2f}/{(part == "S").mean():.2f}', flush=True)
     return R

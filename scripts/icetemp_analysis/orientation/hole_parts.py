@@ -1,12 +1,14 @@
 """The orientation part (G gentle, N north, S south) of every calibration borehole, for merging the three part runs
 (Step 5 plan, step 1c; runner.GloGEMRunner.merge_part_outputs).
 
-A hole takes the part of the EU-DEM 25 m pixel it lies in, with the same slope and aspect as the pixels of
-part_factors.py (np.gradient on the EU-DEM, aspect to true north; G below 10 deg, N 270-90 deg, S 90-270 deg), so
-holes and pixels are classified alike. For the holes with a week-1 plane (hole_sun.csv, fine DEM within 75 m) the
-part from that plane is listed beside it.
+A hole takes the part of its week-1 plane (hole_sun.csv: a plane fitted to the finest DEM within 75 m of the hole;
+G below 10 deg, N 270-90 deg, S 90-270 deg), as the plan of 21 Oct says; holes without one (those with readings only
+in the top 15 m) take the part of the EU-DEM 25 m pixel they lie in (part_at, the classification of the pixels).
+The review of 22 Oct showed the plane's part far closer to the hole's own exposure (its part factor correlates 0.77
+with the hole's own factor, the single pixel's 0.56).
 
-Writes OUT/hole_parts.csv (hole, rgi, lat, lon, slope, aspect, part, part_plane).
+Writes OUT/hole_parts.csv (hole, rgi, lat, lon, slope, aspect of the EU-DEM pixel, part_eudem, part_plane, part = the
+part used, source).
 
 Usage: PYTHONPATH=src python scripts/icetemp_analysis/orientation/hole_parts.py [OUT]
 """
@@ -58,16 +60,18 @@ def main():
         lat, lon = float(B.at[h, 'latitude']), float(B.at[h, 'longitude'])
         slope, aspect, part = part_at(eu, lon, lat)
         rows.append(dict(hole=h, rgi=gid, lat=lat, lon=lon, slope=np.degrees(slope), aspect=np.degrees(aspect),
-                         part=part))
+                         part_eudem=part))
     P = pd.DataFrame(rows)
     H = pd.read_csv(pf.W3 / 'orientation_investigation/evidence/hole_sun.csv', dtype={'hole': str})
     plane = dict(zip(H.hole, part_of(np.radians(H.slope_deg.to_numpy()), np.radians(H.aspect_deg.to_numpy()))))
     P['part_plane'] = P.hole.map(plane)
+    P['part'] = P.part_plane.fillna(P.part_eudem)
+    P['source'] = np.where(P.part_plane.notna(), 'week-1 plane', 'EU-DEM pixel')
     P.to_csv(out / 'hole_parts.csv', index=False, float_format='%.4f')
     both = P.dropna(subset=['part_plane'])
-    print(f'{len(P)} holes: parts {P.part.value_counts().to_dict()}; with a week-1 plane {len(both)}, '
-          f'same part {int((both.part == both.part_plane).sum())}')
-    print(pd.crosstab(both.part, both.part_plane, rownames=['EU-DEM 25 m'], colnames=['week-1 plane']).to_string())
+    print(f'{len(P)} holes: parts used {P.part.value_counts().to_dict()} ({(P.source == "week-1 plane").sum()} from the '
+          f'week-1 plane); EU-DEM pixel and plane agree at {int((both.part_eudem == both.part_plane).sum())} of {len(both)}')
+    print(pd.crosstab(both.part_eudem, both.part_plane, rownames=['EU-DEM 25 m'], colnames=['week-1 plane']).to_string())
 
 
 if __name__ == '__main__':

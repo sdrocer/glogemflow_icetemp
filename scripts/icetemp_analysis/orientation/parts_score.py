@@ -10,6 +10,7 @@ slope and RMS, rule 1a, regime classes and net sites against FRHS, sunny/shaded 
 read from the run of its own part), every band at depth.
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/orientation/parts_score.py [OUT_DIR]
+           [--tag o4] [--parts DIR]   (o3 with week3/orient_parts: the first build, before the review of 22 Oct)
 """
 import json
 import pickle
@@ -32,8 +33,9 @@ W3 = Path('/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week3')
 GRID = orr.GRID
 RUN = {'FRHS': lambda fr: ft.run_name('o1', 'FRHS', fr),
        'C': lambda fr: ft.run_name('o1', 'FRHS', fr).replace('_w0', '_oC_w0'),
-       'CP': lambda fr: ft.run_name('o3', 'FRHS', fr).replace('_w0', '_oCP_w0')}
-PART_RUN = lambda p, fr: ft.run_name('o3', 'FRHS', fr).replace('_w0', f'_oC{p}_w0')  # noqa: E731
+       'CP': lambda fr: ft.run_name(CFG['tag'], 'FRHS', fr).replace('_w0', '_oCP_w0')}
+PART_RUN = lambda p, fr: ft.run_name(CFG['tag'], 'FRHS', fr).replace('_w0', f'_oC{p}_w0')  # noqa: E731
+CFG = dict(tag='o4', parts=W3 / 'orient_parts_v2')
 
 
 def frozen_beds_parts(E, chosen, part_of_hole):
@@ -53,7 +55,14 @@ def frozen_beds_parts(E, chosen, part_of_hole):
 
 
 def main():
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else W3 / 'orient_parts_score'
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('out_dir', nargs='?', default=str(W3 / 'orient_parts_score_v2'))
+    ap.add_argument('--tag', default=CFG['tag'])
+    ap.add_argument('--parts', default=str(CFG['parts']))
+    a = ap.parse_args()
+    CFG.update(tag=a.tag, parts=Path(a.parts))
+    out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     dh = DataHandler(region='CentralEurope', pool_within='hole_year')
     dh.load()
@@ -71,7 +80,7 @@ def main():
     orr.SUN = B[['entity', 'ratio_jja']]
     A = pd.read_csv(orr.TABLES / 'applied.csv', dtype={'rgi': str})
     F0 = dict(zip(A.entity, A.F_band_C))
-    hp = pd.read_csv(W3 / 'orient_parts/hole_parts.csv', dtype={'hole': str})
+    hp = pd.read_csv(CFG['parts'] / 'hole_parts.csv', dtype={'hole': str})
     part_of_hole = dict(zip(hp.hole, hp.part))
     obs_cls = ft.entity_classes(P, 'obs', E)
     zone = P.band.between(*ft.ZONE)
@@ -83,8 +92,8 @@ def main():
             if tag == 'all entities':
                 L[v] = orr.lomo_measures(P, E, obs_cls, v, GRID)
             W, bb = orr.within_measures(P, v, GRID, 1999)
-            if tag == 'all entities':
-                BB[v] = bb
+            if tag == 'Stage-1 exclusions':
+                BB[v] = bb    # pairs as Stage 1 counted them (the Taconnaz 4285/4295 pair stays out)
             r = res['variants'].setdefault(v, {})
             r[f'within ({tag})'] = {k: W[k] for k in ('f_common', 'slope', 'slope_90', 'slope_wo', 'within_rmse',
                                                      'within_rmse_wo', 'slope_massif')}
