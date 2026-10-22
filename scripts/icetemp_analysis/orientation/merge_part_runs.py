@@ -9,7 +9,7 @@ entity-pooled output; profiles and frozen beds are read from the part run of eac
 the three runs must be identical (snow logs and firn line), which is checked first.
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/orientation/merge_part_runs.py
-           BASE [BASE ...] [--strength C] [--parts DIR]
+           BASE [BASE ...] [--strength C] [--parts DIR] [--scheme GNS|GNESW]
        BASE e.g. o3_FRHS_r0.85_i1.017_a1.00
 """
 import argparse
@@ -26,7 +26,7 @@ from icetemp.calibration.data import DataHandler  # noqa: E402
 from icetemp.calibration.runner import GloGEMRunner  # noqa: E402
 
 W3 = Path('/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week3')
-PARTS = ('G', 'N', 'S')
+SCHEMES = {'GNS': ('G', 'N', 'S'), 'GNESW': ('G', 'N', 'E', 'S', 'W')}
 
 
 def same_mass_balance(runs):
@@ -47,12 +47,14 @@ def main():
     ap.add_argument('bases', nargs='+')
     ap.add_argument('--strength', default='C')
     ap.add_argument('--parts', default=str(W3 / 'orient_parts'))
+    ap.add_argument('--scheme', default='GNS', choices=sorted(SCHEMES))
     a = ap.parse_args()
     hp = pd.read_csv(Path(a.parts) / 'hole_parts.csv', dtype={'hole': str})
     part_of_hole = dict(zip(hp.hole, hp.part))
     dh = DataHandler(region='CentralEurope', pool_within='hole_year')
     dh.load()
     for base in a.bases:
+        PARTS = SCHEMES[a.scheme]
         runs = [f'{base}_o{a.strength}{p}_w0' for p in PARTS]
         n_mb = same_mass_balance(runs)
         outs = {}

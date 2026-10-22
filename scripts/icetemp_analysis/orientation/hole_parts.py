@@ -10,7 +10,7 @@ with the hole's own factor, the single pixel's 0.56).
 Writes OUT/hole_parts.csv (hole, rgi, lat, lon, slope, aspect of the EU-DEM pixel, part_eudem, part_plane, part = the
 part used, source).
 
-Usage: PYTHONPATH=src python scripts/icetemp_analysis/orientation/hole_parts.py [OUT]
+Usage: PYTHONPATH=src python scripts/icetemp_analysis/orientation/hole_parts.py [OUT] [--scheme GNS|GNESW]
 """
 import sys
 from pathlib import Path
@@ -28,8 +28,11 @@ from icetemp.calibration import thermal_structure as ts  # noqa: E402
 from icetemp.calibration.data import DataHandler  # noqa: E402
 
 
+SCHEME = dict(name='GNS')
+
+
 def part_of(slope, aspect):
-    return np.where(slope < pf.GENTLE, 'G', np.where((aspect >= np.pi / 2) & (aspect < 1.5 * np.pi), 'S', 'N'))
+    return pf.classify(slope, aspect, SCHEME['name'])
 
 
 def part_at(eu, lon, lat, to3035=Transformer.from_crs('EPSG:4326', 'EPSG:3035', always_xy=True)):
@@ -44,7 +47,13 @@ def part_at(eu, lon, lat, to3035=Transformer.from_crs('EPSG:4326', 'EPSG:3035', 
 
 
 def main():
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else pf.W3 / 'orient_parts'
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('out', nargs='?', default=str(pf.W3 / 'orient_parts'))
+    ap.add_argument('--scheme', default='GNS', choices=sorted(pf.SCHEMES))
+    a = ap.parse_args()
+    SCHEME['name'] = a.scheme
+    out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     dh = DataHandler(region='CentralEurope', pool_within='hole_year')
     dh.load()

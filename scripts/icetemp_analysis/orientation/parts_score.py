@@ -35,14 +35,15 @@ RUN = {'FRHS': lambda fr: ft.run_name('o1', 'FRHS', fr),
        'C': lambda fr: ft.run_name('o1', 'FRHS', fr).replace('_w0', '_oC_w0'),
        'CP': lambda fr: ft.run_name(CFG['tag'], 'FRHS', fr).replace('_w0', '_oCP_w0')}
 PART_RUN = lambda p, fr: ft.run_name(CFG['tag'], 'FRHS', fr).replace('_w0', f'_oC{p}_w0')  # noqa: E731
-CFG = dict(tag='o4', parts=W3 / 'orient_parts_v2')
+CFG = dict(tag='o4', parts=W3 / 'orient_parts_v2', letters='GNS')
 
 
 def frozen_beds_parts(E, chosen, part_of_hole):
     """ft.frozen_bed_table for CP: each bed hole from the part run of its own part. Bed holes without scored points
     (so not in hole_parts.csv) get their part from the same EU-DEM classification (hole_parts.part_at)."""
-    tabs = {p: ft.frozen_bed_table({('CP', fr): PART_RUN(p, fr) for fr in GRID}, {'CP': chosen}, E) for p in 'GNS'}
-    if not all(list(tabs[p].hole) == list(tabs['G'].hole) for p in 'GNS'):
+    tabs = {p: ft.frozen_bed_table({('CP', fr): PART_RUN(p, fr) for fr in GRID}, {'CP': chosen}, E)
+            for p in CFG['letters']}
+    if not all(list(tabs[p].hole) == list(tabs['G'].hole) for p in CFG['letters']):
         raise SystemExit('the part runs list different bed holes')
     B = ts.load_borehole_table().set_index('id')
     eu, added = hp_mod.ec.EuDem(), {}
@@ -60,8 +61,10 @@ def main():
     ap.add_argument('out_dir', nargs='?', default=str(W3 / 'orient_parts_score_v2'))
     ap.add_argument('--tag', default=CFG['tag'])
     ap.add_argument('--parts', default=str(CFG['parts']))
+    ap.add_argument('--scheme', default='GNS', choices=('GNS', 'GNESW'))
     a = ap.parse_args()
-    CFG.update(tag=a.tag, parts=Path(a.parts))
+    CFG.update(tag=a.tag, parts=Path(a.parts), letters=a.scheme)
+    hp_mod.SCHEME['name'] = a.scheme
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     dh = DataHandler(region='CentralEurope', pool_within='hole_year')
