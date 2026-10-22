@@ -216,8 +216,8 @@ FA and FAS are reported. The scorer's dry run on o4 reproduces o4's own scores e
 
 ## What the test gives
 
-*Running since 14:54 on 22 Oct (tag `fa1`, 72 runs: three variants × three parts × eight f_ref, GloGEM `d783f84`,
-`week3/chain_freeair.sh`). The baseline stays o4: the five-part build (o5) scored worse (2.13 °C on left-out massifs
+*Run on 22 Oct 14:54–17:12 (tag `fa1`, 72 runs: three variants × three parts × eight f_ref, GloGEM `d783f84`,
+`week3/chain_freeair.sh`), all 72 OK; merged and scored by the same chain into `week3/freeair/score/`. The baseline stays o4: the five-part build (o5) scored worse (2.13 °C on left-out massifs
 against 1.86) and was not adopted before the runs.*
 
 ## What is still open
