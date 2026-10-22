@@ -30,6 +30,17 @@ def part_of(slope, aspect):
     return np.where(slope < pf.GENTLE, 'G', np.where((aspect >= np.pi / 2) & (aspect < 1.5 * np.pi), 'S', 'N'))
 
 
+def part_at(eu, lon, lat, to3035=Transformer.from_crs('EPSG:4326', 'EPSG:3035', always_xy=True)):
+    """Slope and aspect (rad) of the EU-DEM 25 m pixel at a point, and its part."""
+    x, y = to3035.transform(lon, lat)
+    a, x0, y0, cs = eu.block(x - 100, x + 100, y - 100, y + 100)
+    dzr, dzc = np.gradient(a, cs)
+    r, c = int(round((y0 - y) / cs)), int(round((x - x0) / cs))
+    slope = float(np.arctan(np.hypot(dzc[r, c], -dzr[r, c])))
+    aspect = float(np.mod(np.arctan2(-dzc[r, c], dzr[r, c]) - ec.north_bearing('EPSG:3035', lon, lat), 2 * np.pi))
+    return slope, aspect, str(part_of(np.array(slope), np.array(aspect)))
+
+
 def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else pf.W3 / 'orient_parts'
     out.mkdir(parents=True, exist_ok=True)
@@ -42,18 +53,12 @@ def main():
                 holes[str(h)] = g.glacier_id
     B = ts.load_borehole_table().set_index('id')
     eu = ec.EuDem()
-    to3035 = Transformer.from_crs('EPSG:4326', 'EPSG:3035', always_xy=True)
     rows = []
     for h, gid in sorted(holes.items()):
         lat, lon = float(B.at[h, 'latitude']), float(B.at[h, 'longitude'])
-        x, y = to3035.transform(lon, lat)
-        a, x0, y0, cs = eu.block(x - 100, x + 100, y - 100, y + 100)
-        dzr, dzc = np.gradient(a, cs)
-        r, c = int(round((y0 - y) / cs)), int(round((x - x0) / cs))
-        slope = float(np.arctan(np.hypot(dzc[r, c], -dzr[r, c])))
-        aspect = float(np.mod(np.arctan2(-dzc[r, c], dzr[r, c]) - ec.north_bearing('EPSG:3035', lon, lat), 2 * np.pi))
+        slope, aspect, part = part_at(eu, lon, lat)
         rows.append(dict(hole=h, rgi=gid, lat=lat, lon=lon, slope=np.degrees(slope), aspect=np.degrees(aspect),
-                         part=str(part_of(np.array(slope), np.array(aspect)))))
+                         part=part))
     P = pd.DataFrame(rows)
     H = pd.read_csv(pf.W3 / 'orientation_investigation/evidence/hole_sun.csv', dtype={'hole': str})
     plane = dict(zip(H.hole, part_of(np.radians(H.slope_deg.to_numpy()), np.radians(H.aspect_deg.to_numpy()))))

@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import firn_batch_rule as fbr  # noqa: E402
 import forcing_fair_test as ft  # noqa: E402
+import hole_parts as hp_mod  # noqa: E402
 import orient_rule as orr  # noqa: E402
 from icetemp.calibration import thermal_structure as ts  # noqa: E402
 from icetemp.calibration.data import DataHandler, site_keys  # noqa: E402
@@ -36,12 +37,19 @@ PART_RUN = lambda p, fr: ft.run_name('o3', 'FRHS', fr).replace('_w0', f'_oC{p}_w
 
 
 def frozen_beds_parts(E, chosen, part_of_hole):
-    """ft.frozen_bed_table for CP: each bed hole from the part run of its own part."""
+    """ft.frozen_bed_table for CP: each bed hole from the part run of its own part. Bed holes without scored points
+    (so not in hole_parts.csv) get their part from the same EU-DEM classification (hole_parts.part_at)."""
     tabs = {p: ft.frozen_bed_table({('CP', fr): PART_RUN(p, fr) for fr in GRID}, {'CP': chosen}, E) for p in 'GNS'}
     if not all(list(tabs[p].hole) == list(tabs['G'].hole) for p in 'GNS'):
         raise SystemExit('the part runs list different bed holes')
-    rows = [tabs[part_of_hole[str(r.hole)]].loc[i] for i, r in tabs['G'].iterrows()]
-    return pd.DataFrame(rows)
+    B = ts.load_borehole_table().set_index('id')
+    eu, added = hp_mod.ec.EuDem(), {}
+    for h in tabs['G'].hole.astype(str):
+        if h not in part_of_hole:
+            added[h] = hp_mod.part_at(eu, float(B.at[h, 'longitude']), float(B.at[h, 'latitude']))[2]
+    parts = {**part_of_hole, **added}
+    rows = [tabs[parts[str(r.hole)]].loc[i] for i, r in tabs['G'].iterrows()]
+    return pd.DataFrame(rows).assign(part=[parts[str(h)] for h in tabs['G'].hole]), added
 
 
 def main():
@@ -96,7 +104,9 @@ def main():
         res['variants'][v]['frozen_beds'] = dict(found=int((F.frozen_meas & F[f'frozen_{v}']).sum()),
                                                  of=int(F.frozen_meas.sum()),
                                                  temperate_called_frozen=int((~F.frozen_meas & F[f'frozen_{v}']).sum()))
-    FB = frozen_beds_parts(E, L['CP']['chosen'], part_of_hole)
+    FB, added = frozen_beds_parts(E, L['CP']['chosen'], part_of_hole)
+    FB.to_csv(out / 'frozen_bed_CP.csv', index=False)
+    res['bed_holes_part_added'] = added
     F = FB[np.isfinite(FB['T_CP'].astype(float))]
     res['variants']['CP']['frozen_beds'] = dict(found=int((F.frozen_meas & F['frozen_CP']).sum()),
                                                 of=int(F.frozen_meas.sum()),

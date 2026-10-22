@@ -19,6 +19,9 @@ be defended later, in a paper, a thesis or a talk.
 | 9 | [Snow and firn from data](09_snow_and_firn_from_data.md) | 14–19 Oct 2026 | the precipitation bound fixes the winter snow but not the snow line; less snow restores Tête Rousse's frozen bed; snow lines and firn maps must pin the firn |
 | 10 | [The firn ledger](10_the_firn_ledger.md) | 19–20 Oct 2026 | the ledger's rules reproduce the firn model; fed GloGEM's balance it holds 10–30 m w.e. of firn where observations leave none |
 | 11 | [The missing heat](11_the_missing_heat.md) | 19–20 Oct 2026 – | meltwater refreezing in the snow on ice bands (S) repairs the small zone glaciers, but warms the already warm tongues and costs Tête Rousse's frozen bed; GloGEM's full refreezing model was broken and changes nothing; comparisons now per borehole and year |
+| 12 | [Sun and shade, burial, and the air](12_sun_shade_burial_air.md) | 20–22 Oct 2026 | orientation fails its rule twice but is kept (three parts per band: error on left-out massifs 2.51 → 1.96 °C, the shade pattern inside sites nearly gone); burial 2–20× too fast and the air 2 °C too cold, neither explains the massif split; known limitations |
+
+Decisions made on the data, with whether they followed a rule fixed in advance: [decision log](decision_log.md).
 
 ## How chapters are written
 
