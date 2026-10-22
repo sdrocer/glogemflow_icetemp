@@ -208,6 +208,9 @@ FA and FAS are reported. The scorer's dry run on o4 reproduces o4's own scores e
     4800 m, the summer air being 0.4 K colder.
   - Keeping the tables makes the test differ from o4 in the air alone; the price is factors anchored to slightly too
     much melt. Reported, not rebuilt.
+  - Less anchored melt puts flat ground closer to the melt threshold, so the sun-and-shade contrast grows. **The `fa1`
+    factors are therefore probably slightly too mild for the free-air climate** (reasoning from how the tables are
+    built, not computed).
   - **If the free air is adopted:** one melt-logging run on the free air, `part_factors.py` on it (about 40 min),
     then the part runs.
 
