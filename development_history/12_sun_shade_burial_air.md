@@ -335,21 +335,27 @@ with five parts (right; mean slope and share of the band in brackets).*
   the drill sites are gentle (north-facing ones: median 17°). On north faces F falls steeply with slope, so a north
   part's F is set by its steep pixels, below what a gentle north-facing drill site would get.
   - Five parts make this worse. The narrow north sector drops the north-east and north-west faces, which get more
-    sun. In some bands it is also much steeper (here 29° → 38°, F 0.65 → 0.41).
+    sun, and it is steeper. Between 3300 and 3700 m on all 23 glaciers, its median slope is 30° against 28°, and 38 %
+    of its pixels are steeper than 35° against 31 %. Its median F is 0.63 against 0.72. In some bands the difference
+    is much larger (here 29° → 38°, F 0.65 → 0.41).
   - So a north hole reads a factor made for steeper, more shaded ground than its own, and f_ref rises to make up for
     it. This is the main reason the five-part runs did worse (above).
 
 ![Every pixel's factor against the direction it faces](figures/ch12_pixels.svg)
 
 *Every 25 m pixel between 3300 and 3700 m on the calibration glaciers (dots), with the median F per 15° of direction
-for four slope classes (lines). Solid vertical lines: the three-part boundaries; dashed: the five-part boundaries.
-Provisional: 21 of the 23 glaciers; Gorner (01225) and Aletsch (02596) are still being computed.*
+for four slope classes (lines); 103,000 pixels on the 16 glaciers that reach this height. Solid vertical lines: the
+three-part boundaries; dashed: the five-part boundaries. The parts computed from these pixels are identical to those
+of the corrected build.*
 
 - **F follows the direction smoothly,** lowest facing north to north-east, highest facing south to south-west. The
   curve is shifted towards the west: at the same slope, west faces lie above east faces (20–35°: 0.92 against 0.85).
   This is the timing effect of the clear July day, now in the real terrain.
-- **On the north side, steepness separates the pixels:** facing north, F is 0.92 below 10°, 0.79 at 10–20°, 0.65 at
-  20–35° and 0.44 above 35° (medians). On the south side the slope hardly matters (0.98–1.03).
+- **On the north side, steepness separates the pixels:** facing north, F is 0.93 below 10°, 0.82 at 10–20°, 0.66 at
+  20–35° and 0.39 above 35° (medians). On the south side the slope hardly matters (1.01–1.07).
+- **Most pixels are steep:** 60 % are steeper than 20° (12 % gentle, 28 % at 10–20°, 41 % at 20–35°, 19 % steeper).
+  A part's F is their area average, so it is pulled towards the steep faces, not the gentle ones where boreholes are
+  drilled.
 - **The three-part cuts at east and west fall where F changes fastest.** A pixel facing just north of west (F about
   0.9) is averaged with the north faces (0.4–0.8).
 
