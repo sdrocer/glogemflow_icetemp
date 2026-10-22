@@ -23,7 +23,7 @@ Writes OUT/C_G, OUT/C_N, OUT/C_S/orient_<id>.dat (one file per glacier of the ru
 band and part: pixels, area share, mean slope and aspect, F at dT 0, flags) and OUT/parts.json (inputs, counts).
 
 Usage: PYTHONPATH=src python scripts/icetemp_analysis/orientation/part_factors.py MELTH_RUN_DIR [OUT] [--ids ...]
-           [--workers N]
+           [--workers N] [--scheme GNS|GNESW|GNXS30|GNXS35] [--pixels] [--from-pixels PIXEL_DIR]
 """
 import argparse
 import hashlib
@@ -266,7 +266,46 @@ def one_glacier(args):
                              psi0=p0, dd_jjas=inp[b]['dd_jjas'], flag='',
                              **{f'F{dT:+.0f}': float(F[k]) for k, dT in enumerate(DTS)},
                              **{f'Fband{dT:+.0f}': float(F_band[k]) for k, dT in enumerate(DTS)}))
-    R = pd.DataFrame(rows)
+    R = fill_empty(pd.DataFrame(rows))
+    print(f'{gid}: {len(px["z"])} pixels, {len(bands_g)} bands, parts G/N/S '
+          f'{(part == "G").mean():.2f}/{(part == "N").mean():.2f}/{(part == "S").mean():.2f}', flush=True)
+    if SCHEME.get('pixels'):
+        P = pd.concat(pix, ignore_index=True) if pix else pd.DataFrame()
+        SCHEME['pix_dir'].mkdir(parents=True, exist_ok=True)
+        P.to_csv(SCHEME['pix_dir'] / f'pixels_{gid}.csv.gz', index=False, float_format='%.5f')
+    return R
+
+
+def from_pixels(gid, run, pix_dir):
+    """The parts of one glacier from its stored pixel factors (a --pixels run), for another split: a part's F is the
+    mean of its pixels' F (its mean melt over the flat-ground melt, to the 5 stored decimals); psi0 and dd_jjas are
+    not stored and stay empty."""
+    bands_g = glacierised_bands(run, gid)
+    P = pd.read_csv(pix_dir / f'pixels_{gid}.csv.gz')
+    fcols = [f'F{dT:+.0f}' for dT in DTS]
+    part = classify(np.radians(P.slope.to_numpy()), np.radians(P.aspect.to_numpy()), SCHEME['name'])
+    Fp, slope, asp = P[fcols].to_numpy(), P.slope.to_numpy(), np.radians(P.aspect.to_numpy())
+    rows = []
+    for b in bands_g:
+        inb = np.abs(P.band.to_numpy() - b) < 0.01
+        F_band = Fp[inb].mean(axis=0) if inb.any() else np.full(len(DTS), np.nan)
+        for p in PARTS:
+            q = inb & (part == p)
+            F = Fp[q].mean(axis=0) if q.any() else np.full(len(DTS), np.nan)
+            rows.append(dict(rgi=gid, band=b, part=p, n_pix=int(q.sum()), share=float(q.sum() / inb.sum()) if inb.any()
+                             else 0.0, slope=float(slope[q].mean()) if q.any() else np.nan,
+                             aspect=float(np.degrees(np.angle(np.exp(1j * asp[q]).mean())) % 360) if q.any() else np.nan,
+                             psi0=np.nan, dd_jjas=np.nan, flag='',
+                             **{f'F{dT:+.0f}': float(F[k]) for k, dT in enumerate(DTS)},
+                             **{f'Fband{dT:+.0f}': float(F_band[k]) for k, dT in enumerate(DTS)}))
+    print(f'{gid}: {len(P)} pixels, {len(bands_g)} bands, parts '
+          + ' '.join(f'{p} {(part == p).mean():.2f}' for p in PARTS), flush=True)
+    return fill_empty(pd.DataFrame(rows))
+
+
+def fill_empty(R):
+    """A part without pixels in a band takes that part of the nearest band that has it; only where the glacier has
+    no pixel of that part at all, the band mean (both flagged)."""
     fcols = [f'F{dT:+.0f}' for dT in DTS]
     bcols = [f'Fband{dT:+.0f}' for dT in DTS]
     real = R[R.n_pix > 0]
@@ -283,14 +322,7 @@ def one_glacier(args):
             R.loc[i, fcols] = withpix.loc[k, bcols].to_numpy()
             R.at[i, 'flag'] = 'no pixels of this part on the glacier: band mean'
             R.at[i, 'fill_band'] = withpix.at[k, 'band']
-    R = R.drop(columns=bcols)
-    print(f'{gid}: {len(px["z"])} pixels, {len(bands_g)} bands, parts G/N/S '
-          f'{(part == "G").mean():.2f}/{(part == "N").mean():.2f}/{(part == "S").mean():.2f}', flush=True)
-    if SCHEME.get('pixels'):
-        P = pd.concat(pix, ignore_index=True) if pix else pd.DataFrame()
-        SCHEME['pix_dir'].mkdir(parents=True, exist_ok=True)
-        P.to_csv(SCHEME['pix_dir'] / f'pixels_{gid}.csv.gz', index=False, float_format='%.5f')
-    return R
+    return R.drop(columns=bcols)
 
 
 def write_tables(R, out, ids, fcols):
@@ -312,6 +344,8 @@ def main():
     ap.add_argument('--scheme', default='GNS', choices=sorted(SCHEMES))
     ap.add_argument('--tables-only', action='store_true', help='write the tables again from OUT/parts.csv')
     ap.add_argument('--pixels', action='store_true', help='also write every pixel\'s factor (OUT/pixels/pixels_<id>.csv.gz)')
+    ap.add_argument('--from-pixels', default=None, help='parts from the stored pixel factors in this folder (no energy '
+                    'balance; any --scheme)')
     a = ap.parse_args()
     SCHEME['pixels'], SCHEME['pix_dir'] = a.pixels, Path(a.out) / 'pixels'
     global PARTS
@@ -326,12 +360,16 @@ def main():
         R = pd.read_csv(out / 'parts.csv', dtype={'rgi': str})
         write_tables(R, out, ids, fcols)
         return
-    jobs = [(g, run, zones.get(g, 32), w, sig, dif) for g in ids]
-    with get_context('fork').Pool(a.workers) as pool:
-        R = pd.concat(pool.map(one_glacier, jobs), ignore_index=True)
+    if a.from_pixels:
+        R = pd.concat([from_pixels(g, run, Path(a.from_pixels)) for g in ids], ignore_index=True)
+    else:
+        jobs = [(g, run, zones.get(g, 32), w, sig, dif) for g in ids]
+        with get_context('fork').Pool(a.workers) as pool:
+            R = pd.concat(pool.map(one_glacier, jobs), ignore_index=True)
     write_tables(R, out, ids, fcols)
     R.to_csv(out / 'parts.csv', index=False, float_format='%.5f')
     meta = dict(run=str(run), glaciers=ids, scheme=a.scheme, parts=PARTS, gentle_deg=10.0, strength='C', dT=DTS,
+                from_pixels=a.from_pixels,
                 n_rows=len(R),
                 flags=R.flag.value_counts().to_dict(),
                 inputs={k: dict(path=str(p), sha256=hashlib.sha256(p.read_bytes()).hexdigest())

@@ -9,7 +9,7 @@ entity-pooled output; profiles and frozen beds are read from the part run of eac
 the three runs must be identical (snow logs and firn line), which is checked first.
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/orientation/merge_part_runs.py
-           BASE [BASE ...] [--strength C] [--parts DIR] [--scheme GNS|GNESW]
+           BASE [BASE ...] [--strength C] [--parts DIR] [--scheme GNS|GNESW|GNXS30|GNXS35] [--part-runs P=RUN_TAG ...]
        BASE e.g. o3_FRHS_r0.85_i1.017_a1.00
 """
 import argparse
@@ -20,13 +20,15 @@ from pathlib import Path
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import forcing_fair_test as ft  # noqa: E402
+import part_factors as pf  # noqa: E402
 from icetemp.calibration.data import DataHandler  # noqa: E402
 from icetemp.calibration.runner import GloGEMRunner  # noqa: E402
 
 W3 = Path('/scratch_net/vierzack04_fourth/jabeer/tmp_icetemp_trees/week3')
-SCHEMES = {'GNS': ('G', 'N', 'S'), 'GNESW': ('G', 'N', 'E', 'S', 'W')}
+SCHEMES = pf.SCHEMES
 
 
 def same_mass_balance(runs):
@@ -48,14 +50,18 @@ def main():
     ap.add_argument('--strength', default='C')
     ap.add_argument('--parts', default=str(W3 / 'orient_parts'))
     ap.add_argument('--scheme', default='GNS', choices=sorted(SCHEMES))
+    ap.add_argument('--part-runs', nargs='*', default=[],
+                    help='P=TAG: take part P from the run of another tag (e.g. G=o4: identical tables)')
     a = ap.parse_args()
+    other = dict(x.split('=') for x in a.part_runs)
     hp = pd.read_csv(Path(a.parts) / 'hole_parts.csv', dtype={'hole': str})
     part_of_hole = dict(zip(hp.hole, hp.part))
     dh = DataHandler(region='CentralEurope', pool_within='hole_year')
     dh.load()
     for base in a.bases:
         PARTS = SCHEMES[a.scheme]
-        runs = [f'{base}_o{a.strength}{p}_w0' for p in PARTS]
+        tag = base.split('_')[0]
+        runs = [f'{other[p] + base[len(tag):] if p in other else base}_o{a.strength}{p}_w0' for p in PARTS]
         n_mb = same_mass_balance(runs)
         outs = {}
         for p, r in zip(PARTS, runs):

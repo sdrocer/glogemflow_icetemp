@@ -10,7 +10,8 @@ slope and RMS, rule 1a, regime classes and net sites against FRHS, sunny/shaded 
 read from the run of its own part), every band at depth.
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/orientation/parts_score.py [OUT_DIR]
-           [--tag o4] [--parts DIR]   (o3 with week3/orient_parts: the first build, before the review of 22 Oct)
+           [--tag o4] [--parts DIR] [--scheme S] [--part-runs P=TAG ...]   (o3 with week3/orient_parts: the first
+           build, before the review of 22 Oct)
 """
 import json
 import pickle
@@ -34,8 +35,8 @@ GRID = orr.GRID
 RUN = {'FRHS': lambda fr: ft.run_name('o1', 'FRHS', fr),
        'C': lambda fr: ft.run_name('o1', 'FRHS', fr).replace('_w0', '_oC_w0'),
        'CP': lambda fr: ft.run_name(CFG['tag'], 'FRHS', fr).replace('_w0', '_oCP_w0')}
-PART_RUN = lambda p, fr: ft.run_name(CFG['tag'], 'FRHS', fr).replace('_w0', f'_oC{p}_w0')  # noqa: E731
-CFG = dict(tag='o4', parts=W3 / 'orient_parts_v2', letters='GNS')
+PART_RUN = lambda p, fr: ft.run_name(CFG['part_tags'].get(p, CFG['tag']), 'FRHS', fr).replace('_w0', f'_oC{p}_w0')  # noqa: E731
+CFG = dict(tag='o4', parts=W3 / 'orient_parts_v2', letters=('G', 'N', 'S'), part_tags={})
 
 
 def frozen_beds_parts(E, chosen, part_of_hole):
@@ -61,9 +62,11 @@ def main():
     ap.add_argument('out_dir', nargs='?', default=str(W3 / 'orient_parts_score_v2'))
     ap.add_argument('--tag', default=CFG['tag'])
     ap.add_argument('--parts', default=str(CFG['parts']))
-    ap.add_argument('--scheme', default='GNS', choices=('GNS', 'GNESW'))
+    ap.add_argument('--scheme', default='GNS', choices=sorted(hp_mod.pf.SCHEMES))
+    ap.add_argument('--part-runs', nargs='*', default=[], help='P=TAG: part P from the runs of another tag')
     a = ap.parse_args()
-    CFG.update(tag=a.tag, parts=Path(a.parts), letters=a.scheme)
+    CFG.update(tag=a.tag, parts=Path(a.parts), letters=hp_mod.pf.SCHEMES[a.scheme],
+               part_tags=dict(x.split('=') for x in a.part_runs))
     hp_mod.SCHEME['name'] = a.scheme
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
