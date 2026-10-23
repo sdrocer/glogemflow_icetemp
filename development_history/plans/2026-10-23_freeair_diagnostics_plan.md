@@ -12,6 +12,11 @@ the orientation factors had been built on the 2 m air.
 
 **Approved by Janosch on 23 Oct ("yes lets do it").** This round is diagnostic: reported, no adoption rule.
 
+> **Stopped on 23 Oct at 11:46, three minutes after its start.** The same morning Janosch decided that Gilbert's
+> surface cooling stays out of the model and out of all tests. Every setting here carried it.
+> - Stopped: the chain, 9 launched fa2 runs (2 of them had started IDL); no fd1 run had started.
+> - No result came from this round.
+
 ## What runs
 
 All runs use the free air with Gilbert's surface boundary (FAG, 0.95 × air − 1.4), on the orientation factors

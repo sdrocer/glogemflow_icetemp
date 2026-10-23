@@ -23,8 +23,12 @@
 > - Today's cold air was hiding more than the missing surface cooling: probably also the colder past that the deep
 >   ice still remembers, which a spin-up on 1942–71 cannot give.
 >
-> *Status (23 Oct): the orientation factors are being rebuilt on the free air (orientation session, at Janosch's
-> request; re-run as `fa2`). Next decision: Janosch's.* Plan: `plans/2026-10-22_freeair_plan.md`. Report: `glogemflow_development/reports/Alpine
+> *Status (23 Oct, noon):*
+> - *Janosch decided that Gilbert's surface cooling stays out of the model and out of all tests ("we are loading the
+>   model with more and more processes").*
+> - *The diagnostic round on the free air with Gilbert's cooling (`fa2`, `fd1`; plan of 23 Oct) was stopped minutes
+>   after its start. No result came from it.*
+> - *v1.0 keeps ERA5's 2 m air.* Plan: `plans/2026-10-22_freeair_plan.md`. Report: `glogemflow_development/reports/Alpine
 > air temperature beyond ERA5.md`.*
 
 ## What we believed
@@ -269,17 +273,20 @@ top of each other.*
   - f_ref pressed to its limit.
 - The early free air is also about 0.5 °C warmer, relative to the summit stations, than today's (spin-up check
   above).
-- **Possible next tests** (none decided):
-  - the free air with a colder spin-up (`firnice_spinup_dT`; −1 and −2 K cooled the high, long-memory sites in
-    chapter 12);
-  - a spin-up that starts earlier, on the long summit records. The baseline stays o4: the five-part build (o5) scored worse (2.13 °C on left-out massifs
+- **The diagnostic round that was to test this** (plan of 23 Oct) was stopped minutes after its start.
+  - Its settings: a colder spin-up, f_adv, f_ins, and the orientation factors rebuilt for the free air (`fa2`).
+  - Why: all of them carried Gilbert's cooling, which Janosch took out of the model and of all tests the same day.
+  - The deep-ice explanation therefore stays untested. The baseline stays o4: the five-part build (o5) scored worse (2.13 °C on left-out massifs
 against 1.86) and was not adopted before the runs.*
 
 ## What is still open
 
-- Janosch's decision after the test, and the re-run on orientation factors rebuilt for the free air (`fa2`).
+- **The free air stays a switch, off by default** (GloGEM `freeair-thermal`, local, not merged). v1.0 keeps ERA5's
+  2 m air, a known limitation as decided on 21 Oct, now with its cause and size measured.
+- **Gilbert's surface cooling is out** (Janosch, 23 Oct). A correct air needs a physical snow-surface energy balance
+  instead, in later work.
 - **The deep ice at the high sites:** whether a colder or longer spin-up removes the deep warm bias under the free air
-  (inferred, above).
+  (inferred above; untested).
 - **The mass balance on free air:** a later stage of its own, with recalibration of all CentralEurope glaciers and the
   GCM correction re-anchored to the new reference (the GMIP4 inputs are already corrected to today's ERA5).
 - **Cold pools at low tongues:** free air is too warm in winter valley floors. A terrain-dependent share of ERA5's
