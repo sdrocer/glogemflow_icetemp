@@ -21,11 +21,13 @@
 > choose f_ref 0.85. The zone, the frozen beds and the massif split stay unchanged. West faces get about 12 % more
 > meltwater heat than east faces, but five parts (adding east and west) are worse at the boreholes (2.13 °C). Four
 > parts (the steep north walls apart) bring the boreholes' part factors closer to their own, but are not better at
-> the boreholes either (2.14 °C). Three parts are recommended for v1.0.
+> the boreholes either (2.14 °C). Judged without the Mont Blanc / Monte Rosa split, the boreholes barely tell the
+> splits apart. **Janosch chose five parts for v1.0 (23 Oct):** the map must show east and west faces, so that users
+> such as CREALP can see where cold and polythermal glaciers lie.
 >
-> *Status (23 Oct, morning): the corrected three-part build and the five- and four-part tests are scored (below). A
+> *Status (23 Oct, midday): the three-, four- and five-part builds are scored, and five parts are chosen (below). A
 > section explains how the energy balance behind F works for north, south, east and west faces; every pixel's factor
-> is stored. Three or four parts for v1.0 awaits Janosch's decision. Plans: `plans/2026-10-20_step5_plan.md` (step 1b, revised 21 Oct, and the new step 1c). Decisions:
+> is stored. Plans: `plans/2026-10-20_step5_plan.md` (step 1b, revised 21 Oct, and the new step 1c). Decisions:
 > `decision_log.md`.*
 
 ## What we believed
@@ -525,7 +527,8 @@ parts, now written as 0.000001), merged and scored like the three-part build:
   make up for it, which overheats the rest. The thinner sectors also leave more parts of a band without pixels (4460
   of 12,895 band-parts filled from a neighbouring band, against fewer with three parts).
 - **So the east–west difference is real** (west faces 12 % more meltwater heat), **but a finer compass split does not
-  help a band model at the boreholes.** Three parts stay (pending Janosch's decision).
+  help a band model at the boreholes.** On 23 Oct Janosch nevertheless chose five parts for v1.0, for the map
+  (*The decision: five parts*, below).
 
 ### Four parts: the steep north walls apart
 
@@ -578,16 +581,43 @@ against four (blue). Right: how well the other six fit at each f_ref, when Mont 
 - **What improves:** the bands of one site fit each other better (1.72 → 1.62 °C, back to FRHS's 1.63).
 - **The yardstick and the temperatures disagree, as in Stage 1.** The holes' part factors came closer to their own,
   but the temperatures did not improve out of sample. The meltwater heat at the holes is not the main error.
-- **Recommendation: three parts for v1.0.**
-  - They are best on left-out massifs, and a third cheaper to run.
-  - The steep north walls cover 17 % of the borehole bands' area, but only three single readings can test them.
-  - The four-part tables build in minutes from the stored pixels, so the steep walls can be added to the map later.
-  - Janosch's decision is pending.
+- **My recommendation was three parts for v1.0:** best on left-out massifs, a third cheaper to run, and the steep
+  north walls (17 % of the borehole bands' area) testable by only three single readings.
+
+### The decision: five parts
+
+**Janosch's objection (23 Oct): the comparison is judged mostly on the Mont Blanc / Monte Rosa split.** That is right:
+a small change tips which f_ref a fold chooses, and the two massifs that disagree most then decide the score. So the
+three splits were also compared on measures the fold choices cannot distort (`parts_compare.py`,
+`week3/orient_parts_compare_all`):
+
+| measure | three parts | four parts (steep north walls apart) | five parts (N, E, S, W) |
+|---|---|---|---|
+| error on left-out massifs (the usual score) | **1.86 °C** | 2.14 | 2.13 |
+| one f_ref for every massif, all bands | **1.85** (at 0.85) | 1.89 (0.85) | 1.97 (1.00) |
+| same, above 3800 m | **1.87** | 1.88 | 2.11 |
+| same, zone 3000–3800 m | 2.52 | 2.58 | **2.51** |
+| the other five massifs, each left out in turn | **1.14** | 1.23 | 1.43 |
+
+- **Judged this way, the differences are small.** The boreholes barely tell the splits apart, so the split can be
+  chosen by what the map needs.
+- **The six-part split** (five parts with the steep north walls apart) fitted the holes' own factors best on the
+  pixels (gap 0.099, north holes' shortfall −0.02). It was not run: Janosch judged five parts enough.
+- **Janosch's decision: five parts for v1.0** (gentle; north, east, south and west as 90° sectors). The map must show
+  east and west faces, so that users such as CREALP can narrow down where cold and polythermal glaciers lie.
+  Calibration and map use the same split, because f_ref is calibrated with the factors the boreholes get.
+- **What comes with it:**
+  - every Step 5 design run becomes five part runs (a batch of 40 about 6.5 h instead of 4 h with three parts);
+  - north-facing holes get too little meltwater heat (their part factor 0.41 against their own 0.59), because the
+    narrow north sector holds steep shaded walls;
+  - with five parts the folds choose f_ref 1.0, its upper limit, in five of seven cases, and the best single f_ref is
+    1.00. Step 5's range for f_ref ends at 1.0, the physical limit (all meltwater refreezing and heating), so the
+    calibration may sit against that limit.
 
 ## What is still open
 
-- **Step 5 on the three parts:** every design run becomes three runs (a batch of 40 about 4 h instead of 1.3 h); the
-  pipeline merges them per hole before the emulator (`merge_part_outputs`).
+- **Step 5 on the five parts:** every design run becomes five part runs; the pipeline merges them per hole before
+  the emulator (`merge_part_outputs`). f_ref may sit at its upper limit of 1.0 (above).
 - **The region-wide factors** for the map (all 4079 glaciers; about 3–4 h of computing plus one GloGEM run).
 - **The meltwater switch near 0 °C** (Taconnaz, Tête Rousse) and the massif split: after v1.0.
 
