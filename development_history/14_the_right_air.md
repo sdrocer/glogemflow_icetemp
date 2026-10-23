@@ -96,7 +96,9 @@ conditions:
 
 ## What the runs give
 
-*Pending (chain `week3/chain_freeair_base.sh`, scores in `week3/freeair/score_fb1/` and `week3/freeair/diag_fb1/`).*
+*Pending (chain `week3/chain_freeair_base.sh`, scores in `week3/freeair/score_fb1/` and `week3/freeair/diag_fb1/`).
+On Fri 23 Oct at 15:40 the base (40 runs) and the second wave (45) had finished without a failure; the third wave,
+the merge and the scoring were left to run over the weekend.*
 
 ## What is still open
 
