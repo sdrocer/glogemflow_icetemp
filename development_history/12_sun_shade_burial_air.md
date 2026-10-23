@@ -19,12 +19,13 @@
 > The build with three parts per band, corrected after a max-effort review, lowers the error on left-out massifs to
 > 1.86 °C (above 3800 m from 3.04 to 1.87 °C) and removes the sun-and-shade pattern inside sites; all seven massifs
 > choose f_ref 0.85. The zone, the frozen beds and the massif split stay unchanged. West faces get about 12 % more
-> meltwater heat than east faces, but five parts (adding east and west) are worse at the boreholes (2.13 °C), so
-> three parts stay.
+> meltwater heat than east faces, but five parts (adding east and west) are worse at the boreholes (2.13 °C). Four
+> parts (the steep north walls apart) bring the boreholes' part factors closer to their own, but are not better at
+> the boreholes either (2.14 °C). Three parts are recommended for v1.0.
 >
-> *Status (22 Oct, evening): the corrected three-part build and the five-part test are scored (below). A new section
-> explains how the energy balance behind F works for north, south, east and west faces; every pixel's factor is now
-> stored. Plans: `plans/2026-10-20_step5_plan.md` (step 1b, revised 21 Oct, and the new step 1c). Decisions:
+> *Status (23 Oct, morning): the corrected three-part build and the five- and four-part tests are scored (below). A
+> section explains how the energy balance behind F works for north, south, east and west faces; every pixel's factor
+> is stored. Three or four parts for v1.0 awaits Janosch's decision. Plans: `plans/2026-10-20_step5_plan.md` (step 1b, revised 21 Oct, and the new step 1c). Decisions:
 > `decision_log.md`.*
 
 ## What we believed
@@ -396,6 +397,7 @@ the test; the steeper pixels become a fourth part, "steep north walls" (X).
   calibration.
 - **Cost:** four runs per glacier instead of three. The gentle and south runs are identical to the corrected build's
   and can be reused, so the borehole test needs only the new north and steep-north runs (16 runs).
+- **The runs (23 Oct) do not confirm it at the boreholes:** see *Four parts: the steep north walls apart*, below.
 - **Not yet tested:** classes by exposure (shaded, middle, sunny, from each pixel's own F) instead of by direction.
 
 ### What this energy balance leaves out
@@ -525,6 +527,63 @@ parts, now written as 0.000001), merged and scored like the three-part build:
 - **So the east–west difference is real** (west faces 12 % more meltwater heat), **but a finer compass split does not
   help a band model at the boreholes.** Three parts stay (pending Janosch's decision).
 
+### Four parts: the steep north walls apart
+
+The pixel test above found that splitting the north faces at 30° brings the north holes' part factors much closer to
+their own. **The runs** (tag `o6`, 22 Oct evening):
+- 16 runs: the new north part (north-facing, 10–30°) and the steep north walls (30° and steeper), each at the 8 f_ref
+  values. The gentle and south runs are those of the corrected build, whose tables are identical (to 0.00001).
+- The tables were built from the stored pixel factors (`part_factors.py --from-pixels`). Built the same way, the
+  three parts reproduce all 7737 parts of the corrected build.
+- Seven holes moved from north to steep north. Three of them have one scored reading each: Altels 3015 m, Jungfraufirn
+  3635 m and Corvatsch 3345 m.
+- Merged and scored like the corrected build. The mass balance is identical in all four part runs.
+
+![Three against four parts on left-out massifs](figures/ch12_four_parts.svg)
+
+*Left: each massif predicted with the f_ref chosen on the other six (labels: the f_ref chosen), three parts (grey)
+against four (blue). Right: how well the other six fit at each f_ref, when Mont Blanc (circles) or Monte Rosa
+(squares) is left out; orange rings mark the chosen value. With four parts both choices move, by margins of only
+0.016 and 0.021 °C.*
+
+| measure | three parts (`o4`) | four parts (`o6`) |
+|---|---|---|
+| error on left-out massifs, all bands | **1.86 °C** | 2.14 |
+| above 3800 m | **1.87** | 2.32 |
+| zone 3000–3800 m | **2.52** | 2.58 |
+| without Taconnaz and Lys (also left out of the choice) | **1.26** | 1.32 |
+| one f_ref (0.85) for every massif, all bands | **1.86** | 1.89 |
+| scatter of a site's bands about the site mean | 1.72 | **1.62** |
+| shade error inside sites (°C per +0.1 sunshine) | +0.16 | +0.16 |
+| f_ref chosen in the 7 left-out-massif fits | 0.85 in all | 0.85 in five; 1.00 with Mont Blanc left out, 0.70 with Monte Rosa left out |
+| cold / polythermal / temperate bands right; frozen beds found | 63 / 9 / 2; 11 of 14 | the same |
+
+- **Four parts are not better at the boreholes.** On left-out massifs the error rises from 1.86 to 2.14 °C, and above
+  3800 m from 1.87 to 2.32 °C.
+- **Most of that rise comes from the choice of f_ref, not from the physics.**
+  - With f_ref 0.85 for every massif (what every fold chose with three parts), four parts give 1.89 against 1.86 °C.
+  - But two folds now choose differently, on near-ties. With Mont Blanc left out, the other six fit 1.00 better than
+    0.85 by 0.016 °C. With Monte Rosa left out, they fit 0.70 better than 0.85 by 0.021 °C.
+  - Each choice lands on the value the left-out massif likes least: Mont Blanc wants about 0.2, Monte Rosa 1.0. So
+    Mont Blanc's error rises from 2.94 to 3.18 °C, and Monte Rosa's from 1.98 to 2.64 °C.
+  - This is the massif split again: a small change anywhere can tip the choice on the coarse grid. Step 5 chooses
+    f_ref on a continuous scale, but the split stays.
+- **The north holes do get more meltwater heat, but the temperatures respond mixed.** At f_ref 0.85, 24 of the 105
+  bands change by more than 0.05 °C.
+  - Better: most Bossons bands (errors fall by 0.1–0.6 °C), and Taconnaz 3835 m (2.87 → 0.41 °C).
+  - Worse: Grenzgletscher 3995, 4095 and 4335 m and Morteratsch 3855 m get warmer and miss by 0.3–0.9 °C more.
+  - Worse: Jungfraufirn 3635 m (one reading, −0.6 °C measured). It is a steep face of 38° turned east-north-east (80°),
+    which the three-part cut counts as north. It moved to the steep north walls and came out 1.6 °C colder (error 1.71
+    → 3.29 °C).
+- **What improves:** the bands of one site fit each other better (1.72 → 1.62 °C, back to FRHS's 1.63).
+- **The yardstick and the temperatures disagree, as in Stage 1.** The holes' part factors came closer to their own,
+  but the temperatures did not improve out of sample. The meltwater heat at the holes is not the main error.
+- **Recommendation: three parts for v1.0.**
+  - They are best on left-out massifs, and a third cheaper to run.
+  - The steep north walls cover 17 % of the borehole bands' area, but only three single readings can test them.
+  - The four-part tables build in minutes from the stored pixels, so the steep walls can be added to the map later.
+  - Janosch's decision is pending.
+
 ## What is still open
 
 - **Step 5 on the three parts:** every design run becomes three runs (a batch of 40 about 4 h instead of 1.3 h); the
@@ -537,10 +596,12 @@ parts, now written as 0.000001), merged and scored like the three-part build:
 - Plans: `plans/2026-10-20_step5_plan.md` (step 1b revised and step 1c, 21 Oct).
 - Investigation: `week3/orientation_investigation/` (workflow result, journal, scripts).
 - Runs: `o1` (Stage 1), `b1` (burial), `o2` (re-check), `sd` (spin-up), `mth` (band melt), `o3` (the first build;
-  merged `o3_*_oCP`), `o4` (the corrected build; merged `o4_*_oCP`), `o5` (five parts); scores in
+  merged `o3_*_oCP`), `o4` (the corrected build; merged `o4_*_oCP`), `o5` (five parts), `o6` (four parts: north and steep north; gentle
+  and south from `o4`; merged `o6_*_oCP`); scores in
   `week3/orient_stage1/`, `week3/burial_test/`, `week3/orient_recheck/`, `week3/orient_parts_score/` (o3),
-  `week3/orient_parts_score_v2/` (o4), `week3/orient_parts_score_5/` (o5); factors in `week3/orient_parts_v2/` and
-  `week3/orient_parts5/`; every pixel's factor in `week3/orient_pixels/pixels/`; the air check in
+  `week3/orient_parts_score_v2/` (o4), `week3/orient_parts_score_5/` (o5), `week3/orient_parts_score_nx30/` (o6),
+  `week3/orient_parts_compare_o4_o6/` (`parts_compare.py`: every f_ref, the folds, every band); factors in
+  `week3/orient_parts_v2/`, `week3/orient_parts5/` and `week3/orient_parts_nx30/`; every pixel's factor in `week3/orient_pixels/pixels/`; the air check in
   `week3/airtemp_check/`; the burial literature in `week3/burial_research/`.
 - The energy balance: `scripts/icetemp_analysis/orientation/orientation_eb.py` (physics), `part_factors.py` (pixels
   and parts); the example-band figures in `figures/make_ch12.py` (`Example`, `eb_day`, `eb_factor`).
@@ -559,6 +620,10 @@ parts, now written as 0.000001), merged and scored like the three-part build:
 | orientation factor F | how much more or less a slope melts than flat ground in the same weather; multiplies the thermal model's meltwater only |
 | part (G, N, S) | the gentle (slope under 10°), north-facing and south-facing share of a 10 m band; each has its own F and its own model run |
 | five parts (G, N, E, S, W) | the gentle share plus four 90° sectors centred on north, east, south and west |
+| four parts (G, N, X, S) | three parts with the north faces split at 30°: north 10–30° (N) and the steep north walls (X) |
+| the hole's own factor | F computed for the plane fitted to the terrain within 75 m of a borehole (Stage 1): the yardstick for a split |
+| fold | one left-out-massif fit: f_ref chosen on six massifs, then used to predict the seventh |
+| near-tie | two f_ref values that fit the other six massifs almost equally well, so a small change flips the choice |
 | energy balance | melt computed from the energy a surface receives (absorbed sun plus the air term), instead of from air temperature alone |
 | semi-empirical | the sun is computed physically, the rest of the exchanges are lumped into one air term with constants from the literature (Giesen & Oerlemans 2012) |
 | S | the sunlight reaching a surface: direct beam plus diffuse light from the sky (W m⁻²) |

@@ -363,6 +363,43 @@ def pixels():
               f'{(q.slope >= 35).mean():.2f}, median F {q["F+0"].median():.2f}')
 
 
+def four_parts():
+    D = W3 / 'orient_parts_compare_o4_o6'
+    Fo = pd.read_csv(D / 'folds.csv')
+    fig, (a, b) = plt.subplots(1, 2, figsize=(10.4, 4.2), facecolor=SURFACE, gridspec_kw=dict(width_ratios=[1.25, 1]))
+    for ax in (a, b):
+        style(ax)
+    order = Fo[Fo.tag == 'o4'].sort_values('error').massif.tolist()
+    y = np.arange(len(order))
+    for k, (t, col, lab) in enumerate((('o4', NEUTRAL, 'three parts'), ('o6', BLUE, 'four parts (steep north walls)'))):
+        d = Fo[Fo.tag == t].set_index('massif').loc[order]
+        a.barh(y + (0.2 if k == 0 else -0.2), d.error, 0.38, color=col, label=lab)
+        for yi, (e, c) in enumerate(zip(d.error, d.chosen)):
+            a.text(e + 0.04, yi + (0.2 if k == 0 else -0.2), f'f_ref {c:.2f}', va='center', fontsize=7.5, color=INK2)
+    a.set_yticks(y)
+    a.set_yticklabels(order)
+    a.set_xlim(0, 3.9)
+    a.set_xlabel('error on the left-out massif (°C)')
+    a.legend(frameon=False, fontsize=8, loc='lower right')
+    a.set_title('each massif predicted from the other six', fontsize=10, color=INK)
+    frs = [0.55, 0.70, 0.85, 1.00]
+    for m, mk in (('Mont Blanc', 'o'), ('Monte Rosa', 's')):
+        for t, col, ls in (('o4', NEUTRAL, '-'), ('o6', BLUE, '--')):
+            r = Fo[(Fo.tag == t) & (Fo.massif == m)].iloc[0]
+            v = [r[f'train_{f:.2f}'] for f in frs]
+            b.plot(frs, v, ls=ls, marker=mk, color=col, lw=1.6, ms=5,
+                   label=f'{m} left out, {"three" if t == "o4" else "four"} parts')
+            b.plot(r.chosen, r[f'train_{r.chosen:.2f}'], marker=mk, ms=11, mfc='none', mec=ORANGE, mew=1.6)
+    b.set_xticks(frs)
+    b.set_xlabel('f_ref')
+    b.set_ylabel('error on the other six massifs (°C)')
+    b.set_title('the choice (orange rings) is a near-tie', fontsize=10, color=INK)
+    b.legend(frameon=False, fontsize=7.5, loc='upper center')
+    b.set_ylim(1.35, 2.75)
+    fig.tight_layout()
+    save(fig, 'ch12_four_parts')
+
+
 if __name__ == '__main__':
     burial()
     air_bias()
@@ -375,3 +412,5 @@ if __name__ == '__main__':
     eb_factor(ex)
     if (W3 / 'orient_pixels/pixels').exists():
         pixels()
+    if (W3 / 'orient_parts_compare_o4_o6/folds.csv').exists():
+        four_parts()
