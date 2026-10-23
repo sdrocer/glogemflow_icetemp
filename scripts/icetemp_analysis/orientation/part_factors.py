@@ -50,20 +50,22 @@ ZONES = W3 / 'orientation_investigation/data/region11_grid_utm_zone.csv'
 FIRNICE = Path('training_runs/monthly/CentralEurope/PAST/firnice_temperature')
 GENTLE = np.radians(10.0)
 SCHEMES = {'GNS': ('G', 'N', 'S'), 'GNESW': ('G', 'N', 'E', 'S', 'W'), 'GNXS30': ('G', 'N', 'X', 'S'),
-           'GNXS35': ('G', 'N', 'X', 'S')}
+           'GNXS35': ('G', 'N', 'X', 'S'), 'GNXESW30': ('G', 'N', 'X', 'E', 'S', 'W')}
 PARTS = SCHEMES['GNS']
 
 
 def classify(slope, aspect, scheme='GNS'):
     """Part of each plane: G below 10 deg; GNS: N 270-90 deg, S 90-270 deg; GNESW: four 90-deg sectors centred on
     the compass points (N 315-45, E 45-135, S 135-225, W 225-315); GNXS30/35: as GNS, with the north faces at or
-    above 30/35 deg as X (steep north walls)."""
+    above 30/35 deg as X (steep north walls); GNXESW30: as GNESW, with the north sector at or above 30 deg as X."""
     a, s = np.asarray(aspect), np.asarray(slope)
     if scheme == 'GNS':
         tilted = np.where((a >= np.pi / 2) & (a < 1.5 * np.pi), 'S', 'N')
-    elif scheme == 'GNESW':
+    elif scheme in ('GNESW', 'GNXESW30'):
         k = np.floor(np.mod(a + np.pi / 4, 2 * np.pi) / (np.pi / 2)).astype(int)
         tilted = np.array(['N', 'E', 'S', 'W'])[k]
+        if scheme == 'GNXESW30':
+            tilted = np.where((tilted == 'N') & (s >= np.radians(30.0)), 'X', tilted)
     elif scheme.startswith('GNXS'):
         north = np.where(s >= np.radians(float(scheme[4:])), 'X', 'N')
         tilted = np.where((a >= np.pi / 2) & (a < 1.5 * np.pi), 'S', north)
