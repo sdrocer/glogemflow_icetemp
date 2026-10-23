@@ -6,6 +6,8 @@ ch13_air_products: product minus measured air by month, mean of the 7 stations a
   air today, ERA5 free air at the station height, ICON-DREAM-EU and COSMO-REA6 (cell closest in height).
 ch13_mechanism: ERA5's 2 m air minus its own free air at the grid cell's height, by month, at the nine grid cells
   of the station test, 1995-2022 (week3/climate_products/tables/mechanism_2m_minus_freeair_wide.csv).
+ch13_depth: the test's error (model minus measured, out of sample, f_ref chosen leaving one massif out) by depth,
+  bands at and above 3800 m and below, for o4 and the three free-air variants (week3/freeair/score/points.csv).
 """
 import sys
 from pathlib import Path
@@ -86,6 +88,37 @@ def mechanism():
     save(fig, 'ch13_mechanism')
 
 
+def depth():
+    P = pd.read_csv(W3 / 'freeair/score/points.csv')
+    edges = [15, 20, 30, 50, 100, 200]
+    mid = [17.5, 25, 40, 75, 150]
+    rows = [('BASE', INK2, '--', 'today (o4)'), ('FA', BLUE, '-', 'free air'),
+            ('FAS', GREEN, '-', 'free air + skin (−3.4)'), ('FAG', ORANGE, '-', 'free air + Gilbert (−1.4), judged')]
+    fig, axs = plt.subplots(1, 2, figsize=(7.4, 4.4), sharex=True, facecolor=SURFACE)
+    for ax, (title, sel) in zip(axs, [('bands at and above 3800 m', P.band >= 3800), ('bands below 3800 m', P.band < 3800)]):
+        style(ax)
+        Q = P[sel].assign(dbin=pd.cut(P[sel].depth, edges))
+        n = Q.groupby('dbin', observed=False).size().to_numpy()
+        ax.axvline(0, color=INK, lw=0.8)
+        for v, col, ls, lab in rows:
+            e = (Q[v] - Q.obs).groupby(Q.dbin, observed=False).mean().to_numpy()
+            ax.plot(e, mid, color=col, ls=ls, lw=2, marker='o', ms=4, label=lab)
+        ax.set_yscale('log')
+        ax.set_yticks(mid)
+        ax.set_yticklabels([f'{a}–{b} m ({k})' for a, b, k in zip(edges[:-1], edges[1:], n)], fontsize=8.5)
+        ax.minorticks_off()
+        ax.invert_yaxis()
+        ax.set_xlim(-1.3, 4.4)
+        ax.set_title(title, fontsize=10, color=INK)
+        ax.set_xlabel('model minus measured (°C)')
+    axs[0].set_ylabel('depth (points)')
+    h, lab = axs[0].get_legend_handles_labels()
+    fig.legend(h, lab, loc='lower center', ncol=2, frameon=False, fontsize=8.5)
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
+    save(fig, 'ch13_depth')
+
+
 if __name__ == '__main__':
     air_products()
     mechanism()
+    depth()

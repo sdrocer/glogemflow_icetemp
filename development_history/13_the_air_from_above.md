@@ -15,9 +15,16 @@
 > runs it with and without a snow-surface cooling (Gilbert et al. 2014), because today's too-cold air stands in for
 > the missing cooling. A rule fixed before the runs decides.
 >
-> *Status (22 Oct, afternoon): data, switch and rule done. The review found the free air read a month late (fixed)
-> and the site count of rule 3 wrong (amended before any run). The gate on the fixed switch is running; the 72 test
-> runs start after the five-part orientation runs. Plan: `plans/2026-10-22_freeair_plan.md`. Report: `glogemflow_development/reports/Alpine
+> **The test (23 Oct):** the free air with Gilbert's cooling fails its rule.
+> - It is 2.55 °C on left-out massifs against 1.86, and 3.04 against 1.87 above 3800 m.
+> - It puts the top 15–20 m of the high sites right (−0.5 → +0.1 °C), but the deep ice at the high Mont Blanc sites
+>   becomes 2–4 °C too warm.
+> - Below 3800 m nothing changes.
+> - Today's cold air was hiding more than the missing surface cooling: probably also the colder past that the deep
+>   ice still remembers, which a spin-up on 1942–71 cannot give.
+>
+> *Status (23 Oct): the orientation factors are being rebuilt on the free air (orientation session, at Janosch's
+> request; re-run as `fa2`). Next decision: Janosch's.* Plan: `plans/2026-10-22_freeair_plan.md`. Report: `glogemflow_development/reports/Alpine
 > air temperature beyond ERA5.md`.*
 
 ## What we believed
@@ -217,12 +224,62 @@ FA and FAS are reported. The scorer's dry run on o4 reproduces o4's own scores e
 ## What the test gives
 
 *Run on 22 Oct 14:54–17:12 (tag `fa1`, 72 runs: three variants × three parts × eight f_ref, GloGEM `d783f84`,
-`week3/chain_freeair.sh`), all 72 OK; merged and scored by the same chain into `week3/freeair/score/`. The baseline stays o4: the five-part build (o5) scored worse (2.13 °C on left-out massifs
+`week3/chain_freeair.sh`), all 72 OK; merged and scored by the same chain into `week3/freeair/score/`.*
+
+**By the rule fixed before the runs, FAG is not adopted:** it fails points 1 and 2, and passes the zone, the sites
+and the frozen beds.
+
+| measure (out of sample, below 15 m) | o4 (today's air) | FA (free air) | FAS (+ skin, −3.4) | **FAG (+ Gilbert, −1.4)** | rule |
+|---|---|---|---|---|---|
+| error on left-out massifs | 1.86 °C | 2.71 | 2.26 | **2.55** (+0.69) | ≤ +0.2: **fails** |
+| above 3800 m | 1.87 | 3.28 | 2.52 | **3.04** (+1.17) | ≤ +0.2: **fails** |
+| zone 3000–3800 m | 2.52 | 2.55 | 2.55 | 2.53 (+0.01) | passes |
+| without Taconnaz and Lys | 1.26 | 1.86 | 1.63 | 1.74 | reported |
+| regime classes, net sites | 63 / 9 / 2 | 0 | 0 | 0 (62 / 9 / 2) | passes |
+| frozen beds found (false) | 11 of 14 (1) | 11 (1) | 11 (1) | 11 (1) | passes |
+| f_ref chosen in the 7 folds | 0.85 in all | 0.40–0.70 | 1.0 in six | 0.55–0.85 | reported |
+| best f_ref Mont Blanc / Monte Rosa | 0.23 / 1.0 | 0.07 / 1.0 | 0.30 / 1.0 | 0.15 / 1.0 | reported |
+
+![The test's error by depth](figures/ch13_depth.svg)
+
+*Model minus measured, out of sample. Above 3800 m the free air puts the top 15–20 m right (FAG +0.1 °C, today
+−0.5), but the deeper the reading, the warmer the model gets: +3.8 °C at 100–200 m. Below 3800 m the four airs lie on
+top of each other.*
+
+**What the test shows:**
+- **Below 3800 m the air hardly matters** for the borehole temperatures: every depth moves by less than 0.2 °C.
+- **Above 3800 m the free air fixes the shallow firn but overheats the deep ice.**
+  - At 15–20 m (208 points) the error goes from −0.5 to +0.1 °C.
+  - At 30–200 m it goes from +0.8–1.6 to +2.1–3.8 °C.
+  - The warm deep ice sits in the Mont Blanc massif (Taconnaz +3.2 °C, the summit +2.2, Bossons +1.5 on average
+    over their bands; holes to 113 and 126 m) and at Fieschergletscher (+2.7).
+  - The Monte Rosa saddles stay close (−0.45).
+- **More surface cooling does not cure the deep ice.** With the skin relation (FAS) the top 15–20 m become 1.0 °C too
+  cold, yet 100–200 m stay 2.6 °C too warm. The shape of the column is wrong, not only its level.
+- **f_ref leaves its upper limit.** With the free air the folds choose 0.40–0.85 instead of 0.85–1.0: part of what
+  f_ref did was to make up for the too-cold air. The massif split stays (Mont Blanc 0.15, Monte Rosa 1.0).
+
+**What we infer (not tested):**
+- The deep ice at the high Mont Blanc sites is old: its temperature still carries the colder 19th century (Gilbert &
+  Vincent 2013 read about 1.5 °C of warming since 1900 from these profiles).
+- The spin-up starts from the 1942–71 climate and has no colder past, so the deep ice starts too warm.
+- Today's too-cold 2 m air hid this as well. It made up for three missing colds at once:
+  - the missing snow-surface cooling;
+  - the missing colder past in the deep ice;
+  - f_ref pressed to its limit.
+- The early free air is also about 0.5 °C warmer, relative to the summit stations, than today's (spin-up check
+  above).
+- **Possible next tests** (none decided):
+  - the free air with a colder spin-up (`firnice_spinup_dT`; −1 and −2 K cooled the high, long-memory sites in
+    chapter 12);
+  - a spin-up that starts earlier, on the long summit records. The baseline stays o4: the five-part build (o5) scored worse (2.13 °C on left-out massifs
 against 1.86) and was not adopted before the runs.*
 
 ## What is still open
 
-- The test itself (above), then Janosch's decision.
+- Janosch's decision after the test, and the re-run on orientation factors rebuilt for the free air (`fa2`).
+- **The deep ice at the high sites:** whether a colder or longer spin-up removes the deep warm bias under the free air
+  (inferred, above).
 - **The mass balance on free air:** a later stage of its own, with recalibration of all CentralEurope glaciers and the
   GCM correction re-anchored to the new reference (the GMIP4 inputs are already corrected to today's ERA5).
 - **Cold pools at low tongues:** free air is too warm in winter valley floors. A terrain-dependent share of ERA5's
