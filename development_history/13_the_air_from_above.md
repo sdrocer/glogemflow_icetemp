@@ -28,7 +28,8 @@
 >   model with more and more processes").*
 > - *The diagnostic round on the free air with Gilbert's cooling (`fa2`, `fd1`; plan of 23 Oct) was stopped minutes
 >   after its start. No result came from it.*
-> - *v1.0 keeps ERA5's 2 m air.* Plan: `plans/2026-10-22_freeair_plan.md`. Report: `glogemflow_development/reports/Alpine
+> - *Later the same day Janosch made the free air the base of the thermal model anyway (without cooling). Better
+>   input is kept, and the model's new errors are fixed instead: chapter 14.* Plan: `plans/2026-10-22_freeair_plan.md`. Report: `glogemflow_development/reports/Alpine
 > air temperature beyond ERA5.md`.*
 
 ## What we believed
@@ -281,8 +282,8 @@ against 1.86) and was not adopted before the runs.*
 
 ## What is still open
 
-- **The free air stays a switch, off by default** (GloGEM `freeair-thermal`, local, not merged). v1.0 keeps ERA5's
-  2 m air, a known limitation as decided on 21 Oct, now with its cause and size measured.
+- **The free air is the thermal model's base from 23 Oct** (chapter 14). The switch lives on the local GloGEM branch
+  `freeair-thermal`, not yet merged.
 - **Gilbert's surface cooling is out** (Janosch, 23 Oct). A correct air needs a physical snow-surface energy balance
   instead, in later work.
 - **The deep ice at the high sites:** whether a colder or longer spin-up removes the deep warm bias under the free air
