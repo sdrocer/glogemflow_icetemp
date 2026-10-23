@@ -24,7 +24,7 @@ If the five-part build replaces the three parts before the runs, BASE becomes o5
 (--base-tag o5 --scheme GNESW --parts week3/orient_parts5); the rule is otherwise unchanged.
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/freeair/freeair_rule.py [OUT_DIR]
-           [--base-tag o4] [--tag fa1] [--parts DIR] [--scheme GNS] [--dry]
+           [--base-tag o4] [--tag fa1] [--parts DIR] [--scheme GNS] [--dry] [--variants FAG]
   --dry: score BASE only (checks the scorer against the o4 scores before any free-air run exists)
 """
 import argparse
@@ -91,10 +91,12 @@ def main():
     ap.add_argument('--parts', default=str(W3 / 'orient_parts_v2'))
     ap.add_argument('--scheme', default='GNS', choices=('GNS', 'GNESW'))
     ap.add_argument('--dry', action='store_true')
+    ap.add_argument('--variants', nargs='+', default=['FA', 'FAS', 'FAG'], choices=['FA', 'FAS', 'FAG'],
+                    help='variants run under --tag (fa2: FAG only)')
     a = ap.parse_args()
     cfg = dict(base_tag=a.base_tag, tag=a.tag, scheme=a.scheme)
     hp_mod.SCHEME['name'] = a.scheme
-    variants = ['BASE'] if a.dry else list(SUFFIX)
+    variants = ['BASE'] if a.dry else ['BASE'] + a.variants
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -151,7 +153,7 @@ def main():
     bands.to_csv(out / 'bands.csv', index=False, float_format='%.3f')
     res['tongue_band'] = bands[bands.band == TONGUE].to_dict('records')
 
-    if not a.dry:
+    if 'FAG' in variants:
         b, g = res['variants']['BASE'], res['variants']['FAG']
         d = {k: g['lomo'][k] - b['lomo'][k] for k in ('M1', 'above_M1', 'zone_M1')}
         checks = {'1 M1': d['M1'] <= HARM,

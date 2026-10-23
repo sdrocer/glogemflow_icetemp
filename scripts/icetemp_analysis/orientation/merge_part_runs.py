@@ -10,6 +10,7 @@ the three runs must be identical (snow logs and firn line), which is checked fir
 
 Usage: PYTHONPATH=src:scripts/icetemp_analysis python scripts/icetemp_analysis/orientation/merge_part_runs.py
            BASE [BASE ...] [--strength C] [--parts DIR] [--scheme GNS|GNESW|GNXS30|GNXS35] [--part-runs P=RUN_TAG ...]
+           [--suffix _sd-1.0]   (run names <base>_o<S><P><suffix>_w0, merged <base>_o<S>P<suffix>_w0)
        BASE e.g. o3_FRHS_r0.85_i1.017_a1.00
 """
 import argparse
@@ -52,6 +53,7 @@ def main():
     ap.add_argument('--scheme', default='GNS', choices=sorted(SCHEMES))
     ap.add_argument('--part-runs', nargs='*', default=[],
                     help='P=TAG: take part P from the run of another tag (e.g. G=o4: identical tables)')
+    ap.add_argument('--suffix', default='', help="tags after the part in the run names, e.g. '_sd-1.0'")
     a = ap.parse_args()
     other = dict(x.split('=') for x in a.part_runs)
     hp = pd.read_csv(Path(a.parts) / 'hole_parts.csv', dtype={'hole': str})
@@ -61,7 +63,7 @@ def main():
     for base in a.bases:
         PARTS = SCHEMES[a.scheme]
         tag = base.split('_')[0]
-        runs = [f'{other[p] + base[len(tag):] if p in other else base}_o{a.strength}{p}_w0' for p in PARTS]
+        runs = [f'{other[p] + base[len(tag):] if p in other else base}_o{a.strength}{p}{a.suffix}_w0' for p in PARTS]
         n_mb = same_mass_balance(runs)
         outs = {}
         for p, r in zip(PARTS, runs):
@@ -70,7 +72,7 @@ def main():
             gl = [g for g in dh.calibration_glaciers if g.glacier_name in stored]
             outs[p] = runner.reparse_archived(gl, 'design_0000')
         merged = GloGEMRunner.merge_part_outputs(outs, gl, part_of_hole)
-        dst = ft.BAYESCAL / f'{base}_o{a.strength}P_w0' / 'training_runs'
+        dst = ft.BAYESCAL / f'{base}_o{a.strength}P{a.suffix}_w0' / 'training_runs'
         dst.mkdir(parents=True, exist_ok=True)
         with open(dst / 'design_0000.output_hole_year.pkl', 'wb') as f:
             pickle.dump(merged, f)
