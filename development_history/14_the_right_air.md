@@ -18,7 +18,11 @@
 > - The warmth at 30–100 m is made during the run by a winter surface that is too warm: the model's snow surface is
 >   the air itself, with no radiative cooling.
 >
-> *Status (27 Oct): Janosch's decision on how to treat the snow surface. Plan: `plans/2026-10-23_freeair_base_plan.md`.*
+> **The surface offset f_sur (27 Oct)** works as intended, but does not fix the high sites (1 of 9, as before). Mont
+> Blanc's high sites need 2–4 K more surface cooling than Monte Rosa's, and no single value fits both: the old massif
+> split again, now measured in kelvin.
+>
+> *Status (27 Oct, afternoon): Janosch's decision on how to go on.*
 
 ## What we believed
 
@@ -154,6 +158,48 @@ same f_ref.*
   strongest lever measured so far.
 - **Within plausible values the parameters we have cannot replace the missing surface cooling.** The past-climate
   offset is worth keeping for the deepest ice (100–200 m) and for Fiescher.
+
+## The surface offset f_sur (27 Oct)
+
+**Why:** the knob runs left one candidate, the snow surface's own cooling. Janosch chose to try it as a calibrated
+parameter instead of new physics: **f_sur**, the surface = min(0, air − f_sur), fitted together with f_ref, with f_ins
+and f_adv fixed.
+
+**Built and checked:**
+- **GloGEM `61ada09`, `firnice_f_sur`:** the surface in every month and in the starting profile; off at 0.
+- **Gate:** f_sur = 0 is byte-identical to the base. f_sur = 3 leaves the 69 mass-balance files identical and puts the
+  surface exactly 3 K below the air.
+- **Review at max effort:** the code is right, but the first reading pooled all high readings into one mean, where
+  Mont Blanc and Monte Rosa cancel. Before any run the reading was changed:
+  - judge each band at and above 3800 m within ±1.7 °C at 15–20 m and at 30–200 m, and count sites;
+  - it passes if more high sites fit than with the base and at least half of them, and f_ref and f_sur stay off
+    their grid edges in most folds;
+  - f_ref 0.40 was added.
+
+**The test** (tag `fs1`): f_sur 0 / 1.5 / 3.0 / 4.5 K × f_ref 0.40–1.00, five parts, 75 runs, all OK.
+
+**By the reading, f_ref + f_sur does not fix the high sites:**
+- **Sites:** still 1 of 9 high sites fits (Alphubel South), as with the base.
+- **Overall:** the error on left-out massifs is 2.81 °C against 2.79.
+- **The folds** split along the massifs. Predicting Monte Rosa, the other massifs (mostly Mont Blanc) choose f_sur 0 and
+  f_ref 0.40. Predicting Mont Blanc, they choose f_sur 1.5 and f_ref 1.0.
+- **In sample** the best pairs reach 2.31 °C (f_sur 1.5 with f_ref 0.85, or f_sur 3.0 with f_ref 1.0), against 2.41
+  for the best base. The pairs that fit most sites fit at most 5 of 9 (f_sur 3.0, f_ref 0.70).
+
+![The f_sur each high site needs](figures/ch14_fsur_needed.svg)
+
+*The f_sur each high site needs for its deep readings to match, at each f_ref (interpolated; f_sur acts almost as an
+even offset at cold sites). Mont Blanc's Taconnaz and Bossons need 2–4 K more than the Monte Rosa saddles at every
+f_ref; Fieschergletscher crosses between them; Alphubel needs none.*
+
+**What it shows:**
+- **f_sur works as intended:** at the cold sites it cools every depth almost evenly (f_sur 3: about −3 °C).
+- **It cannot close the gap between the massifs.** The Mont Blanc minus Monte Rosa difference of the deep error does
+  not move with f_sur at all (2.21 °C at f_ref 0.40, whatever f_sur is); only f_ref changes it (2.2 at 0.40 to 3.9 at
+  1.00).
+- **The remaining problem is the massif split, not the air and not the surface.** It is the same split as since
+  chapter 8 (f_ref 0.15–0.23 at Mont Blanc, 1.0 at Monte Rosa), now measured as a surface cooling: Mont Blanc's high
+  sites need 2–4 K more than Monte Rosa's.
 
 ## What is still open
 

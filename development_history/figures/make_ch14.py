@@ -5,6 +5,8 @@ ch14_knobs: left, the error by depth at the bands at and above 3800 m (f_ref cho
   (today's air, five parts), the free-air base fb1 and its two strongest knob settings; right, each knob's depth
   pattern (its error minus the base's at the same f_ref, mean of f_ref 0.40-0.70)
   (week3/freeair/diag_fb1/freeair_diag.json).
+ch14_fsur_needed: the f_sur each high site needs for its deep readings (30-200 m) to match, at each f_ref,
+  interpolated over f_sur 0-4.5 K (week3/freeair/fsur/f_sur_needed.csv); sites with deep readings and a cold column.
 """
 import json
 import sys
@@ -77,5 +79,27 @@ def knobs():
     save(fig, 'ch14_knobs')
 
 
+def fsur_needed():
+    import pandas as pd
+    N = pd.read_csv(W3 / 'freeair/fsur/f_sur_needed.csv')
+    rows = [('Taconnaz', ORANGE, '-'), ('Glacier des Bossons', ORANGE, '--'), ('Fieschergletscher', GREEN, '-'),
+            ('Monte Rosa summit saddles', BLUE, '-'), ('Alphubel South', INK2, ':')]
+    fig, ax = plt.subplots(figsize=(7.2, 3.9), facecolor=SURFACE)
+    style(ax)
+    ax.axhline(0, color=INK, lw=0.8)
+    for site, col, ls in rows:
+        d = N[N.site == site].sort_values('f_ref')
+        ax.plot(d.f_ref, d.f_sur_needed_deep, color=col, ls=ls, lw=2, marker='o', ms=4, label=site)
+    ax.axhspan(0, 4.5, color=GRID, alpha=0.5, lw=0)
+    ax.text(0.405, 4.3, 'range tested (0–4.5 K)', color=INK2, fontsize=8, va='top')
+    ax.set_xlabel('f_ref')
+    ax.set_ylabel('f_sur needed for the deep ice (K)')
+    ax.set_xticks([0.40, 0.55, 0.70, 0.85, 1.00])
+    ax.legend(loc='upper left', bbox_to_anchor=(1.01, 1), frameon=False, fontsize=8)
+    fig.tight_layout()
+    save(fig, 'ch14_fsur_needed')
+
+
 if __name__ == '__main__':
     knobs()
+    fsur_needed()
