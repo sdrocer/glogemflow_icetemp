@@ -7,7 +7,7 @@
 The byte comparisons (switch off against o4; mass-balance files of the free-air runs against the switch-off run) are
 compare_run_files.py.
 
-Usage: python freeair_gate_check.py FA_RUN FAC_RUN [--dt -1.4]
+Usage: python freeair_gate_check.py FA_RUN FAC_RUN [--dt -1.4] [--slope 0.95]   (f_sur F: --slope 1 --dt -F)
 """
 import argparse
 import json
@@ -49,7 +49,7 @@ def check_air(run, tab, nodes):
     return worst
 
 
-def check_surface(run, dt):
+def check_surface(run, dt, slope=0.95):
     worst = 0.0
     for f in sorted((BAYESCAL / run / SUB).glob('firnice_temp_validation_*.dat')):
         gid = f.stem.split('_')[-1]
@@ -64,10 +64,10 @@ def check_surface(run, dt):
         surf = v[:, js]
         elev = v[:, je]
         k = np.array([int(np.argmin(np.abs(bands - e))) for e in elev])
-        expect = np.minimum(0.0, 0.95 * last[k] + dt)
+        expect = np.minimum(0.0, slope * last[k] + dt)
         diff = np.abs(surf - expect).max()
         worst = max(worst, diff)
-        print(f'surf {gid}: {len(surf)} bands, max |surface - min(0, 0.95 air {dt:+.1f})| {diff:.2e} C')
+        print(f'surf {gid}: {len(surf)} bands, max |surface - min(0, {slope} air {dt:+.1f})| {diff:.2e} C')
     return worst
 
 
@@ -76,11 +76,12 @@ def main():
     ap.add_argument('fa_run')
     ap.add_argument('fac_run')
     ap.add_argument('--dt', type=float, default=-1.4)
+    ap.add_argument('--slope', type=float, default=0.95, help='1.0 for f_sur (surface = air - f_sur)')
     a = ap.parse_args()
     tab = xr.open_dataset(TABLE)
     nodes = json.load(open(NODES))['nodes']
     wa = check_air(a.fa_run, tab, nodes)
-    ws = check_surface(a.fac_run, a.dt)
+    ws = check_surface(a.fac_run, a.dt, a.slope)
     print(f'air: worst {wa:.2e} C ({"PASS" if wa < 0.01 else "FAIL"} at 0.01); '
           f'surface: worst {ws:.2e} C ({"PASS" if ws < 0.01 else "FAIL"} at 0.01)')
 

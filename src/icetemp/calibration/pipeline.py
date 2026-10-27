@@ -114,7 +114,7 @@ class CalibrationPipeline:
                              write_melth=self.config.write_melth,
                              thermal_air=self.config.thermal_air, freeair_file=self.config.freeair_file,
                              surface_cool=self.config.surface_cool,
-                             surface_cool_dt=self.config.surface_cool_dt)
+                             surface_cool_dt=self.config.surface_cool_dt, f_sur=self.config.f_sur)
         if self.config.calibration_source_dir is not None:
             runner_kwargs['calibration_source_dir'] = self.config.calibration_source_dir
         if self.config.calibration_source_files is not None:

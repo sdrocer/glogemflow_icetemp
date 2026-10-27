@@ -39,7 +39,8 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
   --freeair FILE: the thermal model's air from the free-air table FILE (GloGEM firnice_thermal_air = 'freeair';
             tag _fa); FILE's sha256 goes to freeair_file.sha256 in the run folder
   --surface-cool DT: thermal surface min(0, 0.95 * air + DT) (GloGEM firnice_surface_cool = 'gilbert'; tag _gcDT)
-            The _fa and _gc tags come before _o, so merge_part_runs.py takes them as part of the base.
+  --fsur F: f_sur, thermal surface min(0, air - F) (GloGEM firnice_f_sur; tag _fsF)
+            The _fa, _gc and _fs tags come before _o, so merge_part_runs.py takes them as part of the base.
   --write-melth: GloGEM also writes every band's thermal melt and air temperature per month (tag _mth)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
@@ -177,6 +178,7 @@ def main():
     ap.add_argument('--write-melth', action='store_true', help='write every band thermal melt and air temperature')
     ap.add_argument('--freeair', default='', help="free-air table: the thermal model's air (firnice_thermal_air)")
     ap.add_argument('--surface-cool', type=float, default=None, help='thermal surface min(0, 0.95 air + DT)')
+    ap.add_argument('--fsur', type=float, default=0.0, help='f_sur: thermal surface min(0, air - F)')
     ap.add_argument('--calibration-dir', default=None,
                     help='mass-balance calibration to use instead of the configured one (all its .dat files)')
     ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
@@ -197,6 +199,7 @@ def main():
               ('_mbfull' if args.mb_refreezing == 'full' else '') + ('_mbhist' if args.mb_hist_file else '') + \
               ('_fa' if args.freeair else '') + \
               (f'_gc{args.surface_cool:+.1f}' if args.surface_cool is not None else '') + \
+              (f'_fs{args.fsur:.1f}' if args.fsur else '') + \
               (f'_o{args.orient_tag}' if args.orient_tag else '') + (f'_b{args.burial_tag}' if args.burial_tag else '') + \
               (f'_sd{args.spinup_dT:+.1f}' if args.spinup_dT else '') + ('_mth' if args.write_melth else '')
 
@@ -218,6 +221,7 @@ def main():
         **(dict(write_melth='y') if args.write_melth else {}),
         **(dict(thermal_air='freeair', freeair_file=str(Path(args.freeair).resolve())) if args.freeair else {}),
         **(dict(surface_cool='gilbert', surface_cool_dt=args.surface_cool) if args.surface_cool is not None else {}),
+        **(dict(f_sur=args.fsur) if args.fsur else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )
