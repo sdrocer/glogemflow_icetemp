@@ -13,7 +13,8 @@ instead of pooled means; f_ref 0.40 added; 30.0 m readings counted as deep):
 - f_ref + f_sur fix the high sites if (1) more high sites fit than with the base, and at least half of them fit;
   (2) f_ref is below 1.0 in at least 4 of the 7 folds and f_sur below 4.5 in at least 4 of the 7 folds (a choice at a
   grid edge means the range is too small, not a fit).
-Reported, not part of the reading: the f_sur each high site needs at each f_ref (interpolated, deep and shallow), the
+Reported, not part of the reading: the f_sur each high site needs at each f_ref (interpolated, deep and shallow;
+none where the site responds by less than 0.1 C per K of f_sur), the
 Mont Blanc minus Monte Rosa gap of the deep error, the pooled errors above 3800 m, the error on left-out massifs
 (overall, above 3800 m, zone), the regime classes at every grid point and out of sample.
 Checked before scoring: every fs1 part run on GloGEM 61ada09 without local changes, and f_sur applied (the last
@@ -43,6 +44,7 @@ FREF = (0.40, 0.55, 0.70, 0.85, 1.00)
 PARTS = 'GNESW'
 GLOGEM = '61ada09'
 HIGH, FLOOR, MIN_READ = 3800, 1.7, 3
+MIN_SLOPE = 0.1   # C per K of f_sur: below it a site does not respond and gets no needed f_sur
 
 
 def run_name(fs, fr, part='P'):
@@ -177,7 +179,9 @@ def main():
                     y = np.array([site_err[fs].loc[site, k] for fs in fsur])
                     if np.isfinite(y).all():
                         slope, icpt = np.polyfit(fsur, y, 1)
-                        row[f'f_sur_needed_{k}'] = float(-icpt / slope) if slope != 0 else np.nan
+                        # a site that barely responds to f_sur (temperate, or melt-dominated) has no needed value
+                        row[f'f_sur_needed_{k}'] = float(-icpt / slope) if abs(slope) >= MIN_SLOPE else np.nan
+                        row[f'slope_{k}'] = float(slope)
                 need.append(row)
     pd.DataFrame(pts).to_csv(out / 'grid_points.csv', index=False, float_format='%.3f')
     pd.DataFrame(need).to_csv(out / 'f_sur_needed.csv', index=False, float_format='%.2f')
