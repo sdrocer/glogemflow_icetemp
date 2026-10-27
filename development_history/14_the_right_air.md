@@ -201,6 +201,54 @@ f_ref; Fieschergletscher crosses between them; Alphubel needs none.*
   chapter 8 (f_ref 0.15–0.23 at Mont Blanc, 1.0 at Monte Rosa), now measured as a surface cooling: Mont Blanc's high
   sites need 2–4 K more than Monte Rosa's.
 
+## Where the split comes from (27 Oct, read-only check)
+
+**Janosch's caution:** f_ref may only carry what the mass-balance calibration leaves, so better physics could not
+remove the split. A read-only check of the existing runs (`week3/freeair/split_check/results.md`) says otherwise.
+
+**Measured: the split does not come from the mass-balance calibration.**
+- **The link to T_off is gone on the free air.** A glacier's best f_ref and its T_off: rank correlation +0.06 (15
+  outlines; old air +0.42 to +0.58). DDF, c_prec, mass balance and ELA show no link either (|r| ≤ 0.26).
+- **Same calibration, opposite answers.** Bossons (00773) and Gorner/Grenz (01225) have nearly the same calibration
+  (T_off 0.79 and 0.67, DDF 4.5, c_prec 1.3 for both), but their best f_ref is opposite: 0.03 and 0.70.
+- **At the same height (4200–4350 m) both massifs get the same inputs:**
+  - the free air (−4.2 °C in June–September, −10.1 °C over the year);
+  - the same over-burial (2.7 and 2.6 against 1.1 measured);
+  - the same meltwater per unit of new firn (0.04 and 0.03);
+  - the same wet depth (2–4 m).
+- **One input differs.** Mont Blanc's bands get 1.5 times the June–September melt (0.11 against 0.07 m w.e.) at the
+  same monthly air (July −3.0 °C at both). Inferred, not read directly: this comes from the day-to-day temperature
+  spread of each glacier's climate cell.
+
+**Measured: the split sits in the boreholes, between warm and cold bands, not between the massifs.**
+- **Across the 50 high bands, the best f_ref follows the measured temperature** (rank correlation +0.91 with the
+  15–20 m reading; +0.14 with T_off).
+- **Cold bands want almost no meltwater heat in both massifs** (best f_ref 0.03).
+- **Monte Rosa's high f_ref comes from its warm bands:** Lysgletscher (4035–4135 m: −0.4 to 0.0 °C at 15–20 m) and parts
+  of the saddles, 4–9 °C above the air.
+- **Warm and cold firn lie side by side at the same height:** at about 4090 m, Lys −0.3 °C, Grenz −9.9 °C, Taconnaz
+  −11.0 °C, with the same modelled melt (0.15–0.17 m w.e.). Warm bands exist on Mont Blanc too (Bossons 4125 m: −1.4 °C,
+  one reading).
+- **The model makes all of them about −10 °C:** it has nothing that makes one high band much wetter than its
+  neighbour.
+
+**What this means (inferred):**
+- **The "massif split" is a contrast between warm, meltwater-soaked bands and cold, dry ones at the same height.**
+  Monte Rosa's borehole set holds more of the warm ones.
+- **A single f_ref cannot fit both.** Better physics could in principle: whatever makes Lys temperate and Grenz cold at
+  the same height (local melt from sun and slope, wind, percolation paths) is missing from the model.
+- **Caveat:** most warm Monte Rosa bands come from one 1999 campaign with only 15–20 m readings. The Step 5 variant
+  "only boreholes rated in equilibrium and published" tests whether they hold.
+
+**Two follow-ups (proposed, not decided):**
+1. **The day-to-day temperature spread.** Rerun the four outlines (00773, 00774, 01225, 01205) with the same spread for
+   every glacier. If it is the cause, Mont Blanc's melt at 4200–4350 m drops from 0.11 to about 0.07 m w.e., and the
+   deep gap at f_ref 1.0 shrinks by about 1 °C.
+2. **Hourly energy-balance melt against the model's degree-day melt** at the warm bands (Lys, Breithornplateau, Grenz
+   3895–4255 m) and the cold ones (Bossons, Taconnaz).
+   - About 2 or more at the warm bands and about 1 at the cold ones: a missing melt or percolation process.
+   - About 1 everywhere: the warmth is local, and no forcing will fit it.
+
 ## What is still open
 
 - Janosch's choice of the parameter space for the calibration (Step 3 of the plan).
