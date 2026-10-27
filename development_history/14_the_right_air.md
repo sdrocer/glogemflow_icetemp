@@ -10,8 +10,15 @@
 > - **The fixes come from the parameter space first**, before new physics. The candidate for the deep error is the
 >   past-climate offset of the spin-up.
 >
-> *Status (23 Oct, 13:45): the base (`fb1`) and the knob runs (`fd2`) are running, 130 runs on five parts per band.
-> Plan: `plans/2026-10-23_freeair_base_plan.md`.*
+> **The knob runs (27 Oct):** none of the three knobs removes the deep warmth of the high sites within plausible
+> values.
+> - The past-climate offset has the right shape but acts mainly below 100 m (−0.77 °C per K there, −0.1 to −0.3
+>   above).
+> - f_ins shifts every depth evenly; f_adv does almost nothing.
+> - The warmth at 30–100 m is made during the run by a winter surface that is too warm: the model's snow surface is
+>   the air itself, with no radiative cooling.
+>
+> *Status (27 Oct): Janosch's decision on how to treat the snow surface. Plan: `plans/2026-10-23_freeair_base_plan.md`.*
 
 ## What we believed
 
@@ -96,9 +103,57 @@ conditions:
 
 ## What the runs give
 
-*Pending (chain `week3/chain_freeair_base.sh`, scores in `week3/freeair/score_fb1/` and `week3/freeair/diag_fb1/`).
-On Fri 23 Oct at 15:40 the base (40 runs) and the second wave (45) had finished without a failure; the third wave,
-the merge and the scoring were left to run over the weekend.*
+*All 130 runs finished on 23 Oct (no failure), merged and scored by 17:09 (`week3/freeair/score_fb1/`,
+`week3/freeair/diag_fb1/`).*
+
+**The new base (`fb1`):**
+- **Overall:** 2.79 °C on left-out massifs, against 2.13 for today's air on five parts (o5); 3.39 above 3800 m; the
+  zone 2.52.
+- **f_ref:** the folds choose 0.40–0.70, off its upper limit.
+- **Regime classes:** 61 / 9 / 2 bands right.
+
+![The error by depth above 3800 m, and what each knob changes](figures/ch14_knobs.svg)
+
+*Left: model minus measured at the bands at and above 3800 m. The free air (dashed) is close at 15–20 m and too warm
+below; the colder spin-up (blue) helps mainly the deepest bin. Right: what each knob changes, against the base at the
+same f_ref.*
+
+| setting (bands at and above 3800 m) | error 15–20 m | error 30–200 m | left-out massifs | pattern vs error (r) |
+|---|---|---|---|---|
+| today's air (o5) | −1.04 | +0.42 | 2.19 | |
+| **free air, the base** | **+0.47** | **+2.84** | **2.79** | |
+| spin-up 1 K colder | +0.35 | +2.47 | 2.74 | −0.81 |
+| spin-up 2 K colder | +0.26 | +2.23 | 2.67 | −0.81 |
+| f_adv 0.5 / 1.5 | +0.66 / +0.33 | +2.86 / +2.76 | 2.77 / 2.80 | −0.98 / +0.75 |
+| f_ins 0.785 / 1.25 | +0.80 / +0.25 | +3.06 / +2.50 | 2.75 / 2.78 | +0.91 / −0.91 |
+
+*(f_ref chosen leaving one massif out among 0.40, 0.55 and 0.70)*
+
+**By the reading fixed before the runs, no knob explains the deep warmth.** It needed the 30–200 m error halved
+(≤ +1.42 °C). The best is the spin-up 2 K colder, from +2.84 to +2.23.
+
+**What each knob does:**
+- **The past-climate offset has the right shape but is too weak where most deep readings are.**
+  - Per kelvin of colder spin-up: −0.77 °C at 100–200 m, but only −0.1 to −0.3 °C at 15–100 m.
+  - Why: the 54 years of the run (1971–2025) re-set the column down to about 50 m (heat diffuses about 45 m in that
+    time). So the warmth at 30–100 m is made during the run, not before it.
+  - Per site (30–200 m): it helps Fieschergletscher clearly (+2.8 → +1.2 °C), but Bossons (+4.0 → +3.5) and Taconnaz
+    (+4.8 → +4.6) only a little.
+- **f_ins shifts every depth about evenly** (−0.25 to −0.40 °C at 1.25): it is the "warmer/colder" knob. Over the
+  depth bins it correlates with the spin-up offset at 0.83, so the boreholes only partly tell the two apart.
+- **f_adv hardly moves anything** (at most 0.17 °C).
+- **Below 3800 m no knob moves anything** (less than 0.06 °C).
+
+**What we infer (from these and the chapter 13 runs, not a separate test):**
+- The deep warmth at the high Mont Blanc sites is made by the surface during the run. With the free air the winter
+  surface is 4–5 K warmer, because the model's snow surface is the air temperature itself; a real snow surface
+  radiates and is several kelvin colder in winter (3.4 K measured at Col du Dôme).
+- f_ref makes up for it near the surface (0.40–0.70, less meltwater heat), so 15–20 m look right while 30–100 m carry
+  the warm winters.
+- The chapter 13 runs agree: the surface cooling of the skin variant (−3.4 K) cooled every depth by 1.1–1.5 °C, the
+  strongest lever measured so far.
+- **Within plausible values the parameters we have cannot replace the missing surface cooling.** The past-climate
+  offset is worth keeping for the deepest ice (100–200 m) and for Fiescher.
 
 ## What is still open
 
