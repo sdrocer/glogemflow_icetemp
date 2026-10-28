@@ -37,6 +37,25 @@ T_off is added to all three as before.
 - **No automatic winner:** Janosch decides on the table. Not used: any model result (mass balance, ice
   temperature).
 
+## The scores (28 Oct, `scripts/icetemp_analysis/freeair/freeair_step2_score.py`, `mbfreeair/step2/step2_scores.csv`)
+
+Model minus station, °C, mean over the stations of each group; rmse = typical size of the monthly differences.
+
+| stations | option | winter (DJF) | spring | summer | autumn | year | rmse |
+|---|---|---|---|---|---|---|---|
+| 6 valley stations (405–1139 m below the ground) | (a) free air | +4.23 | +0.39 | +0.48 | +2.32 | +1.86 | 2.74 |
+| | (b) step | −0.85 | −0.56 | +0.36 | −0.11 | −0.29 | 1.46 |
+| | (c) gradual, 400 m | −0.85 | −0.56 | +0.36 | −0.11 | −0.29 | 1.46 |
+| 3 near the ground | all three | −0.36 | −0.67 | −0.39 | −0.32 | −0.44 | 0.98 |
+| 7 above 2800 m | all three | +0.51 | −0.27 | −0.30 | +0.23 | +0.05 | 0.77 |
+
+- **The stations reject (a)** in the valleys (winter +4.2 °C) and **cannot tell (b) from (c)**: every valley station
+  lies deeper than 400 m, where both give today's air.
+- Per valley station, (b)/(c) is better than (a) at five of six; at Zermatt (736 m below) the free air is closer
+  (rmse 1.61 against 1.86; winter +2.4 against −2.8 °C).
+- **Between (b) and (c)** only physics can decide: (b) puts a step of up to ~5 °C in winter between two neighbouring
+  bands at the ground (the 2 m air's cold layer); (c) changes gradually over 400 m. *Decision: Janosch.*
+
 ## Glossary
 
 | term | meaning |
