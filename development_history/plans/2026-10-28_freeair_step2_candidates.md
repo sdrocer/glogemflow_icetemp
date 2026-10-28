@@ -54,7 +54,7 @@ Model minus station, °C, mean over the stations of each group; rmse = typical s
 - Per valley station, (b)/(c) is better than (a) at five of six; at Zermatt (736 m below) the free air is closer
   (rmse 1.61 against 1.86; winter +2.4 against −2.8 °C).
 - **Between (b) and (c)** only physics can decide: (b) puts a step of up to ~5 °C in winter between two neighbouring
-  bands at the ground (the 2 m air's cold layer); (c) changes gradually over 400 m. *Decision: Janosch.*
+  bands at the ground (the 2 m air's cold layer); (c) changes gradually over 400 m. **Decision (Janosch, 28 Oct): (c), the gradual change over 400 m.**
 
 ## Glossary
 
