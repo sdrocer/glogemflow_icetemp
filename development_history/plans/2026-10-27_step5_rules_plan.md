@@ -4,6 +4,9 @@
 design runs finished on 27 Oct at 18:05 and have not been looked at; the 45 benchmark runs started on 28 Oct at
 11:48.**
 
+**The rules commit is 3467851 (28 Oct, about 15:50, pushed).** It holds every script that decides the result. The fit
+starts only from it, or from a later commit that changes no rules code (this line was added in such a commit).
+
 **Two changes on 28 Oct, decided by Janosch after the check of the data (before any fit):**
 - **Rule 6 (b) reads "0.6 m w.e. per year or less".**
   - The check showed that Dôme du Goûter has no readings below 40 m, so (b) does not add it. I had claimed it would,
