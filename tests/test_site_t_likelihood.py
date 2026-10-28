@@ -215,3 +215,31 @@ def test_checks_and_the_laws(three_sites):
     assert 0.9 < lo < 1 < hi < 1.1
     lo, hi = em.misfit_law_range([70] * 29, 2.6)
     assert lo < 0.5 and hi > 2          # a right heavy-tailed form can fall outside 0.5-2
+
+
+def test_single_points_left_out(three_sites):
+    """fit_exclude_points drops one of the points sharing a (band, depth) key; the likelihood is the marginal of the
+    rest, for the Gaussian and the per-site t."""
+    gl, emu = three_sites
+    for nu in (None, 2.6):
+        full = calibrator(gl, emu, emulator_error='mean', site_t_nu=nu, **SIZES)
+        cut = calibrator(gl, emu, emulator_error='mean', site_t_nu=nu, fit_exclude_points=frozenset({('P@3005', 1)}),
+                         **SIZES)
+        x_points = emu.x_points_used()
+        assert [int(x_points[r]) for r in cut._rows_by_glacier['P@3005']] == [0, 2, 3, 4]
+        assert [int(x_points[r]) for r in full._rows_by_glacier['P@3005']] == [0, 1, 2, 3, 4]
+        for th in THETAS:
+            r, S = full.residual_and_covariance(th)
+            x_used = emu.x_index_used()
+            gone = [i for i, row in enumerate(full._row_emu_idx)
+                    if (x_used[row][0], int(x_points[row])) == ('P@3005', 1)]
+            keep = np.setdiff1d(np.arange(len(r)), gone)
+            site = np.asarray(full._row_site, dtype=object)[keep]
+            ref = 0.0
+            for s in cut._block_site:
+                i = keep[site == s]
+                Sk = S[np.ix_(i, i)]
+                ref += (multivariate_normal(mean=np.zeros(len(i)), cov=Sk).logpdf(r[i]) if nu is None else
+                        multivariate_t(loc=np.zeros(len(i)), shape=Sk * (nu - 2) / nu, df=nu).logpdf(r[i]))
+            assert len(gone) == 1
+            assert abs(cut.log_likelihood(th) - ref) <= 1e-9 * abs(ref)

@@ -152,6 +152,7 @@ class BayesianCalibrator:
     offset_in_fit: bool = None   # K_delta inside Sigma; None = True for 'entity', False for 'depth'
     fit_exclude: frozenset = None   # (glacier_name, depth) points left out of the fit, see
     # data.fit_exclusions
+    fit_exclude_points: frozenset = None   # (glacier_name, point index) single points left out of the fit
     emulator_error: str = 'varying'   # 'varying': E(theta) in Sigma; 'mean': emulator mean only (E = 0)
     fixed_params: dict = None   # e.g. {'advection_scale': 1.0}; None/{} = calibrate all three.
     # shared errors of the depth target besides the band's (residual_covariance.py): per borehole, per
@@ -261,13 +262,15 @@ class BayesianCalibrator:
         # into directly via `rows` below; renumbering a pre-filtered list would silently
         # misalign predictions with the wrong rows.
         self._rows_by_glacier = {}
-        for row, (gname, depth) in enumerate(self._x_used):
+        for row, ((gname, depth), k) in enumerate(zip(self._x_used, self._x_points_used)):
             is_basal_row = (depth == BASAL)
             if self.track == 'depth' and is_basal_row:
                 continue
             if self.track == 'basal' and not is_basal_row:
                 continue
             if self.fit_exclude and (gname, depth) in self.fit_exclude:
+                continue
+            if self.fit_exclude_points and k is not None and (gname, int(k)) in self.fit_exclude_points:
                 continue
             self._rows_by_glacier.setdefault(gname, []).append(row)
 

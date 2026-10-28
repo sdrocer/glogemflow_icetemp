@@ -371,7 +371,7 @@ class CalibrationPipeline:
         decision (see validation.py's Validator.summary)."""
         basal_calib = BayesianCalibrator(
             emulator=self.emulator, glaciers=self._calibration_glaciers(), priors=self.priors,
-            track='basal',
+            track='basal', fixed_params=self.config.fixed_params,
         )
         if not basal_calib._calib_glacier_names:
             print('basal diagnostic: no basal-eligible glaciers in this emulator -- skipping.')

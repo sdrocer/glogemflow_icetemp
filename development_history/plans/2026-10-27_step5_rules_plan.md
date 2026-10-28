@@ -10,7 +10,8 @@ design runs finished on 27 Oct at 18:05 and have not been looked at; the 45 benc
     and that was wrong.
   - One Colle Gnifetti band, Grenzgletscher 4465 m on outline 01225, measured exactly 0.6 (range 0.2–1.4), with
     readings to 83 m in ice about a century old. "Under 0.6" would have put its 15 deep points back into the fit.
-  - With "or less", (b) leaves out the same 85 points as today's rule. It differs from it only for future data.
+  - With "or less", (b) leaves out the same points as today's rule (85 band depths, holding 107 pooled readings). It
+    differs from it only for future data.
 - **Rule 7 is withdrawn.** A reading above 0 °C measures air or water in the hole, not ice, so it cannot go into the
   calibration. Such readings stay dropped, as before.
   - In the calibration holes there are 148,773 of them, mostly at Ortles, Hohsaas, Alphubel and Tortin. Their median
@@ -254,7 +255,8 @@ stage2_design.py); the error model in `src/icetemp/calibration/error_model.py`.
    - Each left-out-massif fold repeats the same steps on its six massifs.
 2. **Unusual site offset (rule 3, check 2).** "More than 2.9 times its uncertainty" is coded as its stated meaning: a
    chance below 1 in 300, two-sided, under the error model's own law. For the heavy-tailed C6b that law is a t
-   distribution, so the line lies further out than 2.9. For a Gaussian the two are the same.
+   distribution, so the line lies further out than 2.9: at about 5.1 times its uncertainty for nu 2.6. Under C6b, 2.9
+   times has a chance of 1 in 74 per site. For a Gaussian the two are the same. **Janosch chose the chance, 28 Oct.**
 3. **Leaving a site out (rule 3, check 3).** All points of the site's bands are left out and the posterior recomputed.
    The site is decisive if f_ref or f_ins moves by more than the main result's posterior spread (one sd).
 4. **f_ref and f_ins apart (rule 4).** By Step 5a's existing rule, they are told apart if they correlate at 0.8 or
@@ -297,6 +299,65 @@ stage2_design.py); the error model in `src/icetemp/calibration/error_model.py`.
     a third of the time, so the old window of 0.5–2 would often fail it. For the t forms the window is therefore the
     99 % range of the form's own law (by simulation). The 0.5–2 window stays for the Gaussian forms.
 
+**Details fixed after an independent review of the scripts (28 Oct afternoon, before the fit).** The review found
+four errors in the code, all corrected and tested on synthetic data before the commit. In the order they mattered:
+- the site resampling scored two sites of one outline as two outlines;
+- the "published" variant also dropped published readings that shared a depth with an unpublished one;
+- each left-out-massif fit started from error sizes that had seen the left-out massif;
+- check 3 had no consequence in the code.
+
+The details below were open in the words and are fixed here.
+
+11. **f_ref and f_ins apart (rule 4) in detail.**
+    - "Half of its starting spread" is half of the starting range's own sd, 0.326, so f_ins must be fixed to 0.163
+      or better. (The nominal 0.35 is cut at 0.3 and 2.0.)
+    - It is judged on the fit of item 1, which uses the emulator mean only, as the fit itself does.
+    - Each left-out-massif fit applies the rule itself, on its six massifs.
+    - When f_ins is fixed, the error sizes are not estimated again.
+12. **One uncertainty everywhere.** "The result's own uncertainty" in check 3, in the box of the 20 further runs and
+    in the map is the joint fit's sd. That sd holds the f_ref–f_ins trade-off, also when f_ins is fixed (rule 4).
+13. **If rule 4 fixes f_ins:**
+    - The 20 further runs still vary f_ins around 1.0, so that the refit on all 60 runs decides rule 4 again.
+    - The wider-f_ins variant compares two fits with f_ins free, one per starting range, so it shows the starting
+      range's effect alone.
+    - Doubling the nominal spread (0.35 → 0.7) raises the range's own sd from 0.326 to 0.442.
+14. **Check 3's consequence (rule 3).**
+    - A decisive site does not stop adoption.
+    - The map's uncertainty then covers both results: per parameter, at least the site's shift and the sd of the fit
+      without it.
+    - The named 1999 check is reported only.
+15. **The left-out-massif fits:**
+    - they start from the C6b sizes;
+    - they train on all other bands, including the 8 of Ecrins, Oetztal and Titlis, which have no readings below 15 m
+      and so are never scored.
+16. **The site resampling.**
+    - The second copy of a site goes with the second copies of the other sites on its outline. So drawing every site
+      once gives M1 exactly, and copies count as separate outlines.
+    - The grid choice and the left-out-massif results stay as they are in each resample; they are not chosen anew.
+17. **The box of the 20 further runs** is the same on both sides: the farthest left-out-massif result, on either
+    side, sets both.
+18. **The yardsticks:**
+    - the grid runs are at f_ins 1.017, the value of every earlier grid;
+    - the starting-values run is at f_ins 1.0.
+19. **"Published" is judged per hole.**
+    - Two Grenzgletscher holes with a published source but profiles from a personal communication stay in.
+    - The variant leaves out single readings, not whole depths that a published hole shares.
+20. **What decides adoption.**
+    - The gate (convergence, design runs near the result, the misfit window, the gap between the best point and the
+      mean) and the emulator agreement are reported beside the decision.
+    - The decision itself is rule 9. It scores real GloGEM runs at the left-out-massif results, so it does not rest
+      on the emulator.
+21. **Rule 10, "the spread between the left-out-massif results", is the sd of the 7 results, as approved.**
+    - Each result comes from six of seven massifs, so for a mean, one massif's own value lies about 6 (n − 1) times
+      further from the overall result than its left-out result does.
+    - That sd therefore understates how much single massifs disagree.
+    - The six-fold value is reported beside it. Which of the two the map uses is for Janosch to decide.
+22. **The scripts refuse to run:**
+    - on uncommitted rules code, data or config;
+    - on a run whose parts did not run the expected point and settings;
+    - on a missing prediction, or one at the wrong depth;
+    - on a fit or left-out-massif fits computed on another set of design runs.
+
 ## Glossary
 
 | term | meaning |
@@ -315,3 +376,8 @@ stage2_design.py); the error model in `src/icetemp/calibration/error_model.py`.
 | f_ref, f_ins | share of the meltwater that refreezes and heats; scale of the snow's insulation |
 | f_sur | how much colder the snow surface is than the air (1.4 K, fixed) |
 | FRHS | the central thermal variant: no T_off in the thermal inputs, ERA5's lapse rate, Herron & Langway meltwater, snow refreezing |
+| M1 | the error at depth: root-mean-square miss below 15 m, each outline counting equally |
+| outline | one glacier polygon of the inventory (RGI); several sites can lie on one outline |
+| sd | standard deviation: the usual size of a spread |
+| emulator | a fast statistical stand-in for GloGEM, trained on the design runs |
+| gate | the fit's own health checks (convergence, design runs near the result, misfit window) |
