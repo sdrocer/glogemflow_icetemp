@@ -1,5 +1,9 @@
 # Step 5, step 3: the rules that decide the result, fixed before any fit
 
+**Approved by Janosch on 28 Oct: all rules as written, and option (b) for very deep, very old ice (rule 6). The 40
+design runs finished on 27 Oct at 18:05 and have not been looked at; the 45 benchmark runs started on 28 Oct at
+11:48.**
+
 *27 Oct 2026. For Janosch's approval. This fills in step 3 of the Step 5 plan (2026-10-20_step5_plan.md) for the
 physics you chose today (option A: the free air, f_sur 1.4 K fixed, five orientation parts; f_ref and f_ins
 calibrated). The 40 design runs compute meanwhile (chain week3/chain_step5.sh, ends about 18:30). Nobody looks at

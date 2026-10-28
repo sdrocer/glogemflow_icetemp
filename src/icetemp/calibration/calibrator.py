@@ -26,6 +26,8 @@ target='depth' (T2, chosen in Step 5a) compares every depth bin instead of one m
     r(theta) ~ N(0, D + S_model + L_emu(theta) L_emu(theta).T)
 at row level, without K_delta (the per-entity offset is estimated after the fit, not inside it).
 D + S_model is fixed and block-diagonal by entity, so each evaluation is a Woodbury update.
+With site_t_nu (form C6b, rules plan of 27 Oct) the likelihood is instead a sum over sites of a multivariate t
+whose covariance is the site's block of that Sigma: some sites may miss much more than others.
 
 Sampling: emcee (gradient-free affine-invariant ensemble MCMC) -- the emulator backend
 (PCGPwM or the sklearn fallback) is not differentiable, so a gradient-based sampler (NUTS)
@@ -158,6 +160,14 @@ class BayesianCalibrator:
     s_hole_year_variance: float = 0.0
     s_site_variance: float = 0.0
     site_of: dict = None
+    # form C6b of the rules plan (27 Oct), target 'depth' only: each reading at or above s_white_max_depth has an
+    # error of its own [degC^2]; site_t_nu: a multivariate t per site with these degrees of freedom, its
+    # covariance the error model above (None = Gaussian); site_weights: site -> weight of the site's
+    # log-likelihood (absent = 1)
+    s_white_variance: float = 0.0
+    s_white_max_depth: float = 15.0
+    site_t_nu: float = None
+    site_weights: dict = None
     # Parameters named here are HELD FIXED and excluded from the search space; the rest are
     # calibrated.
     #
@@ -208,8 +218,11 @@ class BayesianCalibrator:
                                        or not self.use_emulator_factor):
             raise ValueError("target='depth' needs track='depth', use_emulator_factor=True and "
                              "offset_in_fit=False")
-        if self.target != 'depth' and max(self.s_hole_variance, self.s_hole_year_variance, self.s_site_variance) > 0:
-            raise ValueError("the borehole and site terms belong to target='depth'")
+        if self.target != 'depth' and (max(self.s_hole_variance, self.s_hole_year_variance, self.s_site_variance,
+                                           self.s_white_variance) > 0 or self._per_site()):
+            raise ValueError("the borehole, site and per-reading terms belong to target='depth'")
+        if self.site_t_nu is not None and not self.site_t_nu > 2:
+            raise ValueError(f'site_t_nu must exceed 2 (the covariance exists only then), got {self.site_t_nu}')
         unknown = set(self.fixed_params or {}) - set(self._FULL_NAMES)
         if unknown:
             raise ValueError(f'fixed_params {sorted(unknown)} are not in {self._FULL_NAMES}')
@@ -382,7 +395,12 @@ class BayesianCalibrator:
         site terms (residual_covariance.model_covariance)."""
         return model_covariance(self._row_entity, self._row_depth, self.s_model_variance, self.s_model_length_m,
                                 hole=self._row_hole, year=self._row_year, site=self._row_site,
-                                sh2=self.s_hole_variance, sy2=self.s_hole_year_variance, ss2=self.s_site_variance)
+                                sh2=self.s_hole_variance, sy2=self.s_hole_year_variance, ss2=self.s_site_variance,
+                                w2=self.s_white_variance, w_max_depth=self.s_white_max_depth)
+
+    def _per_site(self):
+        """The likelihood is a sum over site blocks (a t per site, or weighted sites)."""
+        return self.site_t_nu is not None or bool(self.site_weights)
 
     # ── residuals at a given theta ──────────────────────────────────────────────────────
     def compute_glacier_residuals(self, theta):
@@ -477,24 +495,34 @@ class BayesianCalibrator:
         if np.any(np.diff(self._row_entity) < 0):
             raise RuntimeError('depth rows are not grouped by entity')
         blocks, logdet = [], 0.0
-        if self.s_site_variance > 0:
-            keys = {s: k for k, s in enumerate(dict.fromkeys(self._row_site))}
+        by_site = self.s_site_variance > 0 or self._per_site()
+        if by_site:
+            sites = list(dict.fromkeys(self._row_site))
+            keys = {s: k for k, s in enumerate(sites)}
             group = np.array([keys[s] for s in self._row_site])
         else:
             group = self._row_entity
         if np.any(B[group[:, None] != group[None, :]] != 0):
             raise RuntimeError('the error model couples rows of different blocks')
-        if self.s_site_variance > 0:
+        if by_site:
             # the site term couples a site's entities: one block per site, rows taken in site order and
-            # the factor's columns put back in row order
+            # the factor's columns put back in row order; the whitened vector holds block k at _block_slices[k]
             perm = np.argsort(group, kind='stable')
+            self._block_site, self._block_slices, self._block_logdet = sites, [], []
             for k in range(group.max() + 1):
                 i = perm[group[perm] == k]
                 C = np.linalg.cholesky(B[np.ix_(i, i)])
                 blocks.append(solve_triangular(C, np.eye(len(i)), lower=True))
-                logdet += 2.0 * float(np.sum(np.log(np.diag(C))))
+                start = self._block_slices[-1].stop if self._block_slices else 0
+                self._block_slices.append(slice(start, start + len(i)))
+                self._block_logdet.append(2.0 * float(np.sum(np.log(np.diag(C)))))
+                logdet += self._block_logdet[-1]
             W = block_diag(blocks, format='csr')
             self._B_inv_chol = W[:, np.argsort(perm)].tocsr()
+            unknown = set(self.site_weights or ()) - set(sites)
+            if unknown:
+                raise ValueError(f'site_weights name sites without rows: {sorted(unknown)}')
+            self._block_weight = np.array([float((self.site_weights or {}).get(s, 1.0)) for s in sites])
         else:
             for k in range(len(self._calib_glacier_names)):
                 i = np.flatnonzero(self._row_entity == k)
@@ -564,7 +592,46 @@ class BayesianCalibrator:
         logdet = self._B_logdet + 2.0 * float(np.sum(np.log(np.diag(c[0]))))
         return quad, logdet, len(r)
 
+    def site_terms(self, theta):
+        """Per site block (order _block_site): r^T S^-1 r, log det S and the number of rows, S the block's
+        covariance. With emulator_error='varying' S holds the emulator factor's own block only: its coupling
+        between sites is left out (the per-site likelihood is not defined with it)."""
+        from scipy.linalg import cho_factor, cho_solve
+
+        mean, L = self.emulator.predict_factor(theta)
+        r = self._row_obs - mean[self._row_emu_idx]
+        L_rows = L[self._row_emu_idx]
+        k = len(self._block_slices)
+        if not (np.isfinite(r).all() and np.isfinite(L_rows).all()):
+            return np.full(k, np.nan), np.full(k, np.nan), np.array([s.stop - s.start for s in self._block_slices])
+        w = self._B_inv_chol @ r
+        quad = np.array([float(w[s] @ w[s]) for s in self._block_slices])
+        logdet = np.array(self._block_logdet)
+        if self.emulator_error != 'mean':
+            W = self._B_inv_chol @ L_rows
+            for j, s in enumerate(self._block_slices):
+                b = W[s].T @ w[s]
+                c = cho_factor(np.eye(W.shape[1]) + W[s].T @ W[s], lower=True)
+                quad[j] -= float(b @ cho_solve(c, b))
+                logdet[j] += 2.0 * float(np.sum(np.log(np.diag(c[0]))))
+        return quad, logdet, np.array([s.stop - s.start for s in self._block_slices])
+
+    def site_log_likelihoods(self, theta):
+        """Log-likelihood of each site block (order _block_site), unweighted: Gaussian, or the multivariate t
+        with site_t_nu degrees of freedom whose covariance is the block's S (scale matrix S (nu - 2) / nu)."""
+        from scipy.special import gammaln
+
+        quad, logdet, m = self.site_terms(theta)
+        if self.site_t_nu is None:
+            return -0.5 * (quad + logdet + m * np.log(2 * np.pi))
+        nu = self.site_t_nu
+        return (gammaln((nu + m) / 2) - gammaln(nu / 2) - 0.5 * m * np.log((nu - 2) * np.pi) - 0.5 * logdet
+                - 0.5 * (nu + m) * np.log1p(quad / (nu - 2)))
+
     def log_likelihood(self, theta):
+        if self.target == 'depth' and self._per_site():
+            ll = float(self._block_weight @ self.site_log_likelihoods(theta))
+            return ll if np.isfinite(ll) else -np.inf
         if self.target == 'depth':
             quad, logdet, n = self._depth_terms(theta)
             if not np.isfinite(quad):

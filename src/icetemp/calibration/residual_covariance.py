@@ -4,12 +4,14 @@
   their borehole:             sh2   (the hole's spot in the band)
   their borehole and year:    sy2   (one visit)
   their site:                 ss2   (all bands of one site)
-The readings' own errors (the diagonal) are added by the caller. With sh2 = sy2 = ss2 = 0 this is the
-covariance used before 2026-10-20."""
+and each reading at or above w_max_depth has an error of its own, w2 (its exact depth and month; rules plan of
+27 Oct, form C6b). The readings' own errors (the diagonal) are added by the caller. With sh2 = sy2 = ss2 = w2 = 0
+this is the covariance used before 2026-10-20."""
 import numpy as np
 
 
-def model_covariance(entity, depth, s2, ell, hole=None, year=None, site=None, sh2=0.0, sy2=0.0, ss2=0.0):
+def model_covariance(entity, depth, s2, ell, hole=None, year=None, site=None, sh2=0.0, sy2=0.0, ss2=0.0, w2=0.0,
+                     w_max_depth=None):
     entity = np.asarray(entity)
     d = np.asarray(depth, dtype=float)
     C = np.zeros((len(d), len(d)))
@@ -29,4 +31,6 @@ def model_covariance(entity, depth, s2, ell, hole=None, year=None, site=None, sh
             raise ValueError('the site term needs every point\'s site')
         s = np.asarray(site, dtype=object)
         C += ss2 * (s[:, None] == s[None, :])
+    if w2 > 0:
+        C[np.diag_indices(len(d))] += w2 * (d <= w_max_depth if w_max_depth is not None else np.ones(len(d), bool))
     return C
