@@ -4,6 +4,18 @@
 design runs finished on 27 Oct at 18:05 and have not been looked at; the 45 benchmark runs started on 28 Oct at
 11:48.**
 
+**Two changes on 28 Oct, decided by Janosch after the check of the data (before any fit):**
+- **Rule 6 (b) reads "0.6 m w.e. per year or less".**
+  - The check showed that Dôme du Goûter has no readings below 40 m, so (b) does not add it. I had claimed it would,
+    and that was wrong.
+  - One Colle Gnifetti band, Grenzgletscher 4465 m on outline 01225, measured exactly 0.6 (range 0.2–1.4), with
+    readings to 83 m in ice about a century old. "Under 0.6" would have put its 15 deep points back into the fit.
+  - With "or less", (b) leaves out the same 85 points as today's rule. It differs from it only for future data.
+- **Rule 7 is withdrawn.** A reading above 0 °C measures air or water in the hole, not ice, so it cannot go into the
+  calibration. Such readings stay dropped, as before.
+  - In the calibration holes there are 148,773 of them, mostly at Ortles, Hohsaas, Alphubel and Tortin. Their median
+    is +0.1 °C, but some reach +19 to +34 °C.
+
 *27 Oct 2026. For Janosch's approval. This fills in step 3 of the Step 5 plan (2026-10-20_step5_plan.md) for the
 physics you chose today (option A: the free air, f_sur 1.4 K fixed, five orientation parts; f_ref and f_ins
 calibrated). The 40 design runs compute meanwhile (chain week3/chain_step5.sh, ends about 18:30). Nobody looks at
@@ -226,6 +238,64 @@ readings at Dôme du Goûter.
                        variants; benchmark;
                        readings above 0 C
 ```
+
+## How the rules are coded (28 Oct, fixed before the fit)
+
+The approved rules leave a few details open. They are fixed here, in the code and in this section, before anything is
+fitted. Scripts: `scripts/icetemp_analysis/step5/` (fit_step5.py, site_checks.py, variants.py, benchmark.py,
+stage2_design.py); the error model in `src/icetemp/calibration/error_model.py`.
+
+1. **Error sizes (rule 1).**
+   - The fit starts from the C6b sizes and fits f_ref and f_ins.
+   - At that first result the sizes are re-estimated, and the parameters fitted again.
+   - The sizes are estimated as the likelihood uses them: with no free mean, and with the readings' own errors fixed.
+   - A second re-estimate replaces them only if it explains the misses better by more than 2 log-units. Otherwise the
+     second fit stands.
+   - Each left-out-massif fold repeats the same steps on its six massifs.
+2. **Unusual site offset (rule 3, check 2).** "More than 2.9 times its uncertainty" is coded as its stated meaning: a
+   chance below 1 in 300, two-sided, under the error model's own law. For the heavy-tailed C6b that law is a t
+   distribution, so the line lies further out than 2.9. For a Gaussian the two are the same.
+3. **Leaving a site out (rule 3, check 3).** All points of the site's bands are left out and the posterior recomputed.
+   The site is decisive if f_ref or f_ins moves by more than the main result's posterior spread (one sd).
+4. **f_ref and f_ins apart (rule 4).** By Step 5a's existing rule, they are told apart if they correlate at 0.8 or
+   less and the data narrow f_ins to at most half of its starting spread. If not, f_ins is fixed at 1.0, and f_ref's
+   spread from the joint fit, which contains the trade-off, is reported as its uncertainty.
+5. **The variants (rule 5).**
+   - **"No site above 20 % of the information":** each site's information on f_ref is computed at the result. Sites
+     above 20 % get a weight that brings them down to 20 %.
+   - **"Published":** a hole whose glenglat source is not a personal communication. "In equilibrium" means bands rated
+     'true'.
+   - **"Wider f_ins range":** the starting spread is doubled, from 0.35 to 0.7.
+6. **The 1999 bands (rule 3 named check, rule 5).** Bands whose every reading is from 1999, none deeper than 25 m: 9
+   Monte Rosa saddle bands and 5 Lys bands.
+7. **The benchmark (rule 8).**
+   - **What is scored:** the error at depth is M1, as for every earlier grid choice: the root-mean-square error below
+     15 m, each outline counting equally.
+   - **The simple rules:**
+     - the elevation line and the air-temperature line are fitted by least squares, each outline counting equally;
+     - the air temperature is the band's mean free air from October 1971 to September 2025, at the nearest grid
+       point;
+     - "5 nearest bands" means the mean of the five bands of the other massifs closest in elevation;
+     - the elevation threshold is two heights (temperate below, polythermal between, cold above), chosen to classify
+       the most bands right;
+     - Suter's limit is 3400 m on north faces and 4150 m on south faces (Suter et al. 2001), and 3775 m on east,
+       west and gentle parts.
+   - **Classes per site:** a site counts as right if more than half its bands are.
+   - **Frozen beds:** "close to melting" means measured at −2 °C or warmer.
+   - **The 90 % ranges** for Step 5 come from each fold's posterior and its error model, for a site the fold has not
+     seen.
+   - **"With 90 % confidence":** the 90th percentile of the difference to the grid choice, over 4000 resamplings of
+     whole sites, must be at most 0.1 °C.
+8. **The 20 further runs (step 4.1).** The box is centred on the result. On each side it reaches the larger of 2.5
+   posterior sd and the farthest left-out-massif result.
+9. **The emulator's own uncertainty (the agreement check).** A per-site t cannot carry the coupling of the
+   emulator's uncertainty between sites. Leaving the coupling out would understate it and make the check lean
+   towards "agree" (the review of 28 Oct). So the check compares the Gaussian form with the same sizes, with and
+   without the emulator's uncertainty, where that coupling is computed exactly. The fit itself uses the emulator mean
+   only.
+10. **The overall misfit check of the gate.** A correct heavy-tailed model gives a misfit per reading below 0.5 about
+    a third of the time, so the old window of 0.5–2 would often fail it. For the t forms the window is therefore the
+    99 % range of the form's own law (by simulation). The 0.5–2 window stays for the Gaussian forms.
 
 ## Glossary
 

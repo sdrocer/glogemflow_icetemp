@@ -91,9 +91,10 @@ def col(variant, fref, fins=FINS0):
 
 
 # ── scored set ───────────────────────────────────────────────────────────────────────────
-def scored_entities(ents, bh_table):
-    """entity -> dict(points [(depth, T_obs)], rgi, band, massif, tolerance), points below 15 m."""
-    excl = fit_exclusions(ents, ['colle_gnifetti_below_40m'])
+def scored_entities(ents, bh_table, exclusions=('colle_gnifetti_below_40m',)):
+    """entity -> dict(points [(depth, T_obs)], rgi, band, massif, tolerance), points below 15 m; the points of the
+    named fit exclusions (data.FIT_EXCLUSIONS) left out."""
+    excl = fit_exclusions(ents, list(exclusions))
     out = {}
     for g in ents:
         if not g.glacier_id or g.glacier_id in SEALED:

@@ -221,7 +221,7 @@ class BayesianCalibrator:
         if self.target != 'depth' and (max(self.s_hole_variance, self.s_hole_year_variance, self.s_site_variance,
                                            self.s_white_variance) > 0 or self._per_site()):
             raise ValueError("the borehole, site and per-reading terms belong to target='depth'")
-        if self.site_t_nu is not None and not self.site_t_nu > 2:
+        if self.site_t_nu is not None and not (np.isfinite(self.site_t_nu) and self.site_t_nu > 2):
             raise ValueError(f'site_t_nu must exceed 2 (the covariance exists only then), got {self.site_t_nu}')
         unknown = set(self.fixed_params or {}) - set(self._FULL_NAMES)
         if unknown:

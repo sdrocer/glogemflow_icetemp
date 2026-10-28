@@ -5,7 +5,7 @@ of the per-site t (nu). As in the likelihood: mean zero, the readings' own varia
 variance fixed, the emulator mean only. Also the form's own checks of the rules plan (rule 1 and rule 3, checks 1-2).
 
 Usage:
-    sizes = fit_sizes(cal, theta)            # dict keyed like the calibrator's fields
+    sizes, info = fit_sizes(cal, theta)      # sizes keyed like the calibrator's fields; info: nll, sizes at a bound
     cal2 = pipeline.make_calibrator(**sizes)
 """
 import numpy as np
@@ -22,6 +22,8 @@ V_BOUNDS, L_BOUNDS, NU_BOUNDS = (1e-4, 30.0), (0.3, 1000.0), (2.1, 200.0)
 BOUNDS = dict(s2=V_BOUNDS, ell=L_BOUNDS, sh2=V_BOUNDS, sy2=V_BOUNDS, ss2=V_BOUNDS, w2=V_BOUNDS, nu=NU_BOUNDS)
 STARTS = dict(s2=(0.5, 2.0), ell=(5.0, 30.0), sh2=(0.3, 2.0), sy2=(0.1,), ss2=(0.5,), w2=(0.2,), nu=(10.0,))
 OFFSET_P = 1 / 300      # rule 3, check 2: a site's offset is unusual at this two-sided chance under the form's law
+SHALLOW = 15.0          # the checks' split into shallow (at and above) and deep readings [m]
+N_LAW, LAW_SEED = 20000, 20261028
 
 
 class SiteBlocks:
@@ -77,11 +79,14 @@ def neg_log_likelihood(blocks, r, p, gaussian=False):
     return f
 
 
-def fit_sizes(cal, theta, gaussian=False, r=None):
+def fit_sizes(cal, theta, gaussian=False, r=None, start=None):
     """Maximum-likelihood sizes at theta (r: residuals instead, e.g. simulated), on the log scale from a grid of
-    starts. Returns the calibrator's field names -> values, plus 'nll'."""
+    starts plus `start` (sizes keyed by the calibrator's field names, e.g. the sizes in use). Returns (sizes keyed by
+    the calibrator's field names, info: nll, the sizes at a bound, whether the best start converged)."""
     blocks = SiteBlocks(cal)
     r = residual(cal, theta) if r is None else np.asarray(r, dtype=float)
+    if not np.isfinite(r).all():
+        raise ValueError(f'{int((~np.isfinite(r)).sum())} residuals are not finite')
     names = [n for n in NAMES if not (gaussian and n == 'nu')]
     lo, hi = np.log([BOUNDS[n][0] for n in names]), np.log([BOUNDS[n][1] for n in names])
 
@@ -90,16 +95,22 @@ def fit_sizes(cal, theta, gaussian=False, r=None):
         return v if np.isfinite(v) else 1e12
 
     grids = np.meshgrid(*[np.log(STARTS[n]) for n in names], indexing='ij')
+    starts = np.stack([g.ravel() for g in grids], axis=1)
+    if start is not None:
+        q = np.log([start[FIELD[n]] for n in names])
+        starts = np.vstack([np.clip(q, lo, hi), starts])
     best = None
-    for q0 in np.stack([g.ravel() for g in grids], axis=1):
+    for q0 in starts:
         res = minimize(nll, q0, method='L-BFGS-B', bounds=list(zip(lo, hi)))
         if best is None or res.fun < best.fun:
             best = res
+    if not best.fun < 1e12:
+        raise RuntimeError('no start gave a finite likelihood')
     out = {FIELD[n]: float(v) for n, v in zip(names, np.exp(best.x))}
     if gaussian:
         out['site_t_nu'] = None
-    out['nll'] = float(best.fun)
-    return out
+    at_bound = [n for n, q, a, b in zip(names, best.x, lo, hi) if min(q - a, b - q) < 1e-6]
+    return out, dict(nll=float(best.fun), at_bound=at_bound, converged=bool(best.success))
 
 
 def sizes_of(cal):
@@ -107,13 +118,28 @@ def sizes_of(cal):
     return {n: getattr(cal, FIELD[n]) for n in NAMES}
 
 
+def misfit_law_range(m, nu, level=0.99, n=N_LAW, seed=LAW_SEED):
+    """Range of sum_k q_k / sum_k m_k under the form's own law, q_k = r_k^T S_k^-1 r_k of the site blocks of sizes m:
+    c m_k F(m_k, nu) per site for the t (c = (nu - 2) / nu), chi^2(m_k) for the Gaussian (nu None); by simulation."""
+    rng = np.random.default_rng(seed)
+    m = np.asarray(m, dtype=int)
+    if nu is None:
+        q = sum(rng.chisquare(k, n) for k in m)
+    else:
+        c = (nu - 2) / nu
+        q = sum(c * k * rng.f(k, nu, n) for k in m)
+    x = q / m.sum()
+    return float(np.quantile(x, (1 - level) / 2)), float(np.quantile(x, 1 - (1 - level) / 2))
+
+
 def checks(cal, theta):
     """The form's own checks at theta with the calibrator's sizes (rules plan, rule 1 and rule 3 checks 1-2).
 
-    overall: r^T S^-1 r / n (about 1 if the form is right); loo_z2 at and above / below s_white_max_depth: the
-    leave-one-out z^2 = (S^-1 r)_i^2 / (S^-1)_ii, mean about 1; per site: q / (c m) against F(m, nu) for the t
-    (chi^2(m) / m for the Gaussian), inside its 99 % range; the site's offset, its GLS mean miss over its
-    standard error, unusual below OFFSET_P two-sided under the form's own law (t with nu for the t)."""
+    overall: r^T S^-1 r / n (about 1 if the form is right) and its 99 % range under the form's own law
+    (misfit_law_range); loo_z2 at and above / below SHALLOW: the leave-one-out z^2 = (S^-1 r)_i^2 / (S^-1)_ii, mean
+    about 1; per site: q / (c m) against F(m, nu) for the t (chi^2(m) / m for the Gaussian), inside its 99 % range;
+    the site's offset, its GLS mean miss over its standard error, unusual below OFFSET_P two-sided under the form's
+    own law (t with nu for the t)."""
     blocks = SiteBlocks(cal)
     r = residual(cal, theta)
     p = sizes_of(cal)
@@ -139,8 +165,11 @@ def checks(cal, theta):
         sites.append(dict(site=s, n=m, misfit_per_n=q / m, law_stat=stat, law_lo=lo, law_hi=hi,
                           inside_99=bool(lo <= stat <= hi), offset=offset, offset_se=se, offset_z=offset / se,
                           offset_p=float(p_off), offset_unusual=bool(p_off < OFFSET_P)))
-    shallow = blocks.depth <= blocks.w_max_depth
-    return dict(misfit_per_n=q_all / blocks.n, loo_z2_shallow=float(z2[shallow].mean()),
-                loo_z2_deep=float(z2[~shallow].mean()), n=blocks.n,
+    shallow = blocks.depth <= SHALLOW
+    lo, hi = misfit_law_range([len(i) for i in blocks.idx], nu)
+    return dict(misfit_per_n=q_all / blocks.n, misfit_law_lo=lo, misfit_law_hi=hi,
+                misfit_inside_99=bool(lo <= q_all / blocks.n <= hi),
+                loo_z2_shallow=float(z2[shallow].mean()) if shallow.any() else None,
+                loo_z2_deep=float(z2[~shallow].mean()) if (~shallow).any() else None, n=blocks.n,
                 sites_outside_99=[x['site'] for x in sites if not x['inside_99']],
                 sites_unusual_offset=[x['site'] for x in sites if x['offset_unusual']]), sites

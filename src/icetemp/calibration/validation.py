@@ -210,6 +210,8 @@ class Validator:
         """A calibrator with self.calibrator's settings (target, offset, error model, fixed
         parameters, points left out of the fit), on `glaciers` only."""
         c = self.calibrator
+        if c.site_weights:
+            raise ValueError('site weights are a variant of the full fit; the folds do not carry them')
         kwargs = dict(emulator=c.emulator, glaciers=glaciers, priors=c.priors, track='depth',
                       target=c.target, offset_in_fit=c.offset_in_fit, fit_exclude=c.fit_exclude,
                       emulator_error=c.emulator_error,

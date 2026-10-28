@@ -48,3 +48,25 @@ bounds_override:
   refreeze_frac: [0.03, 1.0]
 fixed_params:
   advection_scale: 1.0
+
+# The rules of step 3 (development_history/plans/2026-10-27_step5_rules_plan.md, approved by Janosch on 28 Oct; rule 6
+# read as "0.6 m w.e. per year or less" and rule 7 withdrawn, both 28 Oct). Fit: scripts/icetemp_analysis/step5/
+# fit_step5.py; checks: site_checks.py; variants: variants.py; benchmark: benchmark.py.
+# Sites by the written rule (holes within 1 km and 150 m, chained); the site table is the check.
+sites: rule
+# deep old ice: below 40 m wherever the measured accumulation is 0.6 m w.e. per year or less (rule 6 b)
+fit_exclusions: ['low_accumulation_below_40m']
+# error model C6b, chosen by evidence (error_model_forms.py, week3/step5_error_forms/main_t): band term, borehole,
+# borehole-and-year and site terms, each reading's own error in the top 15 m, a multivariate t per site. These are its
+# starting sizes (maximum likelihood on fs1_FRHS_r0.85_i1.017_a1.00_fa_fs1.5_oCP_w0); the fit re-estimates them at
+# its first result (rule 1).
+target: depth
+emulator_error: mean
+s_model_variance: 2.272
+s_model_length_m: 120.807
+s_hole_variance: 1.389
+s_hole_year_variance: 0.026
+s_site_variance: 0.44
+s_white_variance: 0.365
+s_white_max_depth: 15.0
+site_t_nu: 2.561

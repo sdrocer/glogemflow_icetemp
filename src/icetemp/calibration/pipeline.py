@@ -17,7 +17,8 @@ import pandas as pd
 
 from . import adoption
 from .config import CalibrationConfig
-from .data import DataHandler, fit_exclusions, site_keys
+from . import thermal_structure
+from .data import DataHandler, fit_exclusions, rule_site_keys, site_keys
 from .priors import Priors, PARAM_NAMES
 from .design import DesignSampler
 from .runner import GloGEMRunner
@@ -197,9 +198,19 @@ class CalibrationPipeline:
                       s_model_length_m=self.config.s_model_length_m,
                       s_hole_variance=self.config.s_hole_variance,
                       s_hole_year_variance=self.config.s_hole_year_variance,
-                      s_site_variance=self.config.s_site_variance, site_of=site_keys(glaciers))
+                      s_site_variance=self.config.s_site_variance, site_of=self.site_of(glaciers),
+                      s_white_variance=self.config.s_white_variance,
+                      s_white_max_depth=self.config.s_white_max_depth, site_t_nu=self.config.site_t_nu)
         kwargs.update(overrides)
         return BayesianCalibrator(**kwargs)
+
+    def site_of(self, glaciers):
+        """entity name -> site, from the site table or by the written rule (config.sites)."""
+        if self.config.sites == 'table':
+            return site_keys(glaciers)
+        if self.config.sites == 'rule':
+            return rule_site_keys(glaciers, thermal_structure.load_borehole_table())
+        raise ValueError(f"sites must be 'table' or 'rule', not {self.config.sites!r}")
 
     def emulator_agreement(self):
         """Grid posteriors of the configured fit and of the same fit with the emulator's

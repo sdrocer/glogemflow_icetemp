@@ -183,11 +183,26 @@ def glacier_systems(glaciers):
 
 
 # Points left out of the parameter fit and reported apart. Colle Gnifetti below 40 m holds ice from
-# before the model's climate record starts (1942).
+# before the model's climate record starts (1942). 'low_accumulation_below_40m' (rules plan of 27 Oct, rule 6 (b),
+# approved 28 Oct) says the same everywhere: below 40 m wherever the measured long-term accumulation is 0.6 m w.e.
+# per year or less (measured_accumulation.csv: the selection of scripts/icetemp_analysis/burial/
+# select_accumulation.py from the literature compilation of 21 Oct, its sources in measured_accumulation_sources.csv;
+# only entities whose value is used there).
+MEASURED_ACCUMULATION = Path(__file__).with_name('measured_accumulation.csv')
 FIT_EXCLUSIONS = {
     'colle_gnifetti_below_40m': dict(region='CentralEurope', glacier_ids=('01225', '01230'),
                                      min_band=4400, min_depth=40.0),
+    'low_accumulation_below_40m': dict(accumulation_table=MEASURED_ACCUMULATION, max_accumulation=0.6,
+                                       min_depth=40.0),
 }
+
+
+def low_accumulation_entities(table=MEASURED_ACCUMULATION, max_accumulation=0.6):
+    """entity name -> measured accumulation [m w.e./yr], for the entities whose used value is max_accumulation or
+    less."""
+    t = pd.read_csv(table)
+    t = t[(t['use'] == 'used') & t['acc_central'].notna() & (t['acc_central'] <= max_accumulation)]
+    return dict(zip(t['entity'], t['acc_central'].astype(float)))
 
 
 def fit_exclusions(glaciers, names, rules=FIT_EXCLUSIONS):
@@ -198,6 +213,12 @@ def fit_exclusions(glaciers, names, rules=FIT_EXCLUSIONS):
     out = set()
     for name in names or ():
         r = rules[name]
+        if 'accumulation_table' in r:
+            low = low_accumulation_entities(r['accumulation_table'], r['max_accumulation'])
+            for g in glaciers:
+                if g.glacier_name in low:
+                    out |= {(g.glacier_name, float(d)) for d in g.depths if d > r['min_depth']}
+            continue
         for g in glaciers:
             if (g.glogem_region == r['region'] and g.glacier_id in r['glacier_ids']
                     and g.elevation_band >= r['min_band']):
@@ -288,6 +309,43 @@ def site_keys(glaciers, table=SITE_TABLE):
         base = g.glacier_name.split('@')[0]
         m = t[(t.base_name == base) & (t.band_lo <= g.elevation_band) & (g.elevation_band < t.band_hi)]
         out[g.glacier_name] = m.site.iloc[0] if len(m) else base
+    return out
+
+
+SITE_RULE_KM, SITE_RULE_DZ = 1.0, 150.0
+
+
+def rule_site_keys(glaciers, holes, km=SITE_RULE_KM, dz=SITE_RULE_DZ):
+    """entity name -> site by the written rule (rules plan of 27 Oct, rule 2): holes less than km apart and less than
+    dz apart in height belong to one site, chained (single linkage). A site is named '<most common glacier name>
+    <lowest>-<highest hole elevation>'. holes: table with id, latitude, longitude, elevation, glacier_name
+    (thermal_structure.load_borehole_table). Needs each point's hole (pool_within='hole_year')."""
+    if any(getattr(g, 'point_hole', None) is None for g in glaciers):
+        raise ValueError("sites by rule need each point's hole (pool_within='hole_year')")
+    ids = sorted({str(h) for g in glaciers for h in g.point_hole})
+    t = holes.assign(id=holes['id'].astype(str)).set_index('id').loc[ids]
+    lat, lon = np.radians(t['latitude'].to_numpy(float)), np.radians(t['longitude'].to_numpy(float))
+    z = t['elevation'].to_numpy(float)
+    dist = 6371.0 * 2 * np.arcsin(np.sqrt(np.sin((lat[:, None] - lat) / 2) ** 2
+                                          + np.cos(lat[:, None]) * np.cos(lat) * np.sin((lon[:, None] - lon) / 2) ** 2))
+    link = (dist < km) & (np.abs(z[:, None] - z) < dz)
+    lab = np.arange(len(ids))
+    while True:
+        new = np.array([lab[link[i]].min() for i in range(len(ids))])
+        if (new == lab).all():
+            break
+        lab = new
+    names = {}
+    for k in np.unique(lab):
+        m = t.iloc[np.flatnonzero(lab == k)]
+        names[k] = f"{m['glacier_name'].mode().iloc[0]} {m['elevation'].min():.0f}-{m['elevation'].max():.0f}"
+    site_of_hole = {h: names[k] for h, k in zip(ids, lab)}
+    out = {}
+    for g in glaciers:
+        sites = {site_of_hole[str(h)] for h in g.point_hole}
+        if len(sites) != 1:
+            raise ValueError(f'{g.glacier_name}: its holes fall in {len(sites)} sites ({sorted(sites)})')
+        out[g.glacier_name] = sites.pop()
     return out
 
 
@@ -412,6 +470,7 @@ class DataHandler:
         measurement['depth'] = pd.to_numeric(measurement['depth'], errors='coerce')
         measurement['temperature'] = pd.to_numeric(measurement['temperature'], errors='coerce')
         n_before = len(measurement)
+        # a reading above 0 C measures air or water in the hole, not ice: never calibrated on (Janosch, 28 Oct)
         measurement = measurement[measurement['temperature'] <= 0].copy()
 
         self._raw = {

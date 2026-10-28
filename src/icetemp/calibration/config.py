@@ -119,6 +119,13 @@ class CalibrationConfig:
     s_hole_variance: float = 0.0
     s_hole_year_variance: float = 0.0
     s_site_variance: float = 0.0
+    # form C6b (rules plan of 27 Oct): each reading's own error at or above s_white_max_depth [degC^2]; a multivariate
+    # t per site with site_t_nu degrees of freedom (None = Gaussian); sites from 'table' (borehole_sites.csv) or by
+    # 'rule' (holes within 1 km and 150 m, data.rule_site_keys)
+    s_white_variance: float = 0.0
+    s_white_max_depth: float = 15.0
+    site_t_nu: float = None
+    sites: str = 'table'
 
     # -- calibration target (Step 5, chosen 2026-10-12) ------------------------------------
     # 'depth': one misfit per 1 m depth bin, the per-entity offset estimated after the fit (T2);
