@@ -7,6 +7,119 @@ design runs finished on 27 Oct at 18:05 and have not been looked at; the 45 benc
 **The rules commit is 3467851 (28 Oct, about 15:50, pushed).** It holds every script that decides the result. The fit
 starts only from it, or from a later commit that changes no rules code (this line was added in such a commit).
 
+## The result (28 Oct evening): not adopted by rule 9; two decisions for you
+
+*Everything below ran automatically overnight, on the rules commit (the run itself used `cb50eee`, which differs from
+`3467851` only outside the rules code). Step 5 will be redone on the free-air mass balance (decision log, 28 Oct), so
+this run also fixes how that redo is read.*
+
+```
+ 60 design runs ─► the fit ─► site checks ─► 7 left-out-massif ─► 8 real GloGEM runs ─► the benchmark
+ (40 + 20 near    on all 7    and variants    fits (one per        (the 7 fold results    (each massif predicted
+  the result)     massifs     (rules 3, 5)    massif left out)     and the main result)   from the other six)
+```
+
+**1. The fit (all 7 massifs).**
+- **f_ref 0.93 ± 0.02, f_ins 1.18 ± 0.06.** The two are told apart (correlation +0.50; the data narrow f_ins to 0.18
+  of its starting spread), so rule 4 keeps both.
+- **The error model fits:** the misses average 1.15 expected misses (shallow 1.29, deep 1.07).
+- **The gate passes.** The emulator check fails (reported only): with the emulator's own uncertainty, the result could
+  move by about 1 sd in f_ref and 2 sd in f_ins. The real GloGEM runs at the left-out results agree with the emulator
+  (2.60 against 2.58 °C), so the benchmark does not rest on it.
+
+**2. The benchmark (rule 8): each massif predicted from the other six.**
+
+| method | error at depth, all | zone 3000–3800 m | above 3800 m | bands in the right class (of 105) | polythermal bands right (of 18) | sites right (of 22) |
+|---|---|---|---|---|---|---|
+| **Step 5** | **2.60 °C** | **2.50** | **3.07** | 73 | 9 | 9 |
+| grid choice | 2.83 | 2.51 | 3.43 | 72 | 9 | 8 |
+| starting values (f_ref 0.55, f_ins 1.0) | 2.45 | 2.20 | 2.86 | 75 | 9 | 10 |
+| the 5 bands nearest in elevation | 2.88 | 2.45 | 3.47 | 76 | 0 | 12 |
+| a line in elevation | 3.68 | 2.25 | 4.46 | 72 | 0 | 9 |
+| a line in the free air | 3.78 | 2.36 | 4.58 | 72 | 0 | 9 |
+| elevation thresholds | – | – | – | 74 | 0 | 11 |
+| Suter's cold-firn limit | – | – | – | 60 | 0 | 6 |
+
+- **Step 5 beats the grid choice** by 0.23 °C overall (90 % range: 0.42 better to 0.02 worse) and equals it in the
+  zone.
+- **The starting values do 0.14 °C better than Step 5,** but that is within the uncertainty (0.22 better to 0.58
+  worse, resampling whole sites). They win at Mont Blanc and the Bernese Alps and lose at Bernina.
+- **Above 3800 m the model clearly beats the simple rules** (2.9–3.4 against 3.5–4.6 °C). In the zone a line in
+  elevation beats Step 5 (2.25 against 2.50 °C) and matches the starting values, as found on 21 Oct.
+- **No simple rule gets a single polythermal band right.** The 5-nearest rule gets the most bands right by calling
+  almost everything cold.
+- **Frozen beds, the same for every model version:**
+  - 11 of the 14 measured frozen beds found, among them 11 of the 12 very cold ones;
+  - neither of the 2 close to melting (Tête Rousse at 65 m, Corvatsch);
+  - one temperate bed called frozen (Hohsaas at 21.5 m).
+
+**3. Rule 9: not adopted.**
+
+| check | needed | Step 5 | |
+|---|---|---|---|
+| error, all | at worst 0.1 °C worse than the grid choice (90 % confidence) | 0.03 °C *better* | passes |
+| error, zone | the same | 0.004 °C better | passes |
+| the 90 % ranges | hold 80–97 % of the readings | **75 %** | **fails** |
+
+- **By the rule, v1.0 keeps the grid choice with its spread:** f_ref 0.85 at f_ins 1.017 (the best grid value on all
+  7 massifs; 0.70 is nearly as good, 2.34 against 2.32 °C), spread 0.16 between the seven fold choices.
+- **Why the ranges are too narrow:** the misses belong to whole sites, not to single readings.
+
+  | site | the model is | readings inside their range |
+  |---|---|---|
+  | Taconnaz 3680–3830 m | 6.2 °C too warm | 3 % |
+  | Bossons 3930–4304 m | 3.1 °C too warm | 28 % |
+  | Fiescher 3889–3893 m | 2.7 °C too warm | 38 % |
+  | Breithornplateau | 4.0 °C too cold | 12 % |
+
+- **Each left-out fit claims to know f_ref within ±0.02–0.04, but the fits disagree far more.** Six give 0.92–0.94; the
+  one without Monte Rosa gives 0.40. The fit follows whichever of the two big massifs it contains: the Monte Rosa
+  saddles want f_ref near 1.0, Mont Blanc about 0.25. This is the massif split again.
+
+**4. A check after the fact, not a rule** (`step5/coverage_spread.py`): the same ranges with the parameters spread as
+for the map.
+
+| spread of f_ref and f_ins | readings inside their 90 % range | model too warm / too cold |
+|---|---|---|
+| each fold's own (±0.02 / ±0.06): rule 9 as coded | 75 % | 18 % / 7 % |
+| the sd of the 7 fold results (±0.20 / ±0.20) | 82 % | 13 % / 5 % |
+| the map's spread of rule 10 (±0.20 / ±0.37) | 82 % | 14 % / 5 % |
+| one massif's own spread, (n − 1) × sd (±1.2 / ±1.2) | 92 % | 4 % / 4 % |
+
+The calibration's own uncertainty is too sure of itself for an unseen massif. Add the disagreement between the
+massifs, as rule 10 already does for the map, and the ranges become about right. Only one massif's own spread gives
+90 % ranges that hold about 90 %, missing equally often on both sides.
+
+**5. The site checks (rule 3).**
+- **Check 1** (misses within the error model): every site except Grenzgletscher at 2015 m (the tongue, 10 readings).
+- **Check 2** (unusual offset): none.
+- **Check 3** (leaving the site out moves the result by more than its uncertainty): three sites are decisive.
+  - Breithornplateau: f_ref +0.05, f_ins +0.09.
+  - Bossons 3930–4304 m: f_ins −0.07.
+  - The Colle Gnifetti saddles (Grenzgletscher 3898–4485 m): f_ref −0.09, f_ins −0.37.
+
+  They widen the map's f_ins uncertainty to ±0.37. They do not stop adoption.
+- **The named check** (without the 1999 campaign's 14 shallow bands) moves f_ref −0.015 and f_ins +0.045. It is not
+  decisive.
+
+**6. The variants (rule 5): f_ref stays at 0.84–0.93 in every variant; f_ins moves between 0.91 and 1.49.**
+
+| variant | f_ref | f_ins |
+|---|---|---|
+| main | 0.93 | 1.18 |
+| deep readings only | 0.88 | 0.96 |
+| no site above 20 % of the information | 0.84 | 0.91 |
+| holes in equilibrium and published only | 0.91 | 1.49 |
+| f_ins prior twice as wide | 0.93 | 1.18 |
+| without the 1999 shallow bands | 0.91 | 1.22 |
+
+**Decisions for you.**
+
+| # | question | options | recommendation |
+|---|---|---|---|
+| A | Adoption | (a) **follow rule 9**: v1.0 takes the grid choice (f_ref 0.85, f_ins 1.017) with its spread; Step 5's result, its gain in error and the check after the fact are reported beside it. (b) adopt Step 5 anyway, because with the map's spread the ranges hold 82 %; a deviation from the rule, logged like S and orientation | **(a)**: the rule was fixed to catch exactly an over-confident calibration, and it did. The two results lie close (0.85 against 0.93), so the map barely changes, and the paper can say the rule set in advance was followed |
+| B | Rule 10's spread for glaciers without boreholes | (a) **one massif's own spread**, (n − 1) × sd; (b) the sd of the fold results | **(a)**: the only spread whose 90 % ranges hold about 90 % (92 %), missing equally often on both sides. Its cost: f_ref for an unseen massif is then anywhere in 0.03–1.0, so the map's probabilities stay wide in the zone. That is the honest state of the data |
+
 **Two changes on 28 Oct, decided by Janosch after the check of the data (before any fit):**
 - **Rule 6 (b) reads "0.6 m w.e. per year or less".**
   - The check showed that Dôme du Goûter has no readings below 40 m, so (b) does not add it. I had claimed it would,
@@ -384,3 +497,9 @@ The details below were open in the words and are fixed here.
 | sd | standard deviation: the usual size of a spread |
 | emulator | a fast statistical stand-in for GloGEM, trained on the design runs |
 | gate | the fit's own health checks (convergence, design runs near the result, misfit window) |
+| 90 % range, coverage | the range a method gives for a reading, which should contain the reading 9 times in 10; coverage is how often it does |
+| decisive site | a site whose removal moves the result by more than the result's own uncertainty (check 3) |
+| starting values | f_ref 0.55, f_ins 1.0: the values before any calibration |
+| check after the fact | computed after the results were seen; reported, never used to decide |
+| one massif's own spread | (n − 1) × the sd of the fold results: about how far one massif's own best value lies from the overall result |
+| emulator check | whether the fit stays put when the emulator's own uncertainty is included |
