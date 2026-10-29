@@ -117,7 +117,7 @@ massifs, as rule 10 already does for the map, and the ranges become about right.
 
 | # | question | options | recommendation |
 |---|---|---|---|
-| A | Adoption | (a) **follow rule 9**: v1.0 takes the grid choice (f_ref 0.85, f_ins 1.017) with its spread; Step 5's result, its gain in error and the check after the fact are reported beside it. (b) adopt Step 5 anyway, because with the map's spread the ranges hold 82 %; a deviation from the rule, logged like S and orientation | **(a)**: the rule was fixed to catch exactly an over-confident calibration, and it did. The two results lie close (0.85 against 0.93), so the map barely changes, and the paper can say the rule set in advance was followed |
+| A | Adoption | (a) **follow rule 9**: v1.0 takes the grid choice (f_ref 0.85, f_ins 1.017) with its spread; Step 5's result, its gain in error and the check after the fact are reported beside it. (b) adopt Step 5 anyway, because with the map's spread the ranges hold 82 %; a deviation from the rule, logged like S and orientation | **(a)**: the rule was fixed to catch exactly an over-confident calibration, and it did. The two values of f_ref lie close (0.85 against 0.93), well inside the map's spread of ±0.20, and the paper can say the rule set in advance was followed |
 | B | Rule 10's spread for glaciers without boreholes | (a) **one massif's own spread**, (n − 1) × sd; (b) the sd of the fold results | **(a)**: the only spread whose 90 % ranges hold about 90 % (92 %), missing equally often on both sides. Its cost: f_ref for an unseen massif is then anywhere in 0.03–1.0, so the map's probabilities stay wide in the zone. That is the honest state of the data |
 
 **Two changes on 28 Oct, decided by Janosch after the check of the data (before any fit):**
