@@ -67,7 +67,10 @@ ADOPT_MARGIN, COVER = 0.1, (0.80, 0.97)
 CLASSES = ft.CLASSES
 # run names before _oCP_w0; STAND_IN (--stand-in, a test of the code only): the free-air base runs fb1 for all three
 RUNS = dict(grid='s5g{k:02d}_FRHS_r{fr:.2f}_i1.017_a1.00_fa_fs1.4', start='s5s00_FRHS_r0.55_i1.000_a1.00_fa_fs1.4',
-            fold='s5f{k}_*_fa_fs1.4')
+            fold='s5f{k}_*_fa_fs1.4', fold_tag='s5f')
+# the redo on the free-air mass balance (config air_temperature = 'freeair'; plan of 29 Oct)
+RUNS_MBFA = dict(grid='s6g{k:02d}_FRHS_r{fr:.2f}_i1.017_a1.00_mbfa_fa_fs1.4',
+                 start='s6s00_FRHS_r0.55_i1.000_a1.00_mbfa_fa_fs1.4', fold='s6f{k}_*_mbfa_fa_fs1.4', fold_tag='s6f')
 STAND_IN = dict(grid='fb1_FRHS_r{fr:.2f}_i1.017_a1.00_fa', start='fb1_FRHS_r0.55_i1.017_a1.00_fa',
                 fold='fb1_FRHS_r0.55_i1.017_a1.00_fa')
 PARTS = 'GNESW'
@@ -75,6 +78,10 @@ CHECK_RUNS = True   # off with --stand-in, whose runs are at other points
 
 
 # ── runs ───────────────────────────────────────────────────────────────────────────────────
+def run_names(config):
+    return RUNS_MBFA if config.air_temperature == 'freeair' and CHECK_RUNS else RUNS
+
+
 def one_run(pattern, theta, config, missing_ok=False):
     """The merged run matching pattern; its five part runs ran theta with the config's thermal settings."""
     hits = sorted(ft.BAYESCAL.glob(pattern + '_oCP_w0'))
@@ -90,15 +97,16 @@ def one_run(pattern, theta, config, missing_ok=False):
 
 
 def grid_runs(config):
-    return {fr: one_run(RUNS['grid'].format(k=k, fr=fr), (fr, GRID_FINS, 1.0), config) for k, fr in enumerate(GRID)}
+    return {fr: one_run(run_names(config)['grid'].format(k=k, fr=fr), (fr, GRID_FINS, 1.0), config)
+            for k, fr in enumerate(GRID)}
 
 
 def start_run(config):
-    return one_run(RUNS['start'], (*START, 1.0), config)
+    return one_run(run_names(config)['start'], (*START, 1.0), config)
 
 
 def fold_run(f, config):
-    return one_run(RUNS['fold'].format(k=f['fold']), f['theta'], config, missing_ok=True)
+    return one_run(run_names(config)['fold'].format(k=f['fold']), f['theta'], config, missing_ok=True)
 
 
 def emu_rows(emu):
@@ -173,7 +181,7 @@ def cmd_folds(pl, F, out, head):
                           second_estimate_gain=r['second_estimate_gain']))
         with open(out / f'fold{k}_posterior.pkl', 'wb') as f:
             pickle.dump(dict(points=pts, weights=w, sizes=sc.only_sizes(r['sizes'])), f)
-        rows.append(dict(fold=k, massif=m, tag=f's5f{k}', **dict(zip(('refreeze_frac', 'insul_scale', 'advection_scale'),
+        rows.append(dict(fold=k, massif=m, tag=f"{run_names(pl.config)['fold_tag']}{k}", **dict(zip(('refreeze_frac', 'insul_scale', 'advection_scale'),
                                                                      r['theta'].tolist()))))
     rec = dict(commit=head, training={k: pl.training[k] for k in ('n_runs', 'sha256')}, folds=folds)
     (out / 'folds.json').write_text(json.dumps(rec, indent=1, default=float))

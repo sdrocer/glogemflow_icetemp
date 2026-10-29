@@ -408,6 +408,9 @@ class GloGEMRunner:
     surface_cool: str = 'n'       # 'gilbert' = thermal surface min(0, 0.95 * air + surface_cool_dt)
     surface_cool_dt: float = -3.4  # K: -3.4 the measured skin, -1.4 with Gilbert's +2 K for penetrating sunlight
     f_sur: float = 0.0            # K: thermal surface min(0, air - f_sur); 0 = off
+    air_temperature: str = 'era5_2m'  # the mass balance's air (GloGEM air_temperature); 'freeair' = the free air,
+    # written only then, so 'era5_2m' leaves the config unchanged; the calibration folder must hold its
+    # calibration/air_temperature.txt (GloGEM stops on a calibration made with another air)
     region_id: int = 14   # GloGEM-internal region id for CentralEurope (region_id_loop),
     # verified against the working reference config's own region_id_loop=[14,14] -- NOT the
     # RGI O1 code (11, see rgi_region_code below). Two different numbering schemes coexist:
@@ -474,6 +477,8 @@ class GloGEMRunner:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.calibration_source_dir = Path(self.calibration_source_dir)
         self.catchments_dir = Path(self.catchments_dir)
+        if self.air_temperature not in ('era5_2m', 'freeair'):
+            raise ValueError(f"air_temperature must be 'era5_2m' or 'freeair', not {self.air_temperature!r}")
 
     @property
     def override_path(self):
@@ -577,9 +582,18 @@ class GloGEMRunner:
             dest_name = src_file.name.replace(self.calibration_source_catchment, self.catchment)
             dest_name = dest_name.replace('ERA5', 'era5')
             dest_file = dest / dest_name
-            if not dest_file.exists() or dest_file.stat().st_size != src_file.stat().st_size:
+            if not dest_file.exists() or dest_file.read_bytes() != src_file.read_bytes():
                 shutil.copy2(src_file, dest_file)
                 copied.append(dest_file)
+        # the air the calibration was made with (GloGEM write_calibration_air.pro); none = the 2 m air
+        air_src = self.calibration_source_dir / 'air_temperature.txt'
+        if air_src.is_file():
+            if not (dest / air_src.name).is_file() or (dest / air_src.name).read_bytes() != air_src.read_bytes():
+                shutil.copy2(air_src, dest / air_src.name)
+                copied.append(dest / air_src.name)
+        elif self.air_temperature != 'era5_2m':
+            raise FileNotFoundError(f'air_temperature = {self.air_temperature!r}, but {air_src} does not exist: '
+                                    'calibration_source_dir is not a free-air calibration')
         return copied
 
     def check_calibration_areas(self, glacier_ids, lookup_csv=GLIMS_LOOKUP_CSV):
@@ -663,6 +677,13 @@ class GloGEMRunner:
             rf_param='n' if self.mb_refreezing == 'full' else 'y',
             rf_full='y' if self.mb_refreezing == 'full' else 'n',
         )
+        if self.air_temperature != 'era5_2m':
+            # a GloGEM tree without the switch would take the line as an unused variable and run on the 2 m air
+            if 'air_temperature' not in (Path(self.glogem_dir) / 'procedures/initialise/settings.pro').read_text():
+                raise ValueError(f'air_temperature = {self.air_temperature!r}, but {self.glogem_dir} has no such '
+                                 'setting (use a GloGEM tree with the free-air mass balance)')
+            text += (f"air_temperature = '{self.air_temperature}'   ; the mass balance's air too (needs a "
+                     "calibration made with it); freeair_file = firnice_freeair_file\n")
         out_path.write_text(text)
         return out_path
 

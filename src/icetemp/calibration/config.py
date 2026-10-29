@@ -98,6 +98,7 @@ class CalibrationConfig:
     surface_cool: str = 'n'       # 'gilbert' = thermal surface min(0, 0.95 * air + surface_cool_dt)
     surface_cool_dt: float = -3.4  # K: -3.4 the measured skin, -1.4 with Gilbert's +2 K for penetrating sunlight
     f_sur: float = 0.0            # K: thermal surface min(0, air - f_sur), the snow surface colder than the air; 0 = off
+    air_temperature: str = 'era5_2m'  # the mass balance's air (GloGEM air_temperature); 'freeair' needs a free-air calibration
     n_design_points: int = 100
     design_seed: int = 42
     explained_variance: float = 0.999   # at 0.99 about half the insul_scale information is lost (5a)

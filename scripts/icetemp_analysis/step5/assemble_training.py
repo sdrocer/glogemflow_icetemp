@@ -28,7 +28,9 @@ from icetemp.calibration import CalibrationConfig, CalibrationPipeline  # noqa: 
 from icetemp.calibration.priors import PARAM_NAMES  # noqa: E402
 
 SETTINGS = ('forcing_toff', 'thermal_lapse', 'hl1980', 'lh_water', 'snow_refreeze', 'orient', 'thermal_air',
-            'freeair_file', 'f_sur', 'catchment')
+            'freeair_file', 'f_sur', 'catchment', 'air_temperature', 'calibration_source_dir')
+# settings that runs made before them did not record, at the value those runs had
+UNRECORDED = dict(air_temperature='era5_2m')
 
 
 def one_run(pattern):
@@ -45,7 +47,7 @@ def check_part(run, theta, config):
                                                                               atol=1e-12):
         raise SystemExit(f'{run.name}: design {d.to_numpy().tolist()} is not {theta.tolist()}')
     c = yaml.safe_load((run / 'config.yaml').read_text())
-    bad = [k for k in SETTINGS if c.get(k) != getattr(config, k)]
+    bad = [k for k in SETTINGS if c.get(k, UNRECORDED.get(k)) != getattr(config, k)]
     if bad:
         raise SystemExit(f'{run.name}: {", ".join(f"{k} {c.get(k)!r}" for k in bad)} differ from the config')
 

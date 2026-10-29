@@ -42,6 +42,8 @@ Usage:  full_set_runs.py <worker> [host] [run_tag] [--variant V] [--fref X --fin
   --fsur F: f_sur, thermal surface min(0, air - F) (GloGEM firnice_f_sur; tag _fsF)
             The _fa, _gc and _fs tags come before _o, so merge_part_runs.py takes them as part of the base.
   --write-melth: GloGEM also writes every band's thermal melt and air temperature per month (tag _mth)
+  --mb-air freeair: the mass balance on the free air too (GloGEM air_temperature = 'freeair'; tag _mbfa, before _fa);
+            needs --freeair and a --calibration-dir made on the free air (its calibration/air_temperature.txt)
   --ids, --catchment: a glacier subset with a catchment file of its own (gate runs), so the shared
             RGI11_CentralEurope_bayescal.dat is left alone.
   --data-rules old: the borehole data rules before 2026-10-13, to compare with earlier runs.
@@ -61,7 +63,7 @@ import hashlib
 import shutil
 import subprocess
 import time
-from dataclasses import asdict, replace
+from dataclasses import fields, replace
 from pathlib import Path
 
 import dill
@@ -179,6 +181,8 @@ def main():
     ap.add_argument('--freeair', default='', help="free-air table: the thermal model's air (firnice_thermal_air)")
     ap.add_argument('--surface-cool', type=float, default=None, help='thermal surface min(0, 0.95 air + DT)')
     ap.add_argument('--fsur', type=float, default=0.0, help='f_sur: thermal surface min(0, air - F)')
+    ap.add_argument('--mb-air', default='era5_2m', choices=['era5_2m', 'freeair'],
+                    help="the mass balance's air (GloGEM air_temperature)")
     ap.add_argument('--calibration-dir', default=None,
                     help='mass-balance calibration to use instead of the configured one (all its .dat files)')
     ap.add_argument('--data-rules', default='new', choices=['new', 'old'],
@@ -188,6 +192,8 @@ def main():
         raise SystemExit('--orient-dir and --orient-tag go together')
     if bool(args.burial_dir) != bool(args.burial_tag):
         raise SystemExit('--burial-dir and --burial-tag go together')
+    if args.mb_air == 'freeair' and not (args.freeair and args.calibration_dir):
+        raise SystemExit('--mb-air freeair needs --freeair and the --calibration-dir of a free-air calibration')
     theta = THETAS[args.worker].copy()
     custom = any(v is not None for v in (args.fref, args.fins, args.fadv))
     for k, v in enumerate((args.fref, args.fins, args.fadv)):
@@ -197,6 +203,7 @@ def main():
                if custom else args.run_tag) + ('_nodeep' if args.no_deepen else '') + \
               (f'_age{args.firn_age}' if args.firn_age != 20 else '') + \
               ('_mbfull' if args.mb_refreezing == 'full' else '') + ('_mbhist' if args.mb_hist_file else '') + \
+              ('_mbfa' if args.mb_air == 'freeair' else '') + \
               ('_fa' if args.freeair else '') + \
               (f'_gc{args.surface_cool:+.1f}' if args.surface_cool is not None else '') + \
               (f'_fs{args.fsur:.1f}' if args.fsur else '') + \
@@ -222,6 +229,7 @@ def main():
         **(dict(thermal_air='freeair', freeair_file=str(Path(args.freeair).resolve())) if args.freeair else {}),
         **(dict(surface_cool='gilbert', surface_cool_dt=args.surface_cool) if args.surface_cool is not None else {}),
         **(dict(f_sur=args.fsur) if args.fsur else {}),
+        **(dict(air_temperature='freeair') if args.mb_air == 'freeair' else {}),
         **(dict(outline_by_position=False, entry_any_below=None, fill_missing_covariates=False)
            if args.data_rules == 'old' else {}),
     )
@@ -232,8 +240,12 @@ def main():
     if args.freeair:
         record_freeair(Path(cfg.freeair_file), cfg.output_path)
     old_cfg = cfg.output_path / 'config.yaml'
-    if old_cfg.exists() and old_cfg.read_text() != yaml.safe_dump(asdict(cfg), sort_keys=False):
-        raise SystemExit(f'{cfg.output_path} exists with other settings; use another run tag')
+    if old_cfg.exists():
+        # settings added later take their defaults, settings since retired are ignored
+        old = yaml.safe_load(old_cfg.read_text())
+        known = {f.name for f in fields(CalibrationConfig)}
+        if CalibrationConfig(**{k: v for k, v in old.items() if k in known}) != cfg:
+            raise SystemExit(f'{cfg.output_path} exists with other settings; use another run tag')
     pl = SubsetPipeline(cfg)
     pl.ids = None if args.ids is None else set(args.ids.split(','))
     pl.exclude = set(filter(None, args.exclude_ids.split(',')))

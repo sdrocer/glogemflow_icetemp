@@ -75,6 +75,38 @@ def test_mass_balance_refreezing_reaches_the_config(tmp_path):
     assert read(GloGEMRunner(run_dir=tmp_path / 'r2', catchments_dir=tmp_path / 'c2', mb_refreezing='full')) == ('n', 'y')
 
 
+def test_mass_balance_air_only_written_when_free(tmp_path):
+    a = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments').write_training_config()
+    settings_pro = tmp_path / 'procedures' / 'initialise' / 'settings.pro'
+    settings_pro.parent.mkdir(parents=True)
+    settings_pro.write_text("dircali = ''\n")
+    with pytest.raises(ValueError):    # a GloGEM tree without the switch
+        GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', glogem_dir=tmp_path,
+                     air_temperature='freeair').write_training_config(tmp_path / 'x.pro')
+    settings_pro.write_text("air_temperature = 'era5_2m'\n")
+    b = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', glogem_dir=tmp_path,
+                     air_temperature='freeair').write_training_config(tmp_path / 'fa.pro')
+    assert not re.search(r'^air_temperature', a.read_text(), flags=re.M)
+    extra = b.read_text()[len(a.read_text()):]
+    assert b.read_text().startswith(a.read_text()) and re.fullmatch(r"air_temperature = 'freeair'[^\n]*\n", extra)
+    with pytest.raises(ValueError):
+        GloGEMRunner(run_dir=tmp_path / 'r3', catchments_dir=tmp_path / 'c3', air_temperature='2m')
+
+
+def test_free_air_needs_a_free_air_calibration(tmp_path):
+    src = tmp_path / 'cal'
+    src.mkdir()
+    (src / 'calibrate_m1_cID9_centraleurope_final_era5.dat').write_text('x\n')
+    with pytest.raises(FileNotFoundError):
+        GloGEMRunner(run_dir=tmp_path / 'r1', catchments_dir=tmp_path / 'c1', calibration_source_dir=src,
+                     air_temperature='freeair').copy_calibration_data()
+    (src / 'air_temperature.txt').write_text('freeair\n400\n')
+    r = GloGEMRunner(run_dir=tmp_path / 'r2', catchments_dir=tmp_path / 'c2', calibration_source_dir=src,
+                     air_temperature='freeair')
+    r.copy_calibration_data()
+    assert (r.calibration_dest_dir / 'air_temperature.txt').read_text() == 'freeair\n400\n'
+
+
 def test_catchment_file_is_never_changed(tmp_path):
     from types import SimpleNamespace
     r = GloGEMRunner(run_dir=tmp_path / 'runs', catchments_dir=tmp_path / 'catchments', catchment='T')
