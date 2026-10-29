@@ -24,7 +24,8 @@
 > **Against simple rules,** the model wins above 3800 m and is the only method that gets polythermal bands right. In
 > the zone, a line in elevation does as well.
 >
-> *Status (29 Oct): two decisions for Janosch, on adoption and on the map's spread.*
+> *Status (29 Oct): decided by Janosch. Rule 9 is followed, so version 1.0 takes the grid choice (f_ref 0.85,
+> f_ins 1.017), and the map's spread is one massif's own spread. See "Decided on 29 Oct" below.*
 
 ## What we believed
 
@@ -284,34 +285,43 @@ f_ref and f_ins. Shaded: the window rule 9 asks for (80–97 %); dashed: 90 %.*
   the decision log.
 - **GloGEM:** no change. The runs used the free-air worktree at `61ada09`.
 
+## Decided on 29 Oct
+
+- **A, adoption: rule 9 is followed** (Janosch). Version 1.0 takes the grid choice, f_ref 0.85 at f_ins 1.017. Step
+  5's result (0.93 / 1.18), its gain on unseen massifs and the check after the fact are reported beside it.
+- **B, rule 10's spread: one massif's own spread** (Janosch), (n − 1) times the sd of the seven fold results.
+- **The check of that spread around the grid choice** (`step5/coverage_grid.py`, new; emulator only, no new runs).
+  The section above tested the spreads around Step 5's fold results. Version 1.0 uses the grid choice, so the same
+  test was repeated around each massif's grid choice (1.0, 0.7, 0.85, 1.0, 0.55, 0.85, 0.85, at f_ins 1.017):
+
+  | spread around the grid choice | left-out readings inside their 90 % range | model too warm / too cold |
+  |---|---|---|
+  | none | 74 % | 20 % / 6 % |
+  | the sd of the 7 grid choices (f_ref ±0.16), Step 5's fold sd for f_ins (±0.20) | 78 % | 18 % / 5 % |
+  | one massif's own spread (f_ref ±0.96, f_ins ±1.2) | **91 %** | 5 % / 4 % |
+
+  - So version 1.0 with one massif's own spread gives ranges that hold what they claim, missing about equally on
+    both sides.
+  - The script first repeats the Step 5 line of the section above with its own draws: 91.7 % against 91.9 %.
+
 ## What is still open
 
-1. **Decision A, adoption** (Janosch).
-   - (a) Follow rule 9: version 1.0 takes the grid choice (f_ref 0.85, f_ins 1.017) with its spread.
-   - (b) Adopt Step 5 against the rule, logged as a deviation like S and orientation.
-
-   **Recommendation (a):** the rule was fixed to catch an over-confident calibration, and it did. The two values of
-   f_ref lie close (0.85 against 0.93), well inside the map's spread of ±0.20, and the paper can say that the rule
-   fixed in advance was followed.
-2. **Decision B, rule 10's spread** for glaciers without boreholes (Janosch).
-   - (a) One massif's own spread, (n − 1) × sd.
-   - (b) The sd of the left-out results.
-
-   **Recommendation (a):** it is the only spread whose ranges hold what they claim (92 %). Its cost: for an unseen
-   massif, f_ref can then lie anywhere in 0.03–1.0, so the map's probabilities stay wide in the zone. That is what the
-   data support.
-3. **Step 5 will be redone on the free-air mass balance** (decision of 28 Oct, chapter 15), with the same rules
-   committed again. Decisions A and B set how that run is read.
-4. **The extra runs at the result** (step 4.3 of the plan):
+1. **The ice-temperature model on the free-air mass balance** (decision of 28 Oct, chapter 15; plan of 29 Oct,
+   `plans/2026-10-29_freeair_mb_icetemp_plan.md`).
+   - First the 45 grid runs, held against the 2 m air on the same readings: bar 1 is the 2 m air with five parts,
+     2.13 °C; bar 2 is the best 2 m air version, 1.86 °C.
+   - The full Step 5 redo runs only once bar 1 is met, with the same rules committed again. Decisions A and B set how
+     it is read.
+2. **The extra runs at the result** (step 4.3 of the plan):
    - without stretching the columns, as the map will run;
    - FRH and H;
    - the past-balance correction;
    - advection at half and 1.5 times;
    - a colder climate before 1942;
    - the measured ice thickness at the bed holes.
-5. **The two follow-ups of chapter 14** on the cause of the split: the day-to-day temperature spread of each glacier's
+3. **The two follow-ups of chapter 14** on the cause of the split: the day-to-day temperature spread of each glacier's
    climate cell, and hourly energy-balance melt at warm and cold bands.
-6. **The emulator check fails** (reported). With more design runs near the result it should pass. It matters only if
+4. **The emulator check fails** (reported). With more design runs near the result it should pass. It matters only if
    the emulator is used where no real run checks it.
 
 ## Sources

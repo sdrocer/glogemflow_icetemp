@@ -7,7 +7,7 @@ design runs finished on 27 Oct at 18:05 and have not been looked at; the 45 benc
 **The rules commit is 3467851 (28 Oct, about 15:50, pushed).** It holds every script that decides the result. The fit
 starts only from it, or from a later commit that changes no rules code (this line was added in such a commit).
 
-## The result (28 Oct evening): not adopted by rule 9; two decisions for you
+## The result (28 Oct evening): not adopted by rule 9; two decisions for you (decided 29 Oct)
 
 *Everything below ran automatically overnight, on the rules commit (the run itself used `cb50eee`, which differs from
 `3467851` only outside the rules code). Step 5 will be redone on the free-air mass balance (decision log, 28 Oct), so
@@ -119,6 +119,10 @@ massifs, as rule 10 already does for the map, and the ranges become about right.
 |---|---|---|---|
 | A | Adoption | (a) **follow rule 9**: v1.0 takes the grid choice (f_ref 0.85, f_ins 1.017) with its spread; Step 5's result, its gain in error and the check after the fact are reported beside it. (b) adopt Step 5 anyway, because with the map's spread the ranges hold 82 %; a deviation from the rule, logged like S and orientation | **(a)**: the rule was fixed to catch exactly an over-confident calibration, and it did. The two values of f_ref lie close (0.85 against 0.93), well inside the map's spread of ±0.20, and the paper can say the rule set in advance was followed |
 | B | Rule 10's spread for glaciers without boreholes | (a) **one massif's own spread**, (n − 1) × sd; (b) the sd of the fold results | **(a)**: the only spread whose 90 % ranges hold about 90 % (92 %), missing equally often on both sides. Its cost: f_ref for an unseen massif is then anywhere in 0.03–1.0, so the map's probabilities stay wide in the zone. That is the honest state of the data |
+
+**Decided by Janosch on 29 Oct: A (a) and B (a)** (decision log). Around the grid choice, one massif's own spread
+gives 90 % ranges that hold 91 % of the left-out readings, missing 5 % / 4 % on the warm / cold side
+(`step5/coverage_grid.py`, chapter 16).
 
 **Two changes on 28 Oct, decided by Janosch after the check of the data (before any fit):**
 - **Rule 6 (b) reads "0.6 m w.e. per year or less".**
